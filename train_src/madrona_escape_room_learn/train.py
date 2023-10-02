@@ -19,6 +19,8 @@ from .actor_critic import ActorCritic
 from .moving_avg import EMANormalizer
 from .learning_state import LearningState
 
+import datetime
+
 @dataclass(frozen = True)
 class MiniBatch:
     obs: List[torch.Tensor]
@@ -151,6 +153,87 @@ def _compute_action_scores(cfg, amp, advantages):
 
             return action_scores.to(dtype=amp.compute_dtype)
 
+# Keep value loss the same as PPO, but make the policy loss be advantage-weighted regression
+# Introduce buffer if needed
+def _awr_update(cfg : TrainConfig,
+                amp : AMPState,
+                mb : MiniBatch,
+                actor_critic : ActorCritic,
+                optimizer : torch.optim.Optimizer,
+                value_normalizer : EMANormalizer,
+            ):
+    with amp.enable():
+        with profile('AC Forward', gpu=True):
+            new_log_probs, entropies, new_values = actor_critic.fwd_update(
+                mb.rnn_start_states, mb.dones, mb.actions, *mb.obs)
+
+        with torch.no_grad():
+            action_scores = _compute_action_scores(cfg, amp, mb.advantages)
+
+        '''
+        ratio = torch.exp(new_log_probs - mb.log_probs)
+        surr1 = action_scores * ratio
+        surr2 = action_scores * (
+            torch.clamp(ratio, 1.0 - cfg.ppo.clip_coef, 1.0 + cfg.ppo.clip_coef))
+
+        action_obj = torch.min(surr1, surr2)
+        '''
+        action_obj = new_log_probs * torch.exp(action_scores * cfg.awr.beta_inverse) 
+
+        returns = mb.advantages + mb.values
+
+        if cfg.awr.clip_value_loss:
+            with torch.no_grad():
+                low = mb.values - cfg.ppo.clip_coef
+                high = mb.values + cfg.ppo.clip_coef
+
+            new_values = torch.clamp(new_values, low, high)
+
+        normalized_returns = value_normalizer(amp, returns)
+        value_loss = 0.5 * F.mse_loss(
+            new_values, normalized_returns, reduction='none')
+
+        action_obj = torch.mean(action_obj)
+        value_loss = torch.mean(value_loss)
+        entropies = torch.mean(entropies)
+
+        loss = (
+            - action_obj # Maximize the action objective function
+            + cfg.ppo.value_loss_coef * value_loss
+            - cfg.ppo.entropy_coef * entropies # Maximize entropy
+        )
+
+    with profile('Optimize'):
+        if amp.scaler is None:
+            loss.backward()
+            nn.utils.clip_grad_norm_(
+                actor_critic.parameters(), cfg.ppo.max_grad_norm)
+            optimizer.step()
+        else:
+            amp.scaler.scale(loss).backward()
+            amp.scaler.unscale_(optimizer)
+            nn.utils.clip_grad_norm_(
+                actor_critic.parameters(), cfg.ppo.max_grad_norm)
+            amp.scaler.step(optimizer)
+            amp.scaler.update()
+
+        optimizer.zero_grad()
+
+    with torch.no_grad():
+        returns_var, returns_mean = torch.var_mean(normalized_returns)
+        returns_stddev = torch.sqrt(returns_var)
+
+        stats = PPOStats(
+            loss = loss.cpu().float().item(),
+            action_loss = -(action_obj.cpu().float().item()),
+            value_loss = value_loss.cpu().float().item(),
+            entropy_loss = -(entropies.cpu().float().item()),
+            returns_mean = returns_mean.cpu().float().item(),
+            returns_stddev = returns_stddev.cpu().float().item(),
+        )
+
+    return stats
+
 def _ppo_update(cfg : TrainConfig,
                 amp : AMPState,
                 mb : MiniBatch,
@@ -244,6 +327,13 @@ def _update_iter(cfg : TrainConfig,
 
         with profile('Collect Rollouts'):
             rollouts = rollout_mgr.collect(amp, sim, actor_critic)
+
+        # Dump the rollout
+        curr_rand = torch.rand((1,))[0]
+        if curr_rand < 0.01:
+            # Dump the features
+            now = datetime.datetime.now()
+            torch.save(rollouts, "/data/rl/madrona_3d_example/data_dump/ppo_" + str(now) + ".pt")
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values

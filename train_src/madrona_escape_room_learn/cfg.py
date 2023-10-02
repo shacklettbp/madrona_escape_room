@@ -15,6 +15,17 @@ class PPOConfig:
     adaptive_entropy: bool = True
 
 @dataclass(frozen=True)
+class AWRConfig:
+    num_mini_batches: int
+    beta_inverse: float
+    value_loss_coef: float
+    entropy_coef: float
+    max_grad_norm: float
+    num_epochs: int = 1
+    clip_value_loss: bool = False
+    adaptive_entropy: bool = True
+
+@dataclass(frozen=True)
 class TrainConfig:
     num_updates: int
     steps_per_update: int
@@ -22,6 +33,7 @@ class TrainConfig:
     lr: float
     gamma: float
     ppo: PPOConfig
+    #awr: AWRConfig
     gae_lambda: float = 1.0
     normalize_advantages: bool = True
     normalize_values : bool = True
