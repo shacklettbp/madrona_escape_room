@@ -93,7 +93,7 @@ static inline void initWorld(Engine &ctx)
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
-    ctx.data().rng = RNG::make(0); //episode_idx);
+    ctx.data().rng = RNG::make(episode_idx); // SET TO 0 FOR FIXED WORLD
     ctx.data().curEpisodeIdx = episode_idx;
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
