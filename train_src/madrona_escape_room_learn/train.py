@@ -249,6 +249,9 @@ def _ppo_update(cfg : TrainConfig,
         with torch.no_grad():
             action_scores = _compute_action_scores(cfg, amp, mb.advantages)
 
+        if mb.dones.sum() > 0:
+            print("We have a done!")
+
         ratio = torch.exp(new_log_probs - mb.log_probs)
         surr1 = action_scores * ratio
         surr2 = action_scores * (
