@@ -1,5 +1,6 @@
 #include <madrona/viz/viewer.hpp>
 
+#include "madrona/viz/interop.hpp"
 #include "sim.hpp"
 #include "mgr.hpp"
 #include "types.hpp"
@@ -119,8 +120,8 @@ int main(int argc, char *argv[])
 
     Viewer viewer({
         .gpuID = 0,
-        .renderWidth = 2730,
-        .renderHeight = 1536,
+        .renderWidth = 2730/2,
+        .renderHeight = 1536/2,
         .numWorlds = num_worlds,
         .maxViewsPerWorld = num_views,
         .maxInstancesPerWorld = 1000,
@@ -152,12 +153,20 @@ int main(int argc, char *argv[])
         { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
     });
 
+    const auto *bridge = viewer.rendererBridge();
+#if 0
+    const_cast<viz::VizECSBridge *>(bridge)->numViews = nullptr;
+    const_cast<viz::VizECSBridge *>(bridge)->brBridge.maxViewsPerWorld = 1;
+#endif
+
     Manager mgr({
         .execMode = exec_mode,
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
-    }, viewer.rendererBridge());
+    }, bridge);
+
+    viewer.setupBatchRendererProto();
 
     auto replayStep = [&]() {
         if (cur_replay_step == num_replay_steps - 1) {

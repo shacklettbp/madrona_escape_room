@@ -235,7 +235,8 @@ struct Agent : public madrona::Archetype<
 
     // Visualization: In addition to the fly camera, src/viewer.cpp can
     // view the scene from the perspective of entities with this component
-    madrona::viz::VizCamera
+    madrona::viz::VizCamera,
+    madrona::viz::Renderable
 > {};
 
 // Archetype for the doors blocking the end of each challenge room
@@ -254,7 +255,8 @@ struct DoorEntity : public madrona::Archetype<
     madrona::phys::broadphase::LeafID,
     OpenState,
     DoorProperties,
-    EntityType
+    EntityType,
+    madrona::viz::Renderable
 > {};
 
 // Archetype for the button objects that open the doors
@@ -265,7 +267,8 @@ struct ButtonEntity : public madrona::Archetype<
     Scale,
     ObjectID,
     ButtonState,
-    EntityType
+    EntityType,
+    madrona::viz::Renderable
 > {};
 
 // Generic archetype for entities that need physics but don't have custom
@@ -283,7 +286,8 @@ struct PhysicsEntity : public madrona::Archetype<
     ExternalForce,
     ExternalTorque,
     madrona::phys::broadphase::LeafID,
-    EntityType
+    EntityType,
+    madrona::viz::Renderable
 > {};
 
 }

@@ -1,4 +1,5 @@
 #include "mgr.hpp"
+#include "madrona/render/batch_renderer_system.hpp"
 #include "sim.hpp"
 
 #include <madrona/utils.hpp>
@@ -6,6 +7,8 @@
 #include <madrona/physics_loader.hpp>
 #include <madrona/tracing.hpp>
 #include <madrona/mw_cpu.hpp>
+
+#include <madrona/render/batch_renderer.hpp>
 
 #include <array>
 #include <charconv>
@@ -18,6 +21,8 @@
 #include <madrona/mw_gpu.hpp>
 #include <madrona/cuda_utils.hpp>
 #endif
+
+#include <madrona/viz/interop.hpp>
 
 using namespace madrona;
 using namespace madrona::math;
@@ -32,6 +37,7 @@ struct Manager::Impl {
     EpisodeManager *episodeMgr;
     WorldReset *worldResetBuffer;
     Action *agentActionsBuffer;
+    render::BatchRenderer batchRenderer;
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
@@ -43,7 +49,8 @@ struct Manager::Impl {
           episodeMgr(ep_mgr),
           worldResetBuffer(reset_buffer),
           agentActionsBuffer(action_buffer)
-    {}
+    {
+    }
 
     inline virtual ~Impl() {}
 
@@ -106,7 +113,9 @@ struct Manager::CUDAImpl final : Manager::Impl {
         : Impl(mgr_cfg, std::move(phys_loader),
                ep_mgr, reset_buffer, action_buffer),
           gpuExec(std::move(gpu_exec))
-    {}
+    {
+
+    }
 
     inline virtual ~CUDAImpl() final
     {
@@ -259,6 +268,7 @@ Manager::Impl * Manager::Impl::init(
     Sim::Config sim_cfg {
         viz_bridge != nullptr,
         mgr_cfg.autoReset,
+        viz_bridge
     };
 
     switch (mgr_cfg.execMode) {
@@ -279,7 +289,6 @@ Manager::Impl * Manager::Impl::init(
             world_inits[i] = WorldInit {
                 episode_mgr,
                 phys_obj_mgr,
-                viz_bridge,
             };
         }
 
@@ -304,7 +313,6 @@ Manager::Impl * Manager::Impl::init(
 
         Action *agent_actions_buffer = 
             (Action *)gpu_exec.getExported((uint32_t)ExportID::Action);
-
 
         return new CUDAImpl {
             mgr_cfg,
@@ -331,8 +339,7 @@ Manager::Impl * Manager::Impl::init(
         for (int64_t i = 0; i < (int64_t)mgr_cfg.numWorlds; i++) {
             world_inits[i] = WorldInit {
                 episode_mgr,
-                phys_obj_mgr,
-                viz_bridge,
+                phys_obj_mgr
             };
         }
 
@@ -382,6 +389,8 @@ Manager::Manager(const Config &cfg,
     for (int32_t i = 0; i < (int32_t)cfg.numWorlds; i++) {
         triggerReset(i);
     }
+
+    // someRandomFunctionNameLOL();
 
     step();
 }

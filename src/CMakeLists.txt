@@ -30,6 +30,7 @@ target_link_libraries(mad_escape_mgr
         madrona_mw_cpu
         madrona_common
         madrona_importer
+        madrona_batch_render
         madrona_physics_loader
 )
 

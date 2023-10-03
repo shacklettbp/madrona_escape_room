@@ -1,4 +1,5 @@
 #include <madrona/mw_gpu_entry.hpp>
+#include <madrona/render/batch_renderer_system.hpp>
 
 #include "sim.hpp"
 #include "level_gen.hpp"
@@ -11,11 +12,12 @@ namespace madEscape {
 
 // Register all the ECS components and archetypes that will be
 // used in the simulation
-void Sim::registerTypes(ECSRegistry &registry, const Config &)
+void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
 {
     base::registerTypes(registry);
     phys::RigidBodyPhysicsSystem::registerTypes(registry);
-    viz::VizRenderingSystem::registerTypes(registry);
+    viz::VizRenderingSystem::registerTypes(registry, cfg.bridge);
+    // render::BatchRenderingSystem::registerTypes(registry, cfg.bridge);
 
     registry.registerComponent<Action>();
     registry.registerComponent<SelfObservation>();
@@ -72,12 +74,16 @@ static inline void cleanupWorld(Engine &ctx)
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
+                viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.entities[j]);
                 ctx.destroyEntity(room.entities[j]);
             }
         }
 
+        viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[0]);
         ctx.destroyEntity(room.walls[0]);
+        viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[1]);
         ctx.destroyEntity(room.walls[1]);
+        viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.door);
         ctx.destroyEntity(room.door);
     }
 }
@@ -719,6 +725,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         viz::VizRenderingSystem::setupTasks(builder, {reset_sys});
     }
 
+    // render::BatchRenderingSystem::setupTasks(builder, {reset_sys});
+
 #ifdef MADRONA_GPU_MODE
     // Sort entities, this could be conditional on reset like the second
     // BVH build above.
@@ -760,7 +768,7 @@ Sim::Sim(Engine &ctx,
     enableVizRender = cfg.enableViewer;
 
     if (enableVizRender) {
-        viz::VizRenderingSystem::init(ctx, init.vizBridge);
+        viz::VizRenderingSystem::init(ctx, cfg.bridge);
     }
 
     autoReset = cfg.autoReset;

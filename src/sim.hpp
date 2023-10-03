@@ -8,6 +8,12 @@
 #include "init.hpp"
 #include "rng.hpp"
 
+namespace madrona::render {
+
+struct BatchRendererECSBridge;
+
+}
+
 namespace madEscape {
 
 class Engine;
@@ -51,6 +57,7 @@ struct Sim : public madrona::WorldBase {
     struct Config {
         bool enableViewer;
         bool autoReset;
+        const madrona::viz::VizECSBridge *bridge;
     };
 
     // Sim::registerTypes is called during initialization
