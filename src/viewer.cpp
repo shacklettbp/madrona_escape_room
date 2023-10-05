@@ -166,14 +166,14 @@ int main(int argc, char *argv[])
         .autoReset = replay_log.has_value(),
     }, bridge);
 
-    viewer.setupBatchRendererProto();
-
     auto replayStep = [&]() {
         if (cur_replay_step == num_replay_steps - 1) {
             return true;
         }
 
+#if 0
         printf("Step: %u\n", cur_replay_step);
+#endif
 
         for (uint32_t i = 0; i < num_worlds; i++) {
             for (uint32_t j = 0; j < num_views; j++) {
@@ -186,8 +186,10 @@ int main(int argc, char *argv[])
                 int32_t turn = (*replay_log)[base_idx + 2];
                 int32_t g = (*replay_log)[base_idx + 3];
 
+#if 0
                 printf("%d, %d: %d %d %d %d\n",
                        i, j, move_amount, move_angle, turn, g);
+#endif
                 mgr.setAction(i, j, move_amount, move_angle, turn, g);
             }
         }
@@ -206,6 +208,7 @@ int main(int argc, char *argv[])
     auto reward_printer = mgr.rewardTensor().makePrinter();
 
     auto printObs = [&]() {
+#if 0
         printf("Self\n");
         self_printer.print();
 
@@ -228,6 +231,7 @@ int main(int argc, char *argv[])
         reward_printer.print();
 
         printf("\n");
+#endif
     };
 
     viewer.loop([&mgr](CountT world_idx, CountT agent_idx,
