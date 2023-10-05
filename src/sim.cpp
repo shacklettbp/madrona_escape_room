@@ -386,49 +386,52 @@ inline void collectObservationsSystem(Engine &ctx,
 
     Quat to_view = rot.inv();
 
-#pragma unroll
-    for (CountT i = 0; i < consts::numAgents - 1; i++) {
-        Entity other = other_agents.e[i];
+    // Context::iterateQuery() runs serially over archteypes
+    // matching the components on which it is templated.
+    {
+        int idx = 0; // Context::iterateQuery() is serial, so this is safe.
+        ctx.iterateQuery(ctx.query<Position, GrabState, ObjectID>(),
+            [&](Position& other_pos, GrabState& other_grab, ObjectID& other_id) {
+                Vector3 to_other = other_pos - pos;
 
-        Vector3 other_pos = ctx.get<Position>(other);
-        GrabState other_grab = ctx.get<GrabState>(other);
-        Vector3 to_other = other_pos - pos;
+                // Detect whether or not the other agent is the current agent.
+                if (to_other.length() == 0.0f) {
+                    return;
+                }
 
-        partner_obs.obs[i] = {
-            .polar = xyToPolar(to_view.rotateVec(to_other)),
-            .isGrabbing = other_grab.constraintEntity != Entity::none() ?
-                1.f : 0.f,
-        };
+                partner_obs.obs[idx++] = {
+                    .polar = xyToPolar(to_view.rotateVec(to_other)),
+                    .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
+                };
+            });
     }
 
-    const LevelState &level = ctx.singleton<LevelState>();
-    const Room &room = level.rooms[cur_room_idx];
+    // ctx.iterateQuery() version.
+    {
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<EntityType, Position>(), [&](EntityType& e, Position& p) {
 
-    for (CountT i = 0; i < consts::maxEntitiesPerRoom; i++) {
-        Entity entity = room.entities[i];
+            EntityObservation ob;
+            if (e == EntityType::None) {
+                ob.polar = { 0.f, 1.f };
+                ob.encodedType = encodeType(EntityType::None);
+            }
+            else {
+                Vector3 to_entity = p - pos;
+                ob.polar = xyToPolar(to_view.rotateVec(to_entity));
+                ob.encodedType = encodeType(e);
+            }
 
-        EntityObservation ob;
-        if (entity == Entity::none()) {
-            ob.polar = { 0.f, 1.f };
-            ob.encodedType = encodeType(EntityType::None);
-        } else {
-            Vector3 entity_pos = ctx.get<Position>(entity);
-            EntityType entity_type = ctx.get<EntityType>(entity);
-
-            Vector3 to_entity = entity_pos - pos;
-            ob.polar = xyToPolar(to_view.rotateVec(to_entity));
-            ob.encodedType = encodeType(entity_type);
-        }
-
-        room_ent_obs.obs[i] = ob;
+            room_ent_obs.obs[idx++] = ob;
+        });
     }
 
-    Entity cur_door = room.door;
-    Vector3 door_pos = ctx.get<Position>(cur_door);
-    OpenState door_open_state = ctx.get<OpenState>(cur_door);
+    // Context.query() version.
+    ctx.iterateQuery(ctx.query<Position, OpenState>(), [&](Position& p, OpenState& os) {
+            door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
+            door_obs.isOpen = os.isOpen ? 1.f : 0.f;
+    });
 
-    door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
-    door_obs.isOpen = door_open_state.isOpen ? 1.f : 0.f;
 }
 
 // Launches consts::numLidarSamples per agent.
