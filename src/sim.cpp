@@ -93,7 +93,7 @@ static inline void initWorld(Engine &ctx)
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
-    ctx.data().rng = RNG::make(0);//episode_idx); // SET TO 0 FOR FIXED WORLD
+    ctx.data().rng = RNG::make(episode_idx); // SET TO 0 FOR FIXED WORLD
     ctx.data().curEpisodeIdx = episode_idx;
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
@@ -495,6 +495,32 @@ inline void lidarSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
+inline void vishnuRewardSystem(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float new_progress = reward_pos - old_max_y;
+
+    float reward;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    } else {
+        reward = 0.0;
+    }
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
 inline void rewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
@@ -641,6 +667,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({button_sys});
 
     // Compute initial reward now that physics has updated the world state
+    /*
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
          rewardSystem,
             Position,
@@ -655,13 +682,21 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Progress,
             Reward
         >>({reward_sys});
+    */
+    auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
+         vishnuRewardSystem,
+            Position,
+            Progress,
+            Reward
+        >>({door_open_sys});
 
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({bonus_reward_sys});
+    //    >>({bonus_reward_sys});
+        >>({reward_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,

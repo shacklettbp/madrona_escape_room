@@ -74,6 +74,11 @@ def _gather_minibatch(rollouts : Rollouts,
                       inds : torch.Tensor,
                       amp : AMPState):
     obs_slice = tuple(_mb_slice(obs, inds) for obs in rollouts.obs)
+
+    # Print if in third room
+    third_room_count = (obs_slice[0][:,3] > 0.65).sum()
+    if third_room_count > 0:
+        print("There are ", third_room_count, "agents in the third room")
     
     actions_slice = _mb_slice(rollouts.actions, inds)
     log_probs_slice = _mb_slice(rollouts.log_probs, inds).to(

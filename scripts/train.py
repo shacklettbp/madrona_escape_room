@@ -7,6 +7,7 @@ from madrona_escape_room_learn import (
 from policy import make_policy, setup_obs
 
 import torch
+import wandb
 import argparse
 import math
 from pathlib import Path
@@ -14,6 +15,38 @@ import warnings
 warnings.filterwarnings("error")
 
 torch.manual_seed(0)
+
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('--gpu-id', type=int, default=0)
+arg_parser.add_argument('--ckpt-dir', type=str, required=True)
+arg_parser.add_argument('--restore', type=int)
+
+arg_parser.add_argument('--num-worlds', type=int, required=True)
+arg_parser.add_argument('--num-updates', type=int, required=True)
+arg_parser.add_argument('--steps-per-update', type=int, default=40)
+arg_parser.add_argument('--num-bptt-chunks', type=int, default=8)
+
+arg_parser.add_argument('--lr', type=float, default=1e-4)
+arg_parser.add_argument('--gamma', type=float, default=0.998)
+arg_parser.add_argument('--entropy-loss-coef', type=float, default=0.01)
+arg_parser.add_argument('--value-loss-coef', type=float, default=0.5)
+arg_parser.add_argument('--clip-value-loss', action='store_true')
+
+arg_parser.add_argument('--num-channels', type=int, default=256)
+arg_parser.add_argument('--separate-value', action='store_true')
+arg_parser.add_argument('--fp16', action='store_true')
+
+arg_parser.add_argument('--gpu-sim', action='store_true')
+arg_parser.add_argument('--profile-report', action='store_true')
+
+args = arg_parser.parse_args()
+
+run = wandb.init(
+    # Set the project where this run will be logged
+    project="ppo-brennan",
+    # Track hyperparameters and run metadata
+    config=args
+)
 
 class LearningCallback:
     def __init__(self, ckpt_dir, profile_report):
@@ -61,6 +94,21 @@ class LearningCallback:
         print(f"    Returns          => Avg: {ppo.returns_mean}, σ: {ppo.returns_stddev}")
         print(f"    Value Normalizer => Mean: {vnorm_mu: .3e}, σ: {vnorm_sigma :.3e}")
 
+        # Add all this to wandb
+        wandb.log({
+            "update_id": update_id,
+            "loss": ppo.loss,
+            "action_loss": ppo.action_loss,
+            "value_loss": ppo.value_loss,
+            "entropy_loss": ppo.entropy_loss,
+            "reward_mean": reward_mean, 
+            "reward_max": reward_max,
+            "returns_mean": ppo.returns_mean,
+            "returns_stdev": ppo.returns_stddev,
+            "vnorm_mu": vnorm_mu,
+            }
+        )
+
         if self.profile_report:
             print()
             print(f"    FPS: {fps:.0f}, Update Time: {update_time:.2f}, Avg FPS: {self.mean_fps:.0f}")
@@ -69,32 +117,6 @@ class LearningCallback:
 
         if update_id % 100 == 0:
             learning_state.save(update_idx, self.ckpt_dir / f"{update_id}.pth")
-
-
-arg_parser = argparse.ArgumentParser()
-arg_parser.add_argument('--gpu-id', type=int, default=0)
-arg_parser.add_argument('--ckpt-dir', type=str, required=True)
-arg_parser.add_argument('--restore', type=int)
-
-arg_parser.add_argument('--num-worlds', type=int, required=True)
-arg_parser.add_argument('--num-updates', type=int, required=True)
-arg_parser.add_argument('--steps-per-update', type=int, default=40)
-arg_parser.add_argument('--num-bptt-chunks', type=int, default=8)
-
-arg_parser.add_argument('--lr', type=float, default=1e-4)
-arg_parser.add_argument('--gamma', type=float, default=0.998)
-arg_parser.add_argument('--entropy-loss-coef', type=float, default=0.01)
-arg_parser.add_argument('--value-loss-coef', type=float, default=0.5)
-arg_parser.add_argument('--clip-value-loss', action='store_true')
-
-arg_parser.add_argument('--num-channels', type=int, default=256)
-arg_parser.add_argument('--separate-value', action='store_true')
-arg_parser.add_argument('--fp16', action='store_true')
-
-arg_parser.add_argument('--gpu-sim', action='store_true')
-arg_parser.add_argument('--profile-report', action='store_true')
-
-args = arg_parser.parse_args()
 
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
