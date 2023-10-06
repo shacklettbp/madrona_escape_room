@@ -495,7 +495,7 @@ inline void lidarSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void vishnuRewardSystem(Engine &,
+inline void denseRewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
@@ -505,14 +505,52 @@ inline void vishnuRewardSystem(Engine &,
 
     float old_max_y = progress.maxY;
 
-    float new_progress = reward_pos - old_max_y;
+    float reward = 0.0f;
 
-    float reward;
-    if (new_progress > 0) {
-        reward = new_progress * consts::rewardPerDist;
+    if (reward_pos > 14.0f && old_max_y < 14.0f) {
+        // Passed the first room
+        reward += 1.0f;
+    } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
+        reward += 2.0f;
+    } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
+        reward += 3.0f;
+    }
+
+    // Update maxY
+    if (reward_pos > old_max_y) {
+        reward += (reward_pos - old_max_y) * consts::rewardPerDist
         progress.maxY = reward_pos;
-    } else {
-        reward = 0.0;
+    }
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void sparseRewardSystem(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float reward = 0.0f;
+    if (reward_pos > 14.0f && old_max_y < 14.0f) {
+        // Passed the first room
+        reward = 1.0f;
+    } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
+        reward = 1.0f;
+    } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
+        reward = 1.0f;
+    }
+
+    // Update maxY
+    if (reward_pos > old_max_y) {
+        progress.maxY = reward_pos;
     }
 
     out_reward.v = reward;
@@ -684,7 +722,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({reward_sys});
     */
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         vishnuRewardSystem,
+         sparseRewardSystem,
             Position,
             Progress,
             Reward
