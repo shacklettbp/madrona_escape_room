@@ -518,7 +518,7 @@ inline void denseRewardSystem(Engine &,
 
     // Update maxY
     if (reward_pos > old_max_y) {
-        reward += (reward_pos - old_max_y) * consts::rewardPerDist
+        reward += (reward_pos - old_max_y) * consts::rewardPerDist;
         progress.maxY = reward_pos;
     }
 
