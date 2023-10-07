@@ -125,6 +125,22 @@ sim = madrona_escape_room.SimManager(
     auto_reset = True,
 )
 
+steps_so_far = 0
+warm_up = 32
+while steps_so_far < 200:
+    for i in range(warm_up - 1):
+        sim.step()
+    resets = sim.reset_tensor().to_torch().view(-1)
+    total_envs = resets.shape[0]
+    reset_min = (steps_so_far / 200)
+    reset_max = ((steps_so_far + warm_up) / 200)
+    resets[(int)(reset_min * total_envs):(int)(reset_max * total_envs)] = 1
+    print("Steps so far", steps_so_far)
+    print("Max length", 200)
+    print("Resetting", (int)(reset_min * total_envs), (int)(reset_max * total_envs))
+    sim.step()
+    steps_so_far += warm_up
+
 ckpt_dir = Path(args.ckpt_dir)
 
 learning_cb = LearningCallback(ckpt_dir, args.profile_report)
