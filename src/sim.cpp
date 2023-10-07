@@ -528,6 +528,31 @@ inline void denseRewardSystem(Engine &,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
+inline void denseRewardSystem2(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    if (reward_pos < 14.0f && reward_pos > 9.0f) {
+        // Passed the first room
+        reward_pos = 10.0f;
+    } else if (reward_pos < 27.0f && reward_pos > 22.0f) {
+        reward_pos = 22.0f;
+    } else if (reward_pos < 41.0f && reward_pos > 36.0f) {
+        reward_pos = 36.0f;
+    }
+
+    float reward = 0.05 * exp(reward_pos / 10);
+
+    out_reward.v = reward;
+}
+
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
 inline void sparseRewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
@@ -722,7 +747,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({reward_sys});
     */
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         denseRewardSystem,
+         denseRewardSystem2,
             Position,
             Progress,
             Reward
