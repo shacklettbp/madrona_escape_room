@@ -69,6 +69,10 @@ class LearningCallback:
             reward_min = update_results.rewards.min().cpu().item()
             reward_max = update_results.rewards.max().cpu().item()
 
+            return_mean = update_results.returns[update_results.dones == 1.0].mean().cpu().item()
+            return_min = update_results.returns[update_results.dones == 1.0].min().cpu().item()
+            return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
+
             value_mean = update_results.values.mean().cpu().item()
             value_min = update_results.values.min().cpu().item()
             value_max = update_results.values.max().cpu().item()
@@ -91,7 +95,7 @@ class LearningCallback:
         print(f"    Values           => Avg: {value_mean: .3e}, Min: {value_min: .3e}, Max: {value_max: .3e}")
         print(f"    Advantages       => Avg: {advantage_mean: .3e}, Min: {advantage_min: .3e}, Max: {advantage_max: .3e}")
         print(f"    Bootstrap Values => Avg: {bootstrap_value_mean: .3e}, Min: {bootstrap_value_min: .3e}, Max: {bootstrap_value_max: .3e}")
-        print(f"    Returns          => Avg: {ppo.returns_mean}, σ: {ppo.returns_stddev}")
+        print(f"    Returns          => Avg: {return_mean}, max: {return_max}")
         print(f"    Value Normalizer => Mean: {vnorm_mu: .3e}, σ: {vnorm_sigma :.3e}")
 
         # Add all this to wandb
@@ -103,8 +107,8 @@ class LearningCallback:
             "entropy_loss": ppo.entropy_loss,
             "reward_mean": reward_mean, 
             "reward_max": reward_max,
-            "returns_mean": ppo.returns_mean,
-            "returns_stdev": ppo.returns_stddev,
+            "returns_mean": return_mean,
+            "returns_max": return_max
             "vnorm_mu": vnorm_mu,
             }
         )

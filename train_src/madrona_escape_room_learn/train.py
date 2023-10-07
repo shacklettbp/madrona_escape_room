@@ -47,6 +47,7 @@ class PPOStats:
 class UpdateResult:
     actions : torch.Tensor
     rewards : torch.Tensor
+    returns : torch.Tensor
     values : torch.Tensor
     advantages : torch.Tensor
     bootstrap_values : torch.Tensor
@@ -390,6 +391,7 @@ def _update_iter(cfg : TrainConfig,
     return UpdateResult(
         actions = rollouts.actions.view(-1, *rollouts.actions.shape[2:]),
         rewards = rollouts.rewards.view(-1, *rollouts.rewards.shape[2:]),
+        returns = rollouts.returns.view(-1, *rollouts.returns.shape[2:]),
         values = rollouts.values.view(-1, *rollouts.values.shape[2:]),
         advantages = advantages.view(-1, *advantages.shape[2:]),
         bootstrap_values = rollouts.bootstrap_values,
