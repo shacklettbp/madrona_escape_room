@@ -511,14 +511,14 @@ inline void denseRewardSystem(Engine &,
         // Passed the first room
         reward += 1.0f;
     } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
-        reward += 2.0f;
+        reward += 10.0f;
     } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
-        reward += 3.0f;
+        reward += 100.0f;
     }
 
     // Update maxY
     if (reward_pos > old_max_y) {
-        reward += (reward_pos - old_max_y) * consts::rewardPerDist;
+        reward += (reward_pos * 0.025) * consts::rewardPerDist;
         progress.maxY = reward_pos;
     }
 
@@ -722,7 +722,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({reward_sys});
     */
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         sparseRewardSystem,
+         denseRewardSystem,
             Position,
             Progress,
             Reward
