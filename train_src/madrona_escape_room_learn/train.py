@@ -340,11 +340,13 @@ def _update_iter(cfg : TrainConfig,
             rollouts = rollout_mgr.collect(amp, sim, actor_critic)
 
         # Dump the rollout
+        '''
         curr_rand = torch.rand((1,))[0]
         if curr_rand < 0.01:
             # Dump the features
             now = datetime.datetime.now()
             torch.save(rollouts, "/data/rl/madrona_3d_example/data_dump/ppo_" + str(now) + ".pt")
+        '''
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values
