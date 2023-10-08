@@ -550,6 +550,40 @@ inline void denseRewardSystem2(Engine &,
     out_reward.v = reward;
 }
 
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void denseRewardSystem3(Engine &ctx,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    if (reward_pos < 14.0f && reward_pos > 9.0f) {
+        // Passed the first room
+        reward_pos = 10.0f;
+    } else if (reward_pos < 27.0f && reward_pos > 22.0f) {
+        reward_pos = 22.0f;
+    } else if (reward_pos < 41.0f && reward_pos > 36.0f) {
+        reward_pos = 36.0f;
+    }
+
+    float reward = 0.05 * exp(reward_pos / 10);
+
+    // Provide reward for open doors
+    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
+    const LevelState &level = ctx.singleton<LevelState>();
+    const Room &room = level.rooms[cur_room_idx];
+    Entity cur_door = room.door;
+    //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
+    OpenState door_open_state = ctx.get<OpenState>(cur_door);
+    //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
+    isOpen = door_open_state.isOpen ? 1.f : 0.f;
+    reward += isOpen // Maybe add scaling to this
+
+    out_reward.v = reward;
+}
 
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
