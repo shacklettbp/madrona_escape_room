@@ -72,6 +72,12 @@ class LearningCallback:
             return_mean = update_results.returns[update_results.dones == 1.0].mean().cpu().item()
             return_min = update_results.returns[update_results.dones == 1.0].min().cpu().item()
             return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
+            done_count = (update_results.dones == 1.0).sum()
+
+            # compute visits to second and third room
+            second_room_count = (update_results.obs[0][:,:,:,3] > 0.34).sum()
+            third_room_count = (update_results.obs[0][:,:,:,3] > 0.67).sum()
+            exit_count = (update_results.obs[0][:,:,:,3] > 1.01).sum()
 
             value_mean = update_results.values.mean().cpu().item()
             value_min = update_results.values.min().cpu().item()
@@ -108,7 +114,11 @@ class LearningCallback:
             "reward_mean": reward_mean, 
             "reward_max": reward_max,
             "returns_mean": return_mean,
-            "returns_max": return_max
+            "returns_max": return_max,
+            "done_count": done_count,
+            "second_room_count": second_room_count,
+            "third_room_count": third_room_count,
+            "exit_count": exit_count,
             "vnorm_mu": vnorm_mu,
             }
         )

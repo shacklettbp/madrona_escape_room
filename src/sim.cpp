@@ -579,8 +579,8 @@ inline void denseRewardSystem3(Engine &ctx,
     //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
     OpenState door_open_state = ctx.get<OpenState>(cur_door);
     //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
-    isOpen = door_open_state.isOpen ? 1.f : 0.f;
-    reward += isOpen // Maybe add scaling to this
+    float isOpen = door_open_state.isOpen ? 1.f : 0.f;
+    reward += isOpen; // Maybe add scaling to this
 
     out_reward.v = reward;
 }
@@ -765,7 +765,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({button_sys});
 
     // Compute initial reward now that physics has updated the world state
-    /*
+    
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
          rewardSystem,
             Position,
@@ -780,21 +780,21 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Progress,
             Reward
         >>({reward_sys});
-    */
+    /*
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
          denseRewardSystem,
             Position,
             Progress,
             Reward
         >>({door_open_sys});
-
+    */
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-    //    >>({bonus_reward_sys});
-        >>({reward_sys});
+        >>({bonus_reward_sys});
+    //    >>({reward_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,

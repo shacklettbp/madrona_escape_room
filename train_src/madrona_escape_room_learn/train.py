@@ -45,9 +45,11 @@ class PPOStats:
 
 @dataclass(frozen = True)
 class UpdateResult:
+    obs: torch.Tensor
     actions : torch.Tensor
     rewards : torch.Tensor
     returns : torch.Tensor
+    dones: torch.Tensor
     values : torch.Tensor
     advantages : torch.Tensor
     bootstrap_values : torch.Tensor
@@ -389,9 +391,11 @@ def _update_iter(cfg : TrainConfig,
                         cur_stats.returns_stddev - aggregate_stats.returns_stddev) / num_stats
 
     return UpdateResult(
+        obs = rollouts.obs,
         actions = rollouts.actions.view(-1, *rollouts.actions.shape[2:]),
         rewards = rollouts.rewards.view(-1, *rollouts.rewards.shape[2:]),
         returns = rollouts.returns.view(-1, *rollouts.returns.shape[2:]),
+        dones = rollouts.dones.view(-1, *rollouts.dones.shape[2:]),
         values = rollouts.values.view(-1, *rollouts.values.shape[2:]),
         advantages = advantages.view(-1, *advantages.shape[2:]),
         bootstrap_values = rollouts.bootstrap_values,
