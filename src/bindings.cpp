@@ -5,18 +5,20 @@
 
 namespace nb = nanobind;
 
+using namespace madrona::py;
+
 namespace madEscape {
 
 // This file creates the python bindings used by the learning code.
 // Refer to the nanobind documentation for more details on these functions.
 NB_MODULE(madrona_escape_room, m) {
     // Each simulator has a madrona submodule that includes base types
-    // like madrona::py::Tensor and madrona::py::PyExecMode.
-    madrona::py::setupMadronaSubmodule(m);
+    // like Tensor and PyExecMode.
+    setupMadronaSubmodule(m);
 
-    nb::class_<Manager> (m, "SimManager")
+    auto mgr_class = nb::class_<Manager> (m, "SimManager")
         .def("__init__", [](Manager *self,
-                            madrona::py::PyExecMode exec_mode,
+                            PyExecMode exec_mode,
                             int64_t gpu_id,
                             int64_t num_worlds,
                             bool auto_reset) {
@@ -43,6 +45,10 @@ NB_MODULE(madrona_escape_room, m) {
              &Manager::doorObservationTensor)
         .def("lidar_tensor", &Manager::lidarTensor)
         .def("steps_remaining_tensor", &Manager::stepsRemainingTensor)
+        .def("xla", XLAInterface::buildEntry<
+                &Manager::trainInterface,
+                &Manager::step
+             >())
     ;
 }
 

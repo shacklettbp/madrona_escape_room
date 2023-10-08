@@ -501,6 +501,24 @@ Tensor Manager::stepsRemainingTensor() const
                                });
 }
 
+TrainInterface Manager::trainInterface() const
+{
+    return TrainInterface {
+        {
+            { "self", selfObservationTensor() },
+            { "partners", partnerObservationsTensor() },
+            { "roomEntities", roomEntityObservationsTensor() },
+            { "door", doorObservationTensor() },
+            { "lidar", lidarTensor() },
+            { "stepsRemaining", stepsRemainingTensor() },
+        },
+        actionTensor(),
+        rewardTensor(),
+        doneTensor(),
+        resetTensor(),
+    };
+}
+
 void Manager::triggerReset(int32_t world_idx)
 {
     WorldReset reset {
