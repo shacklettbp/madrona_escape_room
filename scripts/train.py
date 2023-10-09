@@ -69,10 +69,12 @@ class LearningCallback:
             reward_min = update_results.rewards.min().cpu().item()
             reward_max = update_results.rewards.max().cpu().item()
 
-            return_mean = update_results.returns[update_results.dones == 1.0].mean().cpu().item()
-            return_min = update_results.returns[update_results.dones == 1.0].min().cpu().item()
-            return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
             done_count = (update_results.dones == 1.0).sum()
+            return_mean, return_min, return_max = 0, 0, 0
+            if done_count > 0:
+                return_mean = update_results.returns[update_results.dones == 1.0].mean().cpu().item()
+                return_min = update_results.returns[update_results.dones == 1.0].min().cpu().item()
+                return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
 
             # compute visits to second and third room
             second_room_count = (update_results.obs[0][:,:,:,3] > 0.34).sum()
