@@ -19,6 +19,7 @@ torch.manual_seed(0)
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--gpu-id', type=int, default=0)
 arg_parser.add_argument('--ckpt-dir', type=str, required=True)
+arg_parser.add_argument('--run-name', type=str, required=True)
 arg_parser.add_argument('--restore', type=int)
 
 arg_parser.add_argument('--num-worlds', type=int, required=True)
@@ -39,11 +40,17 @@ arg_parser.add_argument('--fp16', action='store_true')
 arg_parser.add_argument('--gpu-sim', action='store_true')
 arg_parser.add_argument('--profile-report', action='store_true')
 
+arg_parser.add_argument('--no-value-norm', action='store_true')
+arg_parser.add_argument('--no-advantage-norm', action='store_true')
+
 args = arg_parser.parse_args()
+
+normalize_values = not args.no_value_norm
+normalize_advantages = not args.no_advantage_norm
 
 run = wandb.init(
     # Set the project where this run will be logged
-    project="ppo-brennan",
+    project="escape-room",
     # Track hyperparameters and run metadata
     config=args
 )
@@ -197,6 +204,7 @@ train(
             rewards = rewards,
     ),
     TrainConfig(
+        run_name = args.run_name,
         num_updates = args.num_updates,
         steps_per_update = args.steps_per_update,
         num_bptt_chunks = args.num_bptt_chunks,
@@ -214,6 +222,8 @@ train(
         ),
         value_normalizer_decay = 0.999,
         mixed_precision = args.fp16,
+        normalize_advantages = normalize_advantages,
+        normalize_values = normalize_values,
     ),
     policy,
     learning_cb,

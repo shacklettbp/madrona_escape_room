@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch._dynamo
 from torch import optim
 from torch.func import vmap
+import os
 from os import environ as env_vars
 from typing import Callable
 from dataclasses import dataclass
@@ -79,9 +80,9 @@ def _gather_minibatch(rollouts : Rollouts,
     obs_slice = tuple(_mb_slice(obs, inds) for obs in rollouts.obs)
 
     # Print if in third room
-    third_room_count = (obs_slice[0][:,3] > 0.65).sum()
-    if third_room_count > 0:
-        print("There are ", third_room_count, "agents in the third room")
+    #third_room_count = (obs_slice[0][:,3] > 0.65).sum()
+    #if third_room_count > 0:
+    #    print("There are ", third_room_count, "agents in the third room")
     
     actions_slice = _mb_slice(rollouts.actions, inds)
     log_probs_slice = _mb_slice(rollouts.log_probs, inds).to(
@@ -340,13 +341,16 @@ def _update_iter(cfg : TrainConfig,
             rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
 
         # Dump the rollout
-        '''
         curr_rand = torch.rand((1,))[0]
-        if curr_rand < 0.01:
+        if curr_rand < 0.05:
             # Dump the features
             now = datetime.datetime.now()
-            torch.save(rollouts, "/data/rl/madrona_3d_example/data_dump/ppo_" + str(now) + ".pt")
-        '''
+            dir_path = "/data/rl/madrona_3d_example/data_dump/" + cfg.run_name + "/"
+            isExist = os.path.exists(dir_path)
+            if not isExist:
+                # Create a new directory because it does not exist
+                os.makedirs(path)
+            torch.save(rollouts, dir_path + str(now) + ".pt")
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values

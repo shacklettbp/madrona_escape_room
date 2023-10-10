@@ -27,6 +27,7 @@ class AWRConfig:
 
 @dataclass(frozen=True)
 class TrainConfig:
+    run_name: str
     num_updates: int
     steps_per_update: int
     num_bptt_chunks: int
