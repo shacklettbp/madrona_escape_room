@@ -349,7 +349,7 @@ def _update_iter(cfg : TrainConfig,
             isExist = os.path.exists(dir_path)
             if not isExist:
                 # Create a new directory because it does not exist
-                os.makedirs(path)
+                os.makedirs(dir_path)
             torch.save(rollouts, dir_path + str(now) + ".pt")
     
         # Engstrom et al suggest recomputing advantages after every epoch
