@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
     auto reward_printer = mgr.rewardTensor().makePrinter();
 
     auto printObs = [&]() {
-        printf("#########################################\n");
+        // printf("#########################################\n");
 #if 0
         printf("Self\n");
         self_printer.print();

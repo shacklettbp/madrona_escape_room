@@ -78,6 +78,7 @@ int main(int argc, char *argv[])
 
     viz::VizECSBridge *gpu_bridge_ptr;
     cudaMalloc(&gpu_bridge_ptr, sizeof(viz::VizECSBridge));
+    cudaMemcpy(gpu_bridge_ptr, &dummy_bridge, sizeof(dummy_bridge), cudaMemcpyHostToDevice);
 
     Manager mgr({
         .execMode = exec_mode,
