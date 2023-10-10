@@ -6,6 +6,7 @@ from .amp import AMPState
 from .cfg import SimInterface
 from .actor_critic import ActorCritic, RecurrentStateConfig
 from .profile import profile
+from .moving_avg import EMANormalizer
 
 @dataclass(frozen = True)
 class Rollouts:
@@ -115,6 +116,7 @@ class RolloutManager:
             amp : AMPState,
             sim : SimInterface,
             actor_critic : ActorCritic,
+            value_normalizer: EMANormalizer,
         ):
         rnn_states_cur_in = self.rnn_end_states
         rnn_states_cur_out = self.rnn_alt_states
@@ -147,6 +149,9 @@ class RolloutManager:
                             rnn_states_cur_in,
                             *cur_obs_buffers,
                         )
+
+                    # Invert normalized values
+                    self.values[bptt_chunk, slot] = value_normalizer.invert(amp, self.values[bptt_chunk, slot])
 
                     rnn_states_cur_in, rnn_states_cur_out = \
                         rnn_states_cur_out, rnn_states_cur_in
@@ -196,6 +201,7 @@ class RolloutManager:
         with amp.enable(), profile("Bootstrap Values"):
             actor_critic.fwd_critic(
                 self.bootstrap_values, None, self.rnn_end_states, *final_obs)
+            self.bootstrap_values = value_normalizer.invert(amp, self.bootstrap_values)
 
         # Right now this just returns the rollout manager's pointers,
         # but in the future could return only one set of buffers from a

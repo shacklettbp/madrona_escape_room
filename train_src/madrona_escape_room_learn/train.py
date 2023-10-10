@@ -127,7 +127,7 @@ def _compute_advantages(cfg : TrainConfig,
     seq_advantages_out = advantages_out.view(T, N, 1)
 
     next_advantage = 0.0
-    next_values = value_normalizer.invert(amp, rollouts.bootstrap_values)
+    next_values = rollouts.bootstrap_values # Move all inversion to rollout collection
     for i in reversed(range(cfg.steps_per_update)):
         cur_dones = seq_dones[i].to(dtype=amp.compute_dtype)
         cur_rewards = seq_rewards[i].to(dtype=amp.compute_dtype)
@@ -257,8 +257,8 @@ def _ppo_update(cfg : TrainConfig,
         with torch.no_grad():
             action_scores = _compute_action_scores(cfg, amp, mb.advantages)
 
-        if mb.dones.sum() > 0:
-            print("We have a done!")
+        #if mb.dones.sum() > 0: # VISHNU LOGGING
+        #    print("We have a done!")
 
         ratio = torch.exp(new_log_probs - mb.log_probs)
         surr1 = action_scores * ratio
@@ -337,7 +337,7 @@ def _update_iter(cfg : TrainConfig,
         value_normalizer.eval()
 
         with profile('Collect Rollouts'):
-            rollouts = rollout_mgr.collect(amp, sim, actor_critic)
+            rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
 
         # Dump the rollout
         '''
