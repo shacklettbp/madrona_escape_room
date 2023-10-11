@@ -356,6 +356,11 @@ static inline float computeZAngle(Quat q)
     return atan2f(siny_cosp, cosy_cosp);
 }
 
+// Helper function for determining room membership, often used by Context::iterateQuery.
+static CountT roomIndex(const Position& p) {
+    return std::max(CountT(0), std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
+}
+
 // This system packages all the egocentric observations together 
 // for the policy inputs.
 inline void collectObservationsSystem(Engine &ctx,
@@ -369,10 +374,8 @@ inline void collectObservationsSystem(Engine &ctx,
                                       RoomEntityObservations &room_ent_obs,
                                       DoorObservation &door_obs)
 {
-    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    cur_room_idx = std::max(CountT(0), 
-        std::min(consts::numRooms - 1, cur_room_idx));
-
+    const CountT cur_room_idx = roomIndex(pos);
+        
     self_obs.roomX = pos.x / (consts::worldWidth / 2.f);
     self_obs.roomY = (pos.y - cur_room_idx * consts::roomLength) /
         consts::roomLength;
@@ -390,46 +393,62 @@ inline void collectObservationsSystem(Engine &ctx,
     // matching the components on which it is templated.
     {
         int idx = 0; // Context::iterateQuery() is serial, so this is safe.
-        ctx.iterateQuery(ctx.query<Position, GrabState, ObjectID>(),
-            [&](Position& other_pos, GrabState& other_grab, ObjectID& other_id) {
-                Vector3 to_other = other_pos - pos;
+		ctx.iterateQuery(ctx.data().otherAgentQuery,
+			[&](Position& other_pos, GrabState& other_grab) {
+				Vector3 to_other = other_pos - pos;
 
-                // Detect whether or not the other agent is the current agent.
-                if (to_other.length() == 0.0f) {
-                    return;
-                }
+				// Detect whether or not the other agent is the current agent.
+				if (to_other.length() == 0.0f) {
+					return;
+				}
 
-                partner_obs.obs[idx++] = {
-                    .polar = xyToPolar(to_view.rotateVec(to_other)),
-                    .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
-                };
-            });
+				partner_obs.obs[idx++] = {
+					.polar = xyToPolar(to_view.rotateVec(to_other)),
+					.isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
+				};
+			});
     }
 
-    // ctx.iterateQuery() version.
+    // Previously, we iterated over entities that were explicitly members of the current room.
+    // These could safely zero themselves when their EntityTypes were EntityType::None.
+    // However, now that we iterate by component matching, we can encounter entities
+    // that are in the current room, have EntityType::None, but were never Cubes or Buttons,
+    // so shouldn't be allowed to zero entries of the RoomEntityObservations table.
+    // Therefore, we zero the table manually here, and let only the current Cubes and Buttons that
+    // exist update it.
+    EntityObservation ob;
+    ob.polar = { 0.f, 1.f };
+    ob.encodedType = encodeType(EntityType::None);
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        room_ent_obs.obs[i] = ob;
+    }
+
     {
         int idx = 0;
-        ctx.iterateQuery(ctx.query<EntityType, Position>(), [&](EntityType& e, Position& p) {
+		ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position& p, EntityType& e) {
 
-            EntityObservation ob;
-            if (e == EntityType::None) {
-                ob.polar = { 0.f, 1.f };
-                ob.encodedType = encodeType(EntityType::None);
-            }
-            else {
-                Vector3 to_entity = p - pos;
-                ob.polar = xyToPolar(to_view.rotateVec(to_entity));
-                ob.encodedType = encodeType(e);
-            }
+			// We want information on cubes and buttons in the current room.
+			if (roomIndex(p) != cur_room_idx ||
+				(e != EntityType::Cube && e != EntityType::Button)) {
+				return;
+			}
 
-            room_ent_obs.obs[idx++] = ob;
-        });
+			EntityObservation ob;
+			Vector3 to_entity = p - pos;
+			ob.polar = xyToPolar(to_view.rotateVec(to_entity));
+			ob.encodedType = encodeType(e);
+
+			room_ent_obs.obs[idx++] = ob;
+		});
     }
 
     // Context.query() version.
-    ctx.iterateQuery(ctx.query<Position, OpenState>(), [&](Position& p, OpenState& os) {
-            door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
-            door_obs.isOpen = os.isOpen ? 1.f : 0.f;
+    ctx.iterateQuery(ctx.data().doorQuery, [&](Position& p, OpenState& os) {
+        if (roomIndex(p) != cur_room_idx) {
+            return;
+        }
+        door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
+        door_obs.isOpen = os.isOpen ? 1.f : 0.f;
     });
 
 }

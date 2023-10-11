@@ -92,6 +92,11 @@ struct Sim : public madrona::WorldBase {
     // Episode ID number
     int32_t curEpisodeIdx;
 
+    // Queries for collectObservations
+    Query<Position, GrabState>  otherAgentQuery;
+    Query<Position, EntityType> roomEntityQuery;
+    Query<Position, OpenState>  doorQuery;
+
     // Should the environment automatically reset (generate a new episode)
     // at the end of each episode?
     bool autoReset;

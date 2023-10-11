@@ -12,6 +12,7 @@ namespace madEscape {
 // Include several madrona types into the simulator namespace for convenience
 using madrona::Entity;
 using madrona::CountT;
+using madrona::Query;
 using madrona::base::Position;
 using madrona::base::Rotation;
 using madrona::base::Scale;
