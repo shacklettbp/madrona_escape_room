@@ -424,9 +424,8 @@ inline void collectObservationsSystem(Engine &ctx,
     }
 
     {
-        int idx = 0;
+       int idx = 0;
 		ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position& p, EntityType& e) {
-
 			// We want information on cubes and buttons in the current room.
 			if (roomIndex(p) != cur_room_idx ||
 				(e != EntityType::Cube && e != EntityType::Button)) {
@@ -444,13 +443,12 @@ inline void collectObservationsSystem(Engine &ctx,
 
     // Context.query() version.
     ctx.iterateQuery(ctx.data().doorQuery, [&](Position& p, OpenState& os) {
-        if (roomIndex(p) != cur_room_idx) {
-            return;
-        }
-        door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
-        door_obs.isOpen = os.isOpen ? 1.f : 0.f;
+       if (roomIndex(p) != cur_room_idx) {
+           return;
+       }
+       door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
+       door_obs.isOpen = os.isOpen ? 1.f : 0.f;
     });
-
 }
 
 // Launches consts::numLidarSamples per agent.
@@ -707,20 +705,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
         builder, {reset_sys});
 
-    // Finally, collect observations for the next step.
-    auto collect_obs = builder.addToGraph<ParallelForNode<Engine,
-        collectObservationsSystem,
-            Position,
-            Rotation,
-            Progress,
-            GrabState,
-            OtherAgents,
-            SelfObservation,
-            PartnerObservations,
-            RoomEntityObservations,
-            DoorObservation
-        >>({post_reset_broadphase});
-
     // The lidar system
 #ifdef MADRONA_GPU_MODE
     // Note the use of CustomParallelForNode to create a taskgraph node
@@ -745,7 +729,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // Sort entities, this could be conditional on reset like the second
     // BVH build above.
     auto sort_agents = queueSortByWorld<Agent>(
-        builder, {lidar, collect_obs});
+        builder, {lidar});
     auto sort_phys_objects = queueSortByWorld<PhysicsEntity>(
         builder, {sort_agents});
     auto sort_buttons = queueSortByWorld<ButtonEntity>(
@@ -757,8 +741,26 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     (void)sort_walls;
 #else
     (void)lidar;
-    (void)collect_obs;
+    //(void)collect_obs;
 #endif
+
+    // Finally, collect observations for the next step.
+    auto collect_obs = builder.addToGraph<ParallelForNode<Engine,
+        collectObservationsSystem,
+            Position,
+            Rotation,
+            Progress,
+            GrabState,
+            OtherAgents,
+            SelfObservation,
+            PartnerObservations,
+            RoomEntityObservations,
+            DoorObservation
+        >>({post_reset_broadphase, 
+#ifdef MADRONA_GPU_MODE
+        sort_constraints
+#endif
+        });
 }
 
 Sim::Sim(Engine &ctx,
