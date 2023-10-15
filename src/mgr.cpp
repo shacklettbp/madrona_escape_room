@@ -407,8 +407,7 @@ Tensor Manager::actionTensor() const
 {
     return impl_->exportTensor(ExportID::Action, Tensor::ElementType::Int32,
         {
-            impl_->cfg.numWorlds,
-            consts::numAgents,
+            impl_->cfg.numWorlds * consts::numAgents,
             4,
         });
 }
@@ -417,8 +416,7 @@ Tensor Manager::rewardTensor() const
 {
     return impl_->exportTensor(ExportID::Reward, Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    1,
                                });
 }
@@ -427,8 +425,7 @@ Tensor Manager::doneTensor() const
 {
     return impl_->exportTensor(ExportID::Done, Tensor::ElementType::Int32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    1,
                                });
 }
@@ -438,8 +435,7 @@ Tensor Manager::selfObservationTensor() const
     return impl_->exportTensor(ExportID::SelfObservation,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    8,
                                });
 }
@@ -449,8 +445,7 @@ Tensor Manager::partnerObservationsTensor() const
     return impl_->exportTensor(ExportID::PartnerObservations,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::numAgents - 1,
                                    3,
                                });
@@ -461,8 +456,7 @@ Tensor Manager::roomEntityObservationsTensor() const
     return impl_->exportTensor(ExportID::RoomEntityObservations,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::maxEntitiesPerRoom,
                                    3,
                                });
@@ -473,8 +467,7 @@ Tensor Manager::doorObservationTensor() const
     return impl_->exportTensor(ExportID::DoorObservation,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    3,
                                });
 }
@@ -483,8 +476,7 @@ Tensor Manager::lidarTensor() const
 {
     return impl_->exportTensor(ExportID::Lidar, Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::numLidarSamples,
                                    2,
                                });
@@ -495,8 +487,7 @@ Tensor Manager::stepsRemainingTensor() const
     return impl_->exportTensor(ExportID::StepsRemaining,
                                Tensor::ElementType::Int32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    1,
                                });
 }
@@ -516,6 +507,7 @@ TrainInterface Manager::trainInterface() const
         rewardTensor(),
         doneTensor(),
         resetTensor(),
+        Optional<Tensor>::none(),
     };
 }
 

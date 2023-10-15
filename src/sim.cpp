@@ -555,7 +555,6 @@ inline void stepTrackerSystem(Engine &,
     } else if (num_remaining == 0) {
         done.v = 1;
     }
-
 }
 
 // Helper function for sorting nodes in the taskgraph.

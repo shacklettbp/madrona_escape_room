@@ -45,7 +45,7 @@ NB_MODULE(madrona_escape_room, m) {
              &Manager::doorObservationTensor)
         .def("lidar_tensor", &Manager::lidarTensor)
         .def("steps_remaining_tensor", &Manager::stepsRemainingTensor)
-        .def("xla", XLAInterface::buildEntry<
+        .def("jax", JAXInterface::buildEntry<
                 &Manager::trainInterface,
                 &Manager::step
              >())
