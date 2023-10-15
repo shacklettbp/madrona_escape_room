@@ -37,6 +37,10 @@ public:
 
     MGR_EXPORT void step();
 
+#ifdef MADRONA_CUDA_SUPPORT
+    MGR_EXPORT void gpuRolloutStep(cudaStream_t strm, void **rollout_buffers);
+#endif
+
     // These functions export Tensor objects that link the ECS
     // simulation state to the python bindings / PyTorch tensors (src/bindings.cpp)
     MGR_EXPORT madrona::py::Tensor resetTensor() const;

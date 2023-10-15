@@ -48,6 +48,9 @@ NB_MODULE(madrona_escape_room, m) {
         .def("jax", JAXInterface::buildEntry<
                 &Manager::trainInterface,
                 &Manager::step
+#ifdef MADRONA_CUDA_SUPPORT
+                , &Manager::gpuRolloutStep
+#endif
              >())
     ;
 }
