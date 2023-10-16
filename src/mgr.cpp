@@ -582,6 +582,16 @@ Tensor Manager::stepsRemainingTensor() const
                                });
 }
 
+Tensor Manager::agentIDTensor() const
+{
+    return impl_->exportTensor(ExportID::AgentID,
+                               Tensor::ElementType::Int32,
+                               {
+                                   impl_->cfg.numWorlds * consts::numAgents,
+                                   1,
+                               });
+}
+
 TrainInterface Manager::trainInterface() const
 {
     return TrainInterface {
@@ -592,6 +602,7 @@ TrainInterface Manager::trainInterface() const
             { "door", doorObservationTensor() },
             { "lidar", lidarTensor() },
             { "stepsRemaining", stepsRemainingTensor() },
+            { "agentID", agentIDTensor() },
         },
         actionTensor(),
         rewardTensor(),

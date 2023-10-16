@@ -53,6 +53,7 @@ public:
     MGR_EXPORT madrona::py::Tensor doorObservationTensor() const;
     MGR_EXPORT madrona::py::Tensor lidarTensor() const;
     MGR_EXPORT madrona::py::Tensor stepsRemainingTensor() const;
+    MGR_EXPORT madrona::py::Tensor agentIDTensor() const;
     MGR_EXPORT madrona::py::TrainInterface trainInterface() const;
 
     // These functions are used by the viewer to control the simulation

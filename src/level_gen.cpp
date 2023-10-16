@@ -158,6 +158,7 @@ void createPersistentEntities(Engine &ctx)
         ctx.get<ResponseType>(agent) = ResponseType::Dynamic;
         ctx.get<GrabState>(agent).constraintEntity = Entity::none();
         ctx.get<EntityType>(agent) = EntityType::Agent;
+        ctx.get<AgentID>(agent).id = (int32_t)i;
     }
 
     // Populate OtherAgents component, which maintains a reference to the

@@ -63,7 +63,7 @@ def iter_cb(actions, action_probs, values, dones, rewards):
 
 dev = jax.devices()[0]
 
-policy = make_policy(jnp.float16)
+policy = make_policy(jnp.float16, True)
 
 infer_cfg = InferConfig(
     num_steps = args.num_steps,

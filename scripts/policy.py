@@ -21,8 +21,8 @@ def setup_obs(sim):
     lidar_tensor = sim.lidar_tensor().to_torch()
     steps_remaining_tensor = sim.steps_remaining_tensor().to_torch()
 
-    N, A = self_obs_tensor.shape[0:2]
-    batch_size = N * A
+    A = 2
+    N = self_obs_tensor.shape[0] // A
 
     # Add in an agent ID tensor
     id_tensor = torch.arange(A).float()
@@ -30,15 +30,15 @@ def setup_obs(sim):
         id_tensor = id_tensor / (A - 1)
 
     id_tensor = id_tensor.to(device=self_obs_tensor.device)
-    id_tensor = id_tensor.view(1, 2).expand(N, 2).reshape(batch_size, 1)
+    id_tensor = id_tensor.view(1, 2).expand(N, 2).reshape(N * A, 1)
 
     obs_tensors = [
-        self_obs_tensor.view(batch_size, *self_obs_tensor.shape[2:]),
-        partner_obs_tensor.view(batch_size, *partner_obs_tensor.shape[2:]),
-        room_ent_obs_tensor.view(batch_size, *room_ent_obs_tensor.shape[2:]),
-        door_obs_tensor.view(batch_size, *door_obs_tensor.shape[2:]),
-        lidar_tensor.view(batch_size, *lidar_tensor.shape[2:]),
-        steps_remaining_tensor.view(batch_size, *steps_remaining_tensor.shape[2:]),
+        self_obs_tensor,
+        partner_obs_tensor,
+        room_ent_obs_tensor,
+        door_obs_tensor,
+        lidar_tensor,
+        steps_remaining_tensor,
         id_tensor,
     ]
 

@@ -19,6 +19,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     registry.registerComponent<Action>();
     registry.registerComponent<SelfObservation>();
+    registry.registerComponent<AgentID>();
     registry.registerComponent<Reward>();
     registry.registerComponent<Done>();
     registry.registerComponent<GrabState>();
@@ -48,6 +49,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
         (uint32_t)ExportID::Action);
     registry.exportColumn<Agent, SelfObservation>(
         (uint32_t)ExportID::SelfObservation);
+    registry.exportColumn<Agent, AgentID>(
+        (uint32_t)ExportID::AgentID);
     registry.exportColumn<Agent, PartnerObservations>(
         (uint32_t)ExportID::PartnerObservations);
     registry.exportColumn<Agent, RoomEntityObservations>(

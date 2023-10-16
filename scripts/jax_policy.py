@@ -81,7 +81,7 @@ def make_policy(dtype, use_simple_policy):
         encoder = madrona_learn.BackboneEncoder(
             net = MLP(
                 num_channels = 256,
-                num_layers = 2,
+                num_layers = 3,
                 dtype = dtype,
             ),
             #rnn = LSTM(
@@ -116,7 +116,7 @@ def make_policy(dtype, use_simple_policy):
             actions_num_buckets = [4, 8, 5, 2],
             dtype = dtype,
         ),
-        critic = DenseLayerCritic(dtype=jnp.float16),
+        critic = DenseLayerCritic(dtype=dtype),
     )
 
     return policy
