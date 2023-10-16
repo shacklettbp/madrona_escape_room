@@ -356,7 +356,7 @@ static inline float computeZAngle(Quat q)
     return atan2f(siny_cosp, cosy_cosp);
 }
 
-// Helper function for determining room membership, often used by Context::iterateQuery.
+// Helper function for determining room membership.
 static CountT roomIndex(const Position& p) {
     return std::max(CountT(0), std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
 }
@@ -741,7 +741,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     (void)sort_walls;
 #else
     (void)lidar;
-    //(void)collect_obs;
 #endif
 
     // Finally, collect observations for the next step.

@@ -354,7 +354,7 @@ static Entity makeButton(Engine &ctx,
 static Entity makeCube(Engine &ctx,
                        float cube_x,
                        float cube_y,
-                       float scale = 1.0f)
+                       float scale = 1.f)
 {
     Entity cube = ctx.makeEntity<PhysicsEntity>();
     setupRigidBodyEntity(

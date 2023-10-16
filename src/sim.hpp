@@ -92,7 +92,7 @@ struct Sim : public madrona::WorldBase {
     // Episode ID number
     int32_t curEpisodeIdx;
 
-    // Queries for collectObservations
+    // Queries for the collectObservations system.
     Query<Position, GrabState>  otherAgentQuery;
     Query<Position, EntityType> roomEntityQuery;
     Query<Position, OpenState>  doorQuery;
