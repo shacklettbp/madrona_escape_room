@@ -743,7 +743,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
 #endif
 
     // Finally, collect observations for the next step.
-    auto collect_obs = builder.addToGraph<ParallelForNode<Engine,
+    builder.addToGraph<ParallelForNode<Engine,
         collectObservationsSystem,
             Position,
             Rotation,
