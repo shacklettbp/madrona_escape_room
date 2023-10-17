@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive D3.js Heatmap and Trajectories</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    /* Add your CSS styles here */
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: black;
+      shape-rendering: crispEdges;
+    }
+    .bgimg {
+        display: inline-block;
+        margin: 10px;
+        background-image: url('https://images.unsplash.com/photo-1500964757637-c85e8a162699');
+        background-size: contain;
+        background-repeat: no-repeat;
+    }
+  </style>
+</head>
+<body>
+
+<div id="heatmap" class="bgimg"></div>
+<div id="trajectories" class="bgimg"></div>
+
+<script>
+  // Sample data for multiple trajectories with values
+  /*
+  const trajectoriesData = [
+    [
+      { x: 50, y: 50, value: 10 },
+      { x: 100, y: 150, value: 15 },
+      { x: 200, y: 100, value: 12 },
+      { x: 300, y: 200, value: 18 },
+      { x: 400, y: 50, value: 8 }
+    ],
+    [
+      { x: 100, y: 50, value: 13 },
+      { x: 150, y: 100, value: 16 },
+      { x: 250, y: 50, value: 14 },
+      { x: 350, y: 150, value: 20 },
+      { x: 450, y: 100, value: 11 }
+    ]
+    // Add more trajectory sets as needed
+  ];
+  */
+
+  const repeat = (arr, n) => [].concat(...Array(n).fill(arr));
+
+  function getUrlParameter(name) {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get(name);
+  }
+
+  var runname = getUrlParameter("run")
+  var stepname = getUrlParameter("step")
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", String(runname) + "/" + String(stepname) + ".json", false); // `false` makes the request synchronous
+  xhr.send(null);
+  var trajectoriesData = JSON.parse(xhr.responseText);
+  console.log(trajectoriesData)
+
+  // Define heatmap parameters
+  
+  /*
+  const dataSize = 0.01;
+  const dataWidth = 1.0;
+  const dataHeight = 1.0;
+  */
+
+  // Define the margins and dimensions for your figures
+  var margin = { top: 0, right: 0, bottom: 0, left: 0 };
+  var figureWidth = 400 // 600 - margin.left - margin.right;
+  var figureHeight = 600 // 300 - margin.top - margin.bottom;
+  console.log(figureWidth)
+  console.log(figureHeight)
+
+  const xMin = -0.3;
+  const xMax = 0.3;
+  const yMin = 0.0;
+  const yMax = 1.2;
+  const xSize = 0.03; // Example x cell size
+  const ySize = 0.05; // Example y cell size'
+  const cellX = Math.floor(figureWidth * xSize / (xMax - xMin))
+  const cellY = Math.floor(figureHeight * ySize / (yMax - yMin))
+
+  // Create scales for x and y axes
+  var xScale = d3.scaleLinear()
+    .domain([xMin, xMax])
+    .range([0, figureWidth]);
+
+  var yScale = d3.scaleLinear()
+    .domain([yMin, yMax])
+    .range([0, figureHeight]);
+
+  // Create heat map with X and Y axes
+  var heatmapSvg = d3.select("#heatmap")
+    .append("svg")
+    .attr("width", figureWidth + margin.left + margin.right)
+    .attr("height", figureHeight + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  // Create trajectories plot with X and Y axes
+  var trajectoriesSvg = d3.select("#trajectories")
+    .append("svg")
+    .attr("width", figureWidth + margin.left + margin.right)
+    .attr("height", figureHeight + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  // Calculate the number of cells in x and y directions
+  const numCellsX = Math.ceil((xMax - xMin) / xSize);
+  const numCellsY = Math.ceil((yMax - yMin) / ySize);
+
+  // Create heatmap data and count data arrays
+  const heatmapData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
+  const countData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
+
+  // Update the trajectoriesData array with your data
+  trajectoriesData.forEach(trajectory => {
+    trajectory.forEach(point => {
+      // Check if the point is within the specified range
+      if (point.x >= xMin && point.x <= xMax && point.y >= yMin && point.y <= yMax) {
+        // Calculate grid positions based on the point's coordinates and cell sizes
+        const gridX = Math.floor((point.x - xMin) / xSize);
+        const gridY = Math.floor((point.y - yMin) / ySize);
+        // Add point value to heatmap data and increment count data
+        heatmapData[gridY][gridX] += point.value;
+        countData[gridY][gridX]++;
+      }
+    });
+  });
+
+  // Calculate average values for heatmap and max count for opacity scale
+  const averageHeatmapData = heatmapData.map((row, i) => row.map((value, j) => value / countData[i][j] || 0));
+  const maxCount = d3.max(countData.flat());
+
+  const opacityScale = d3.scaleLinear()
+      .domain([0, maxCount])
+      .range([0.3, 1]); // Adjust the opacity range as per your preference
+
+  const heatmapColorScale = d3.scaleLinear()
+    .domain([-d3.max(averageHeatmapData.flat()), 0, d3.max(averageHeatmapData.flat())])
+    .range(["red", "white", "green"]);
+
+  heatmapSvg.selectAll("rect")
+    .data(averageHeatmapData.flat())
+    .enter()
+    .append("rect")
+    .attr("x", (d, i) => xScale(xMin + (i % numCellsX) * xSize))
+    .attr("y", (d, i) => yScale(yMin + Math.floor(i / numCellsX) * ySize))
+    .attr("width", cellX)
+    .attr("height", cellY)
+    .attr("fill", (d, i) => heatmapColorScale(d)) // Use average value for color
+    .attr("fill-opacity", (d, i) => opacityScale(countData.flat()[i])) // Use count for opacity
+    .on("mouseover", handleMouseOver)
+    .on("mouseout", handleMouseOut);
+
+  // Create X and Y axes for the heatmap
+  const heatmapXAxis = d3.axisBottom()
+    .scale(d3.scaleLinear().domain([xMin, xMax]).range([0, figureWidth]));
+
+  const heatmapYAxis = d3.axisRight()
+    .scale(d3.scaleLinear().domain([yMin, yMax]).range([0, figureHeight]));
+
+  heatmapSvg.append("g")
+    .attr("class", "x axis")
+    //.attr("transform", "translate(0," + figureHeight + ")")
+    .call(heatmapXAxis);
+
+  heatmapSvg.append("g")
+    .attr("class", "y axis")
+    .call(heatmapYAxis);
+
+  const lineGenerator = d3.line()
+    .x(d => d.x)
+    .y(d => d.y);
+
+  const colorScale = d3.scaleLinear()
+    .domain([0, d3.max(trajectoriesData.flat(d => d.value))])
+    .range(["green", "red"]); // Change colors as per your preference
+
+  function handleMouseOver(d, i) {
+    // Filter trajectories for the hovered cell
+    var hoveredTrajectories = trajectoriesData.filter(trajectory => {
+      return trajectory.some(point => {
+        const gridX = Math.floor((point.x - xMin) / xSize);
+        const gridY = Math.floor((point.y - yMin) / ySize);
+        return gridX === i % numCellsX && gridY === Math.floor(i / numCellsX);
+      });
+    });
+
+    if (hoveredTrajectories.length == 0) {
+      hoveredTrajectories = trajectoriesData
+    }
+
+    // Create heatmap data and count data arrays
+    const heatmapData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
+    const countData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
+
+    // Update the trajectoriesData array with your data
+    hoveredTrajectories.forEach(trajectory => {
+      trajectory.forEach(point => {
+        // Check if the point is within the specified range
+        if (point.x >= xMin && point.x <= xMax && point.y >= yMin && point.y <= yMax) {
+          // Calculate grid positions based on the point's coordinates and cell sizes
+          const gridX = Math.floor((point.x - xMin) / xSize);
+          const gridY = Math.floor((point.y - yMin) / ySize);
+          // Add point value to heatmap data and increment count data
+          heatmapData[gridY][gridX] += point.value;
+          countData[gridY][gridX]++;
+        }
+      });
+    });
+
+    // Calculate average values for heatmap and max count for opacity scale
+    const averageHeatmapData = heatmapData.map((row, i) => row.map((value, j) => value / countData[i][j] || 0));
+    const maxCount = d3.max(countData.flat());
+
+    const opacityScale = d3.scaleLinear()
+        .domain([0, maxCount])
+        .range([0.7, 1]); // Adjust the opacity range as per your preference
+
+    const heatmapColorScale = d3.scaleLinear()
+      .domain([-d3.max(averageHeatmapData.flat()), 0, d3.max(averageHeatmapData.flat())])
+      .range(["red", "white", "green"]);
+
+    heatmapSvg.selectAll("rect").remove();
+    heatmapSvg.selectAll("rect")
+      .data(averageHeatmapData.flat())
+      .enter()
+      .append("rect")
+      .attr("x", (d, i) => xScale(xMin + (i % numCellsX) * xSize))
+      .attr("y", (d, i) => yScale(yMin + Math.floor(i / numCellsX) * ySize))
+      .attr("width", cellX)
+      .attr("height", cellY)
+      .attr("fill", (d, i) => heatmapColorScale(d)) // Use average value for color
+      .attr("fill-opacity", (d, i) => opacityScale(countData.flat()[i])) // Use count for opacity
+      .on("mouseover", handleMouseOver)
+      .on("mouseout", handleMouseOut);
+
+    heatmapSvg.append("g")
+      .attr("class", "x axis")
+      //.attr("transform", "translate(0," + figureHeight + ")")
+      .call(heatmapXAxis);
+
+    heatmapSvg.append("g")
+      .attr("class", "y axis")
+      .call(heatmapYAxis);
+
+    // Draw trajectories for the hovered cell
+    trajectoriesSvg.selectAll("path").remove(); // Clear previous trajectories
+    trajectoriesSvg.selectAll("line").remove();
+    hoveredTrajectories.forEach(trajectory => {
+        trajectory.forEach((point, index) => {
+        const color = heatmapColorScale(point.value);
+        if (index > 0) {
+          const prevPoint = trajectory[index - 1];
+          trajectoriesSvg.append("line")
+            .attr("x1", xScale(prevPoint.x))
+            .attr("y1", yScale(prevPoint.y))
+            .attr("x2", xScale(point.x))
+            .attr("y2", yScale(point.y))
+            .attr("stroke", color)
+            .attr("stroke-width", 2);
+        }
+      });
+    });
+
+    trajectoriesSvg.append("g")
+      .attr("class", "x axis")
+      //.attr("transform", "translate(0," + figureHeight + ")")
+      .call(heatmapXAxis);
+
+    trajectoriesSvg.append("g")
+      .attr("class", "y axis")
+      .call(heatmapYAxis);
+  }
+
+  function handleMouseOut() {
+    handleMouseOver(0, 0)
+  }
+</script>
+
+</body>
+</html>
