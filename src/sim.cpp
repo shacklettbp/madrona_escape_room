@@ -357,8 +357,10 @@ static inline float computeZAngle(Quat q)
 }
 
 // Helper function for determining room membership.
-static CountT roomIndex(const Position& p) {
-    return std::max(CountT(0), std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
+static inline CountT roomIndex(const Position &p)
+{
+    return std::max(CountT(0),
+    std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
 }
 
 // This system packages all the egocentric observations together 
@@ -393,8 +395,8 @@ inline void collectObservationsSystem(Engine &ctx,
     {
         int idx = 0; // Context::iterateQuery() is serial, so this is safe.
 		ctx.iterateQuery(ctx.data().otherAgentQuery,
-			[&](Position& other_pos, GrabState& other_grab) {
-				Vector3 to_other = other_pos - pos;
+			[&](Position &other_pos, GrabState &other_grab) {
+			    Vector3 to_other = other_pos - pos;
 
 				// Detect whether or not the other agent is the current agent.
 				if (to_other.length() == 0.0f) {
@@ -408,13 +410,11 @@ inline void collectObservationsSystem(Engine &ctx,
 			});
     }
 
-    // Previously, we iterated over entities that were explicitly members of the current room.
-    // These could safely zero themselves when their EntityTypes were EntityType::None.
-    // However, now that we iterate by component matching, we can encounter entities
-    // that are in the current room, have EntityType::None, but were never Cubes or Buttons,
-    // so shouldn't be allowed to zero entries of the RoomEntityObservations table.
-    // Therefore, we zero the table manually here, and let only the current Cubes and Buttons that
-    // exist update it.
+    // Becase we iterate by component matching, we can encounter entities
+    // that are in the current room, have EntityType::None, but were never 
+    // Cubes or Buttons, so shouldn't be allowed to zero entries of the 
+    // RoomEntityObservations table. Therefore, we zero the table manually 
+    // here, and let only the current Cubes and Buttons that exist update it.
     EntityObservation ob;
     ob.polar = { 0.f, 1.f };
     ob.encodedType = encodeType(EntityType::None);
@@ -424,7 +424,7 @@ inline void collectObservationsSystem(Engine &ctx,
 
     {
        int idx = 0;
-		ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position& p, EntityType& e) {
+		ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
 			// We want information on cubes and buttons in the current room.
 			if (roomIndex(p) != cur_room_idx ||
 				(e != EntityType::Cube && e != EntityType::Button)) {
@@ -441,7 +441,7 @@ inline void collectObservationsSystem(Engine &ctx,
     }
 
     // Context.query() version.
-    ctx.iterateQuery(ctx.data().doorQuery, [&](Position& p, OpenState& os) {
+    ctx.iterateQuery(ctx.data().doorQuery, [&](Position &p, OpenState &os) {
        if (roomIndex(p) != cur_room_idx) {
            return;
        }
@@ -791,6 +791,11 @@ Sim::Sim(Engine &ctx,
 
     // Generate initial world state
     initWorld(ctx);
+
+    // Create the queries for collectObservations
+    ctx.data().otherAgentQuery = ctx.query<Position, GrabState>();
+    ctx.data().roomEntityQuery = ctx.query<Position, EntityType>();
+    ctx.data().doorQuery       = ctx.query<Position, OpenState>();
 }
 
 // This declaration is needed for the GPU backend in order to generate the
