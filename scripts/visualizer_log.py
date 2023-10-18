@@ -17,6 +17,7 @@ from madrona_escape_room_learn.amp import AMPState
 from madrona_escape_room_learn.moving_avg import EMANormalizer
 from torch import optim
 import datetime
+import json
 
 torch.manual_seed(0)
 
@@ -46,12 +47,6 @@ sim = madrona_escape_room.SimManager(
 obs, num_obs_features = setup_obs(sim)
 policy = make_policy(num_obs_features, args.num_channels, args.separate_value)
 
-#weights = LearningState.load_policy_weights(args.ckpt_path)
-#policy.load_state_dict(weights)
-
-
-
-
 dev = torch.device(f'cuda:{args.gpu_id}')
 optimizer = optim.Adam(policy.parameters(), lr=0.1)
 amp = AMPState(dev, True)
@@ -68,13 +63,6 @@ learning_state = LearningState(
 )
 
 start_update_idx = learning_state.load(args.ckpt_path)
-
-
-
-
-
-
-
 
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
@@ -108,4 +96,22 @@ with torch.no_grad():
 # Dump the features
 now = datetime.datetime.now()
 dir_path = "/data/rl/madrona_3d_example/scripts/"
-torch.save(rollouts, dir_path + str(now) + ".pt")
+# torch.save(rollouts, dir_path + str(now) + ".pt")
+
+trajectories_data = []
+    
+values = rollouts.values.cpu().reshape((args.num_steps, -1))
+positions = rollouts.obs[0].cpu().reshape((args.num_steps, -1, rollouts.obs[0].shape[-1]))
+
+for i in range(args.num_worlds):
+    trajectory = []
+    for j in range(args.num_steps):
+        x = positions[j, i, 2]
+        y = positions[j, i, 3]
+        value = values[j, i]
+        trajectory.append({"x": float(x), "y": float(y), "value": float(value)})
+    trajectories_data.append(trajectory)
+
+trajectories_json = json.dumps(trajectories_data)
+with open("/data/rl/madrona_3d_example/visualization/test_run_2/" + args.ckpt_path.split('/')[-1].split('.')[0] + ".json", "w") as json_file:
+    json_file.write(trajectories_json)
