@@ -16,7 +16,7 @@
     .bgimg {
         display: inline-block;
         margin: 10px;
-        background-image: url('https://images.unsplash.com/photo-1500964757637-c85e8a162699');
+        background-image: url("map_background.png");
         background-size: contain;
         background-repeat: no-repeat;
     }
@@ -75,15 +75,15 @@
 
   // Define the margins and dimensions for your figures
   var margin = { top: 0, right: 0, bottom: 0, left: 0 };
-  var figureWidth = 400 // 600 - margin.left - margin.right;
+  var figureWidth = 300 // 600 - margin.left - margin.right;
   var figureHeight = 600 // 300 - margin.top - margin.bottom;
   console.log(figureWidth)
   console.log(figureHeight)
 
-  const xMin = -0.3;
-  const xMax = 0.3;
+  const xMin = -0.25;
+  const xMax = 0.25;
   const yMin = 0.0;
-  const yMax = 1.2;
+  const yMax = 1.0;
   const xSize = 0.03; // Example x cell size
   const ySize = 0.05; // Example y cell size'
   const cellX = Math.floor(figureWidth * xSize / (xMax - xMin))
@@ -227,9 +227,11 @@
         .domain([0, maxCount])
         .range([0.7, 1]); // Adjust the opacity range as per your preference
 
+    /*
     const heatmapColorScale = d3.scaleLinear()
       .domain([-d3.max(averageHeatmapData.flat()), 0, d3.max(averageHeatmapData.flat())])
       .range(["red", "white", "green"]);
+    */
 
     heatmapSvg.selectAll("rect").remove();
     heatmapSvg.selectAll("rect")

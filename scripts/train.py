@@ -100,8 +100,11 @@ class LearningCallback:
             bootstrap_value_min = update_results.bootstrap_values.min().cpu().item()
             bootstrap_value_max = update_results.bootstrap_values.max().cpu().item()
 
-            vnorm_mu = learning_state.value_normalizer.mu.cpu().item()
-            vnorm_sigma = learning_state.value_normalizer.sigma.cpu().item()
+            vnorm_mu = 0
+            vnorm_sigma = 0
+            if normalize_values:
+                vnorm_mu = learning_state.value_normalizer.mu.cpu().item()
+                vnorm_sigma = learning_state.value_normalizer.sigma.cpu().item()
 
         print(f"\nUpdate: {update_id}")
         print(f"    Loss: {ppo.loss: .3e}, A: {ppo.action_loss: .3e}, V: {ppo.value_loss: .3e}, E: {ppo.entropy_loss: .3e}")
