@@ -24,6 +24,7 @@ torch.manual_seed(0)
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--gpu-id', type=int, default=0)
 arg_parser.add_argument('--ckpt-path', type=str, required=True)
+arg_parser.add_argument('--run-name', type=str, required=True)
 arg_parser.add_argument('--action-dump-path', type=str)
 
 arg_parser.add_argument('--num-worlds', type=int, required=True)
@@ -113,5 +114,7 @@ for i in range(args.num_worlds):
     trajectories_data.append(trajectory)
 
 trajectories_json = json.dumps(trajectories_data)
-with open("/data/rl/madrona_3d_example/visualization/test_run_2/" + args.ckpt_path.split('/')[-1].split('.')[0] + ".json", "w") as json_file:
+folder_name = "/mnt/ssd/rl/madrona_escape_room/visualization/" + args.run_name + "/"
+Path(folder_name).mkdir(parents=True, exist_ok=True)
+with open(folder_name + args.ckpt_path.split('/')[-1].split('.')[0] + ".json", "w") as json_file:
     json_file.write(trajectories_json)

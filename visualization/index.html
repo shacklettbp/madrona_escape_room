@@ -146,8 +146,10 @@
       .range([0.5, 1]); // Adjust the opacity range as per your preference
 
   const heatmapColorScale = d3.scaleLinear()
-    .domain([-0.5, 0, 1.5, 3])
-    .range(["red", "white", "blue", "navy"]);
+  //  .domain([-0.5, 0, 1.5, 3])
+  //  .range(["red", "white", "blue", "navy"]);
+      .domain([d3.min(averageHeatmapData.flat()), 0, d3.max(averageHeatmapData.flat())])
+      .range(["red", "white", "blue"]);
 
   heatmapSvg.selectAll("rect")
     .data(averageHeatmapData.flat())
@@ -270,7 +272,8 @@
             .attr("x2", xScale(point.x))
             .attr("y2", yScale(point.y))
             .attr("stroke", color)
-            .attr("stroke-width", 2);
+            .attr("stroke-width", 2)
+            .attr("stroke-opacity", 0.5);
         }
       });
     });

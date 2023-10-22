@@ -43,6 +43,8 @@ arg_parser.add_argument('--profile-report', action='store_true')
 arg_parser.add_argument('--no-value-norm', action='store_true')
 arg_parser.add_argument('--no-advantage-norm', action='store_true')
 
+arg_parser.add_argument('--no-advantages', action='store_true')
+
 args = arg_parser.parse_args()
 
 normalize_values = not args.no_value_norm
@@ -87,6 +89,7 @@ class LearningCallback:
             second_room_count = (update_results.obs[0][:,:,:,3] > 0.34).sum()
             third_room_count = (update_results.obs[0][:,:,:,3] > 0.67).sum()
             exit_count = (update_results.obs[0][:,:,:,3] > 1.01).sum()
+            door_count = (update_results.obs[3][:,:,:,2] > 0.5).sum()
 
             value_mean = update_results.values.mean().cpu().item()
             value_min = update_results.values.min().cpu().item()
@@ -131,6 +134,7 @@ class LearningCallback:
             "second_room_count": second_room_count,
             "third_room_count": third_room_count,
             "exit_count": exit_count,
+            "door_count": door_count,
             "vnorm_mu": vnorm_mu,
             }
         )
@@ -151,7 +155,7 @@ sim = madrona_escape_room.SimManager(
     auto_reset = True,
 )
 
-use_warm_up = False
+use_warm_up = True
 if use_warm_up:
     steps_so_far = 0
     warm_up = 32
@@ -222,6 +226,7 @@ train(
             max_grad_norm=0.5,
             num_epochs=2,
             clip_value_loss=args.clip_value_loss,
+            no_advantages=args.no_advantages,
         ),
         value_normalizer_decay = 0.999,
         mixed_precision = args.fp16,

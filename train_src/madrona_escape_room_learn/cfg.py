@@ -13,6 +13,7 @@ class PPOConfig:
     num_epochs: int = 1
     clip_value_loss: bool = False
     adaptive_entropy: bool = True
+    no_advantages: bool = False # Override to use values instead of advantages
 
 @dataclass(frozen=True)
 class AWRConfig:

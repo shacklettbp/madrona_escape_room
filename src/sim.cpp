@@ -93,7 +93,7 @@ static inline void initWorld(Engine &ctx)
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
-    ctx.data().rng = RNG::make(episode_idx); // SET TO 0 FOR FIXED WORLD VISHNU
+    ctx.data().rng = RNG::make(0); //episode_idx); // SET TO 0 FOR FIXED WORLD VISHNU
     ctx.data().curEpisodeIdx = episode_idx;
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
@@ -507,11 +507,10 @@ inline void denseRewardSystem(Engine &,
 
     float reward = 0.0f;
 
-    /*if (reward_pos > 14.0f && old_max_y < 14.0f) {
+    if (reward_pos > 14.0f && old_max_y < 14.0f) {
         // Passed the first room
         reward += 1.0f;
-    } else */
-    if (reward_pos > 28.0f && old_max_y < 28.0f) {
+    } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
         reward += 10.0f;
     } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
         reward += 100.0f;
@@ -565,22 +564,27 @@ inline void denseRewardSystem3(Engine &ctx,
         reward_pos = 10.0f;
     } else if (reward_pos < 27.0f && reward_pos > 22.0f) {
         reward_pos = 22.0f;
-    } else if (reward_pos < 41.0f && reward_pos > 36.0f) {
+    } else if (reward_pos < 40.0f && reward_pos > 36.0f) {
         reward_pos = 36.0f;
+    } else if (reward_pos >= 40.0f) {
+        reward_pos += 10.0f; // Not sure if this one is necessary
     }
-
-    float reward = 0.05 * exp(reward_pos / 10);
 
     // Provide reward for open doors
     CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    const LevelState &level = ctx.singleton<LevelState>();
-    const Room &room = level.rooms[cur_room_idx];
-    Entity cur_door = room.door;
-    //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
-    OpenState door_open_state = ctx.get<OpenState>(cur_door);
-    //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
-    float isOpen = door_open_state.isOpen ? 1.f : 0.f;
-    reward += isOpen; // Maybe add scaling to this
+    if (cur_room_idx < 3) {
+        // Still in a room
+        const LevelState &level = ctx.singleton<LevelState>();
+        const Room &room = level.rooms[cur_room_idx];
+        Entity cur_door = room.door;
+        //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
+        OpenState door_open_state = ctx.get<OpenState>(cur_door);
+        //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
+        float isOpen = door_open_state.isOpen ? 1.f : 0.f;
+        reward_pos += isOpen*5; // Maybe add scaling to this
+    }
+
+    float reward = 0.05 * exp(reward_pos / 10);
 
     out_reward.v = reward;
 }
@@ -676,6 +680,30 @@ inline void rewardSystem(Engine &,
         reward = consts::slackReward;
     }
 
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void rewardSystemFixed(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float new_progress = reward_pos - old_max_y;
+
+    float reward = 0.0f;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    } 
+    
     out_reward.v = reward;
 }
 
@@ -802,7 +830,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({button_sys});
 
     // Compute initial reward now that physics has updated the world state
-    
+    /*
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
          rewardSystem,
             Position,
@@ -817,21 +845,21 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Progress,
             Reward
         >>({reward_sys});
-    /*
+    */
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         sparseRewardSystem2,
+         denseRewardSystem3,
             Position,
             Progress,
             Reward
         >>({door_open_sys});
-    */
+    
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({bonus_reward_sys});
-    //    >>({reward_sys});
+    //    >>({bonus_reward_sys});
+        >>({reward_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,

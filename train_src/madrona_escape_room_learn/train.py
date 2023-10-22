@@ -137,8 +137,12 @@ def _compute_advantages(cfg : TrainConfig,
         next_valid = 1.0 - cur_dones
 
         # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)
-        td_err = (cur_rewards + 
-            cfg.gamma * next_valid * next_values - cur_values)
+        if cfg.no_advantages:
+            td_err = (cur_rewards + 
+                cfg.gamma * next_valid * next_values) # Don't subtract off cur_values
+        else:
+            td_err = (cur_rewards + 
+                cfg.gamma * next_valid * next_values - cur_values)
 
         # A_t = sum (gamma * lambda)^(l - 1) * delta_l (EQ 16 GAE)
         #     = delta_t + gamma * lambda * A_t+1
@@ -341,6 +345,7 @@ def _update_iter(cfg : TrainConfig,
             rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
 
         # Dump the rollout
+        '''
         curr_rand = torch.rand((1,))[0]
         if curr_rand < 0.05:
             # Dump the features
@@ -351,6 +356,7 @@ def _update_iter(cfg : TrainConfig,
                 # Create a new directory because it does not exist
                 os.makedirs(dir_path)
             torch.save(rollouts, dir_path + str(now) + ".pt")
+        '''
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values
