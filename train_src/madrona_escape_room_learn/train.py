@@ -137,7 +137,7 @@ def _compute_advantages(cfg : TrainConfig,
         next_valid = 1.0 - cur_dones
 
         # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)
-        if cfg.no_advantages:
+        if cfg.ppo.no_advantages:
             td_err = (cur_rewards + 
                 cfg.gamma * next_valid * next_values) # Don't subtract off cur_values
         else:

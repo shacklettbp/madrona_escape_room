@@ -44,6 +44,7 @@ arg_parser.add_argument('--no-value-norm', action='store_true')
 arg_parser.add_argument('--no-advantage-norm', action='store_true')
 
 arg_parser.add_argument('--no-advantages', action='store_true')
+arg_parser.add_argument('--value-normalizer-decay', type=float, default=0.999)
 
 args = arg_parser.parse_args()
 
@@ -228,7 +229,7 @@ train(
             clip_value_loss=args.clip_value_loss,
             no_advantages=args.no_advantages,
         ),
-        value_normalizer_decay = 0.999,
+        value_normalizer_decay = args.value_normalizer_decay,
         mixed_precision = args.fp16,
         normalize_advantages = normalize_advantages,
         normalize_values = normalize_values,
