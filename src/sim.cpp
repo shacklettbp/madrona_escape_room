@@ -566,9 +566,9 @@ inline void denseRewardSystem3(Engine &ctx,
         reward_pos = 10.0f;
     } else if (reward_pos < 27.0f && reward_pos > 22.0f) {
         reward_pos = 22.0f;
-    } else if (reward_pos < 40.0f && reward_pos > 36.0f) {
+    } else if (reward_pos < 41.0f && reward_pos > 36.0f) {
         reward_pos = 36.0f;
-    } else if (reward_pos >= 40.0f) {
+    } else if (reward_pos >= 41.0f) {
         reward_pos += 10.0f; // Not sure if this one is necessary
     }
 
