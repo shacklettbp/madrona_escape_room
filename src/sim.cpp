@@ -581,7 +581,7 @@ inline void denseRewardSystem3(Engine &ctx,
         OpenState door_open_state = ctx.get<OpenState>(cur_door);
         //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
         float isOpen = door_open_state.isOpen ? 1.f : 0.f;
-        reward_pos += isOpen*5; // Maybe add scaling to this
+        reward_pos += isOpen*3; // Maybe add scaling to this
     }
 
     float reward = 0.05 * exp(reward_pos / 10);
