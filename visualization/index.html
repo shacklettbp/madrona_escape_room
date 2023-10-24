@@ -177,6 +177,7 @@
       .domain([-d3.max(averageHeatmapData.flat()), 0, d3.max(averageHeatmapData.flat())])
       .range(["red", "white", "blue"]);
 
+  /*
   heatmapSvg.selectAll("rect")
     .data(averageHeatmapData.flat())
     .enter()
@@ -189,6 +190,7 @@
     .attr("fill-opacity", (d, i) => opacityScale(countData.flat()[i])) // Use count for opacity
     .on("mouseover", handleMouseOver)
     .on("mouseout", handleMouseOut);
+  */
 
   // Create X and Y axes for the heatmap
   const heatmapXAxis = d3.axisBottom()
@@ -417,6 +419,8 @@
   function handleMouseOut() {
     handleMouseOver(0, 0)
   }
+
+  handleMouseOut()
 </script>
 
 </body>
