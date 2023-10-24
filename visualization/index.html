@@ -60,6 +60,7 @@
 
   var runname = getUrlParameter("run")
   var stepname = getUrlParameter("step")
+  var doorstatus = getUrlParameter("door")
 
   var xhr = new XMLHttpRequest();
   xhr.open("GET", String(runname) + "/" + String(stepname) + ".json", false); // `false` makes the request synchronous
@@ -67,13 +68,11 @@
   var trajectoriesData = JSON.parse(xhr.responseText);
   console.log(trajectoriesData)
 
-  // Define heatmap parameters
-  
-  /*
-  const dataSize = 0.01;
-  const dataWidth = 1.0;
-  const dataHeight = 1.0;
-  */
+  if (doorstatus != null) {
+    trajectoriesData = trajectoriesData.map(trajectory => {
+      return trajectory.filter(point => point.door_open == doorstatus);
+    });
+  }
 
   // Define the margins and dimensions for your figures
   var margin = { top: 0, right: 0, bottom: 0, left: 0 };

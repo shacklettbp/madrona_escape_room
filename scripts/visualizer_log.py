@@ -104,6 +104,7 @@ trajectories_data = []
 values = rollouts.values.cpu().reshape((args.num_steps, -1))
 rewards = rollouts.rewards.cpu().reshape((args.num_steps, -1))
 positions = rollouts.obs[0].cpu().reshape((args.num_steps, -1, rollouts.obs[0].shape[-1]))
+door_opens = rollouts.obs[3].cpu()[:,:,:,2].reshape((args.num_steps, -1))
 
 for i in range(args.num_worlds):
     trajectory = []
@@ -112,7 +113,8 @@ for i in range(args.num_worlds):
         y = positions[j, i, 3]
         value = values[j, i]
         reward = rewards[j, i]
-        trajectory.append({"x": float(x), "y": float(y), "value": float(value), "reward": float(reward)})
+        door_open = door_opens[j, i]
+        trajectory.append({"x": float(x), "y": float(y), "value": float(value), "reward": float(reward), "door_open": float(door_open)})
     trajectories_data.append(trajectory)
 
 trajectories_json = json.dumps(trajectories_data)
