@@ -315,6 +315,13 @@
       .attr("class", "y axis")
       .call(heatmapYAxis);
 
+    heatmapSvg.append("text")
+      .attr("x", figureWidth / 2) // Position the title horizontally in the middle of the SVG
+      .attr("y", 30) // Position the title 30 units above the top edge of the SVG
+      .attr("text-anchor", "middle") // Center the text around (x, y)
+      .style("font-size", "24px") // Set font size
+      .text("Values");
+
     /*
     variancemapSvg.selectAll("rect").remove();
     variancemapSvg.selectAll("rect")
@@ -363,6 +370,13 @@
       .attr("class", "y axis")
       .call(heatmapYAxis);
 
+    rewardmapSvg.append("text")
+      .attr("x", figureWidth / 2) // Position the title horizontally in the middle of the SVG
+      .attr("y", 30) // Position the title 30 units above the top edge of the SVG
+      .attr("text-anchor", "middle") // Center the text around (x, y)
+      .style("font-size", "24px") // Set font size
+      .text("Rewards");
+
     returnmapSvg.selectAll("rect").remove();
     returnmapSvg.selectAll("rect")
       .data(averageReturnmapData.flat())
@@ -385,6 +399,13 @@
     returnmapSvg.append("g")
       .attr("class", "y axis")
       .call(heatmapYAxis);
+
+    returnmapSvg.append("text")
+      .attr("x", figureWidth / 2) // Position the title horizontally in the middle of the SVG
+      .attr("y", 30) // Position the title 30 units above the top edge of the SVG
+      .attr("text-anchor", "middle") // Center the text around (x, y)
+      .style("font-size", "24px") // Set font size
+      .text("Returns");
 
     // Draw trajectories for the hovered cell
     trajectoriesSvg.selectAll("path").remove(); // Clear previous trajectories
@@ -414,6 +435,13 @@
     trajectoriesSvg.append("g")
       .attr("class", "y axis")
       .call(heatmapYAxis);
+    
+    trajectoriesSvg.append("text")
+      .attr("x", figureWidth / 2) // Position the title horizontally in the middle of the SVG
+      .attr("y", 30) // Position the title 30 units above the top edge of the SVG
+      .attr("text-anchor", "middle") // Center the text around (x, y)
+      .style("font-size", "24px") // Set font size
+      .text("Trajectories");
   }
 
   function handleMouseOut() {
