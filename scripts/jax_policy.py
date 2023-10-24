@@ -69,7 +69,19 @@ class ProcessObsMLP(nn.Module):
         obs,
         train,
     ):
-        processed_obs = ProcessObsCommon(self.dtype)(obs, train)
+        obs = jax.tree_map(lambda x: jnp.asarray(x, dtype=self.dtype), obs)
+        jax.tree_map(lambda x: assert_valid_input(x), obs)
+
+        obs = jax.tree_map(
+            lambda o: o.reshape(o.shape[0], -1), obs)
+
+        obs, steps_remaining = obs.pop('stepsRemaining')
+        steps_remaining = steps_remaining / 200
+
+        processed_obs = obs.copy({
+            'stepsRemaining': steps_remaining,
+        })
+
         flattened, _ = jax.tree_util.tree_flatten(processed_obs)
 
         return jnp.concatenate(flattened, axis=-1)

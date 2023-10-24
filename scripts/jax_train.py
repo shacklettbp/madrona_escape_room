@@ -63,7 +63,12 @@ def metrics_cb(metrics, epoch, mb, train_state):
 
 def host_cb(update_idx, metrics, train_state_mgr):
     print(f"Update: {update_idx}")
-    print(metrics)
+
+    metrics.pretty_print()
+    vnorm_mu = train_state_mgr.train_states.value_normalize_stats['mu'][0][0]
+    vnorm_sigma = train_state_mgr.train_states.value_normalize_stats['sigma'][0][0]
+    print(f"    Value Normalizer => Mean: {vnorm_mu: .3e}, σ: {vnorm_sigma: .3e}")
+    print()
 
     train_state_mgr.save(update_idx, f"{args.ckpt_dir}/{update_idx}")
 
@@ -73,8 +78,10 @@ def iter_cb(update_idx, update_time, metrics, train_state_mgr):
     cb = partial(jax.experimental.io_callback, host_cb, ())
     noop = lambda *args: ()
 
-    lax.cond(update_idx % 10 == 0, cb, noop,
-             update_idx, metrics, train_state_mgr)
+    update_id = update_idx + 1
+    lax.cond(jnp.logical_or(update_id == 1, update_id % 10 == 0), cb, noop,
+             update_id, metrics, train_state_mgr)
+    #cb(update_id, metrics, train_state_mgr)
 
 dev = jax.devices()[0]
 
@@ -107,6 +114,6 @@ cfg = TrainConfig(
 policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, True)
 
 madrona_learn.train(dev, cfg, sim_step, init_sim_data, policy,
-    iter_cb, CustomMetricConfig(cb=metrics_cb, custom_metrics=[]))
+    iter_cb, CustomMetricConfig(register_metrics = lambda metrics: metrics))
 
 del sim

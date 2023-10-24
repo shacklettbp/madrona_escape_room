@@ -26,8 +26,8 @@ class LearningCallback:
         fps = args.num_worlds * args.steps_per_update / update_time
         self.mean_fps += (fps - self.mean_fps) / update_id
 
-        if update_id != 1 and  update_id % 10 != 0:
-            return
+        #if update_id != 1 and  update_id % 10 != 0:
+        #    return
 
         ppo = update_results.ppo_stats
 
@@ -148,7 +148,7 @@ train(
             value_loss_coef=args.value_loss_coef,
             entropy_coef=args.entropy_loss_coef,
             max_grad_norm=0.5,
-            num_epochs=2,
+            num_epochs=1,
             clip_value_loss=args.clip_value_loss,
         ),
         value_normalizer_decay = 0.999,

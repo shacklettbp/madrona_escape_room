@@ -10,7 +10,6 @@ from functools import partial
 import madrona_escape_room
 
 import madrona_learn
-from madrona_learn import InferConfig
 
 from jax_policy import make_policy
 
@@ -22,6 +21,7 @@ arg_parser.add_argument('--num-policies', type=int, default=1)
 arg_parser.add_argument('--num-steps', type=int, default=200)
 arg_parser.add_argument('--ckpt-path', type=str, required=True)
 arg_parser.add_argument('--action-dump-path', type=str)
+arg_parser.add_argument('--fp16', action='store_true')
 arg_parser.add_argument('--gpu-sim', action='store_true')
 arg_parser.add_argument('--gpu-id', type=int, default=0)
 
@@ -43,35 +43,57 @@ if args.action_dump_path:
 else:
     action_log = None
 
-def host_cb(actions, action_probs, values, dones, rewards):
-    print(actions)
-    print(action_probs[0][0, 0], action_probs[0][0, 1])
-    print(action_probs[1][0, 0], action_probs[1][0, 1])
-    print(action_probs[2][0, 0], action_probs[2][0, 1])
-    print(action_probs[3][0, 0], action_probs[3][0, 1])
-    print(rewards)
+def host_cb(obs, actions, action_probs, values, dones, rewards):
+    print(obs)
+
+    print("Actions:", actions)
+    print("    ", action_probs[0][0, 0], action_probs[0][0, 1])
+    print("    ", action_probs[1][0, 0], action_probs[1][0, 1])
+    print("    ", action_probs[2][0, 0], action_probs[2][0, 1])
+    print("    ", action_probs[3][0, 0], action_probs[3][0, 1])
+    print("Rewards:", rewards)
 
     if action_log:
         actions.tofile(action_log)
 
     return ()
 
-def iter_cb(actions, action_probs, values, dones, rewards):
+def iter_cb(obs, actions, action_probs, values, dones, rewards):
     cb = partial(jax.experimental.io_callback, host_cb, ())
 
-    cb(actions, action_probs, values, dones, rewards)
+    cb(obs, actions, action_probs, values, dones, rewards)
 
 dev = jax.devices()[0]
 
 policy = make_policy(jnp.float16, True)
 
-infer_cfg = InferConfig(
-    num_steps = args.num_steps,
-    num_policies = args.num_policies,
-    mixed_precision = True,
+cfg = madrona_learn.TrainConfig(
+    num_worlds = args.num_worlds,
+    team_size = 2,
+    num_teams = 1,
+    num_updates = 0,
+    steps_per_update = 0,
+    num_bptt_chunks = 0,
+    lr = 0,
+    gamma = 0,
+    gae_lambda = 0.95,
+    algo = madrona_learn.PPOConfig(
+        num_mini_batches=1,
+        clip_coef=0.2,
+        value_loss_coef=0,
+        entropy_coef=0,
+        max_grad_norm=0.5,
+        num_epochs=2,
+        clip_value_loss=0,
+    ),
+    value_normalizer_decay = 0.999,
+    mixed_precision = args.fp16,
+    seed = 5,
+    pbt_ensemble_size = 1,
+    pbt_history_len = 1,
 )
 
-madrona_learn.infer(dev, infer_cfg, sim_step, init_sim_data,
-    policy, iter_cb, args.ckpt_path)
+madrona_learn.eval_ckpt(dev, args.ckpt_path, args.num_steps, cfg, sim_step,
+    init_sim_data, policy, iter_cb)
 
 del sim
