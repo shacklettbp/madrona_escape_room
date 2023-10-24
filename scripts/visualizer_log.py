@@ -102,6 +102,7 @@ dir_path = "/data/rl/madrona_3d_example/scripts/"
 trajectories_data = []
     
 values = rollouts.values.cpu().reshape((args.num_steps, -1))
+rewards = rollouts.rewards.cpu().reshape((args.num_steps, -1))
 positions = rollouts.obs[0].cpu().reshape((args.num_steps, -1, rollouts.obs[0].shape[-1]))
 
 for i in range(args.num_worlds):
@@ -110,11 +111,12 @@ for i in range(args.num_worlds):
         x = positions[j, i, 2]
         y = positions[j, i, 3]
         value = values[j, i]
-        trajectory.append({"x": float(x), "y": float(y), "value": float(value)})
+        reward = rewards[j, i]
+        trajectory.append({"x": float(x), "y": float(y), "value": float(value), "reward": float(reward)})
     trajectories_data.append(trajectory)
 
 trajectories_json = json.dumps(trajectories_data)
-folder_name = "/mnt/ssd/rl/madrona_escape_room/visualization/" + args.run_name + "/"
+folder_name = "/data/rl/madrona_3d_example/visualization/" + args.run_name + "/"
 Path(folder_name).mkdir(parents=True, exist_ok=True)
 with open(folder_name + args.ckpt_path.split('/')[-1].split('.')[0] + ".json", "w") as json_file:
     json_file.write(trajectories_json)

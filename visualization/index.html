@@ -24,8 +24,10 @@
 </head>
 <body>
 
-<div id="heatmap" class="bgimg"></div>
 <div id="trajectories" class="bgimg"></div>
+<div id="heatmap" class="bgimg"></div>
+<div id="variancemap" class="bgimg"></div>
+<div id="rewardmap" class="bgimg"></div>
 
 <script>
   // Sample data for multiple trajectories with values
@@ -100,6 +102,22 @@
 
   // Create heat map with X and Y axes
   var heatmapSvg = d3.select("#heatmap")
+    .append("svg")
+    .attr("width", figureWidth + margin.left + margin.right)
+    .attr("height", figureHeight + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  // Create heat map with X and Y axes
+  var variancemapSvg = d3.select("#variancemap")
+    .append("svg")
+    .attr("width", figureWidth + margin.left + margin.right)
+    .attr("height", figureHeight + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  // Create heat map with X and Y axes
+  var rewardmapSvg = d3.select("#rewardmap")
     .append("svg")
     .attr("width", figureWidth + margin.left + margin.right)
     .attr("height", figureHeight + margin.top + margin.bottom)
@@ -204,6 +222,8 @@
 
     // Create heatmap data and count data arrays
     const heatmapData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
+    const rewardmapData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
+    const heatmapSquareData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
     const countData = new Array(numCellsY).fill(0).map(() => new Array(numCellsX).fill(0));
 
     // Update the trajectoriesData array with your data
@@ -216,6 +236,8 @@
           const gridY = Math.floor((point.y - yMin) / ySize);
           // Add point value to heatmap data and increment count data
           heatmapData[gridY][gridX] += point.value;
+          rewardmapData[gridY][gridX] += point.reward;
+          heatmapSquareData[gridY][gridX] += (point.value * point.value);
           countData[gridY][gridX]++;
         }
       });
@@ -223,6 +245,8 @@
 
     // Calculate average values for heatmap and max count for opacity scale
     const averageHeatmapData = heatmapData.map((row, i) => row.map((value, j) => value / countData[i][j] || 0));
+    const averageRewardmapData = rewardmapData.map((row, i) => row.map((value, j) => value / countData[i][j] || 0));
+    const varHeatmapData = averageHeatmapData.map((row, i) => row.map((value, j) => (heatmapSquareData[i][j] / countData[i][j]) - (value*value) || 0));
     const maxCount = d3.max(countData.flat());
 
     const opacityScale = d3.scaleLinear()
@@ -234,6 +258,18 @@
       .domain([-d3.max(averageHeatmapData.flat()), 0, d3.max(averageHeatmapData.flat())])
       .range(["red", "white", "green"]);
     */
+
+    const varColorScale = d3.scaleLinear()
+    //  .domain([-0.5, 0, 1.5, 3])
+    //  .range(["red", "white", "blue", "navy"]);
+        .domain([0, d3.max(varHeatmapData.flat())])
+        .range(["white", "blue"]);
+
+    const rewardColorScale = d3.scaleLinear()
+    //  .domain([-0.5, 0, 1.5, 3])
+    //  .range(["red", "white", "blue", "navy"]);
+        .domain([0, d3.max(averageRewardmapData.flat())])
+        .range(["white", "blue"]);
 
     heatmapSvg.selectAll("rect").remove();
     heatmapSvg.selectAll("rect")
@@ -255,6 +291,52 @@
       .call(heatmapXAxis);
 
     heatmapSvg.append("g")
+      .attr("class", "y axis")
+      .call(heatmapYAxis);
+
+    variancemapSvg.selectAll("rect").remove();
+    variancemapSvg.selectAll("rect")
+      .data(varHeatmapData.flat())
+      .enter()
+      .append("rect")
+      .attr("x", (d, i) => xScale(xMin + (i % numCellsX) * xSize))
+      .attr("y", (d, i) => yScale(yMin + Math.floor(i / numCellsX) * ySize))
+      .attr("width", cellX)
+      .attr("height", cellY)
+      .attr("fill", (d, i) => varColorScale(d)) // Use average value for color
+      .attr("fill-opacity", 0.7) // Use count for opacity
+      .on("mouseover", handleMouseOver)
+      .on("mouseout", handleMouseOut);
+
+    variancemapSvg.append("g")
+      .attr("class", "x axis")
+      //.attr("transform", "translate(0," + figureHeight + ")")
+      .call(heatmapXAxis);
+
+    variancemapSvg.append("g")
+      .attr("class", "y axis")
+      .call(heatmapYAxis);
+
+    rewardmapSvg.selectAll("rect").remove();
+    rewardmapSvg.selectAll("rect")
+      .data(averageRewardmapData.flat())
+      .enter()
+      .append("rect")
+      .attr("x", (d, i) => xScale(xMin + (i % numCellsX) * xSize))
+      .attr("y", (d, i) => yScale(yMin + Math.floor(i / numCellsX) * ySize))
+      .attr("width", cellX)
+      .attr("height", cellY)
+      .attr("fill", (d, i) => rewardColorScale(d)) // Use average value for color
+      .attr("fill-opacity", 0.7) // Use count for opacity
+      .on("mouseover", handleMouseOver)
+      .on("mouseout", handleMouseOut);
+
+    rewardmapSvg.append("g")
+      .attr("class", "x axis")
+      //.attr("transform", "translate(0," + figureHeight + ")")
+      .call(heatmapXAxis);
+
+    rewardmapSvg.append("g")
       .attr("class", "y axis")
       .call(heatmapYAxis);
 

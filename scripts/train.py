@@ -53,7 +53,7 @@ normalize_advantages = not args.no_advantage_norm
 
 run = wandb.init(
     # Set the project where this run will be logged
-    project="escape-room",
+    project="escape-room-lugia",
     # Track hyperparameters and run metadata
     config=args
 )
