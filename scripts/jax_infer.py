@@ -58,7 +58,7 @@ def host_cb(obs, actions, action_probs, values, dones, rewards):
 
     return ()
 
-def iter_cb(obs, actions, action_probs, values, dones, rewards):
+def iter_cb(obs, actions, action_probs, action_logits, values, dones, rewards):
     cb = partial(jax.experimental.io_callback, host_cb, ())
 
     cb(obs, actions, action_probs, values, dones, rewards)
