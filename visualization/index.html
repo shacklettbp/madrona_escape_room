@@ -263,8 +263,8 @@
     const maxCount = d3.max(countData.flat());
 
     const opacityScale = d3.scaleLinear()
-        .domain([0, maxCount])
-        .range([0.5, 1]); // Adjust the opacity range as per your preference
+        .domain([0, 1, maxCount])
+        .range([0, 0.5, 1]); // Adjust the opacity range as per your preference
 
     /*
     const heatmapColorScale = d3.scaleLinear()
@@ -357,7 +357,7 @@
       .attr("width", cellX)
       .attr("height", cellY)
       .attr("fill", (d, i) => rewardColorScale(d)) // Use average value for color
-      .attr("fill-opacity", 0.7) // Use count for opacity
+      .attr("fill-opacity", (d, i) => opacityScale(countData.flat()[i])) // Use count for opacity
       .on("mouseover", handleMouseOver)
       .on("mouseout", handleMouseOut);
 
@@ -387,7 +387,7 @@
       .attr("width", cellX)
       .attr("height", cellY)
       .attr("fill", (d, i) => returnColorScale(d)) // Use average value for color
-      .attr("fill-opacity", 0.7) // Use count for opacity
+      .attr("fill-opacity", (d, i) => opacityScale(countData.flat()[i])) // Use count for opacity
       .on("mouseover", handleMouseOver)
       .on("mouseout", handleMouseOut);
 
