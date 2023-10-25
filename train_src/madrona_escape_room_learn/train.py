@@ -408,4 +408,4 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         start_update_idx=start_update_idx,
     )
 
-    return actor_critic.cpu()
+    return actor_critic
