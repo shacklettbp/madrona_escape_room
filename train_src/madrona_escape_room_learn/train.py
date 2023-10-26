@@ -145,6 +145,10 @@ def _compute_action_scores(cfg, amp, advantages):
         # Unclear from docs if var_mean is safe under autocast
         with amp.disable():
             var, mean = torch.var_mean(advantages.to(dtype=torch.float32))
+            print("Z Score: {} {} {}".format(
+                mean.cpu().item(), var.cpu().item(),
+                torch.rsqrt(var.clamp(min=1e-5)).cpu().item()))
+
             action_scores = advantages - mean
             action_scores.mul_(torch.rsqrt(var.clamp(min=1e-5)))
 
@@ -165,14 +169,25 @@ def _ppo_update(cfg : TrainConfig,
         with torch.no_grad():
             action_scores = _compute_action_scores(cfg, amp, mb.advantages)
 
-        ratio = torch.exp(new_log_probs - mb.log_probs)
+        ratio = torch.exp(new_log_probs - new_log_probs.detach())
         surr1 = action_scores * ratio
         surr2 = action_scores * (
             torch.clamp(ratio, 1.0 - cfg.ppo.clip_coef, 1.0 + cfg.ppo.clip_coef))
 
         action_obj = torch.min(surr1, surr2)
-
+    
         returns = mb.advantages + mb.values
+
+
+        print("Obs", mb.obs[0])
+        print("Returns", returns)
+        print(mb.values)
+        print("NV", new_values)
+        print(mb.advantages)
+        print(mb.log_probs)
+        print(action_scores)
+        print(ratio)
+        print(action_obj)
 
         if cfg.ppo.clip_value_loss:
             with torch.no_grad():
@@ -185,9 +200,13 @@ def _ppo_update(cfg : TrainConfig,
         value_loss = 0.5 * F.mse_loss(
             new_values, normalized_returns, reduction='none')
 
+        print(f"Values, Returns: {torch.mean(new_values)} {torch.mean(normalized_returns)}")
+
         action_obj = torch.mean(action_obj)
         value_loss = torch.mean(value_loss)
         entropies = torch.mean(entropies)
+
+        print(f"V loss: {value_loss.cpu().item()}")
 
         loss = (
             - action_obj # Maximize the action objective function
@@ -198,37 +217,48 @@ def _ppo_update(cfg : TrainConfig,
     with profile('Optimize'):
         if amp.scaler is None:
             loss.backward()
-            #print("MAX")
-            #for k, v in actor_critic.named_parameters():
-            #    print("  ", k, torch.max(v.grad))
-            #print("MIN")
-            #for k, v in actor_critic.named_parameters():
-            #    print("  ", k, torch.min(v.grad))
-            #print("MEAN")
-            #for k, v in actor_critic.named_parameters():
-            #    print("  ", k, torch.mean(v.grad))
 
+            print("\nGrads:", loss.cpu().item())
+            named_params = dict(actor_critic.named_parameters())
+            sorted_keys = sorted(named_params.keys())
+            for k in sorted_keys:
+                v = named_params[k]
+                print("  ", k, torch.mean(v.grad).cpu().item(),
+                      torch.min(v.grad).cpu().item(), torch.max(v.grad).cpu().item())
+                grad = v.grad.detach().cpu()
+                if len(grad.shape) > 1:
+                    grad = grad.transpose(0, 1)
+                print(grad)
             nn.utils.clip_grad_norm_(
                 actor_critic.parameters(), cfg.ppo.max_grad_norm)
             optimizer.step()
         else:
             amp.scaler.scale(loss).backward()
             amp.scaler.unscale_(optimizer)
-            #print("MAX")
-            #for k, v in actor_critic.named_parameters():
-            #    print("  ", k, torch.max(v.grad))
-            #print("MIN")
-            #for k, v in actor_critic.named_parameters():
-            #    print("  ", k, torch.min(v.grad))
-            #print("MEAN")
-            #for k, v in actor_critic.named_parameters():
-            #    print("  ", k, torch.mean(v.grad))
+
+            print("\nGrads:", loss.cpu().item())
+            named_params = dict(actor_critic.named_parameters())
+            sorted_keys = named_params.keys()
+            for k in sorted_keys:
+                v = named_params[k]
+                print("  ", k, torch.mean(v.grad), torch.min(v.grad), torch.max(v.grad))
+
             nn.utils.clip_grad_norm_(
                 actor_critic.parameters(), cfg.ppo.max_grad_norm)
             amp.scaler.step(optimizer)
             amp.scaler.update()
 
         optimizer.zero_grad()
+
+        print("\nParams:")
+        named_params = dict(actor_critic.named_parameters())
+        sorted_keys = sorted(named_params.keys())
+        for k in sorted_keys:
+            v = named_params[k]
+            v = v.detach()
+            if len(v.shape) > 1:
+                v = v.transpose(0, 1)
+            print("  ", k, v.cpu().numpy())
 
     with torch.no_grad():
         returns_var, returns_mean = torch.var_mean(normalized_returns)
@@ -271,7 +301,7 @@ def _update_iter(cfg : TrainConfig,
                                 amp,
                                 advantages,
                                 rollouts)
-    
+
     actor_critic.train()
     value_normalizer.train()
 
@@ -280,8 +310,9 @@ def _update_iter(cfg : TrainConfig,
         num_stats = 0
 
         for epoch in range(cfg.ppo.num_epochs):
-            for inds in torch.randperm(num_train_seqs).chunk(
-                    cfg.ppo.num_mini_batches):
+            #for inds in torch.randperm(num_train_seqs).chunk(
+            #        cfg.ppo.num_mini_batches):
+            for inds in [torch.arange(num_train_seqs)]:
                 with torch.no_grad(), profile('Gather Minibatch', gpu=True):
                     mb = _gather_minibatch(rollouts, advantages, inds, amp)
                 cur_stats = _ppo_update(cfg,
@@ -362,6 +393,14 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
     torch.backends.cudnn.allow_tf32 = True
 
     num_agents = sim.actions.shape[0]
+
+    named_params = dict(actor_critic.named_parameters())
+    sorted_names = sorted(named_params.keys())
+    for k in sorted_names:
+        v = named_params[k]
+        print(k, v.shape, torch.mean(v).cpu().item(), torch.std(v).cpu().item())
+
+    torch.save(actor_critic.state_dict(), "/tmp/pt")
 
     actor_critic = actor_critic.to(dev)
 

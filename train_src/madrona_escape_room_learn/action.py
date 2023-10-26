@@ -1,6 +1,8 @@
 import torch
 from torch.distributions.categorical import Categorical
 
+sampled_actions_dump = open("/tmp/sampled_actions", "wb")
+
 class DiscreteActionDistributions:
     def __init__(self, actions_num_buckets, logits = None):
         self.actions_num_buckets = actions_num_buckets
@@ -28,6 +30,9 @@ class DiscreteActionDistributions:
 
         torch.stack(actions, dim=1, out=actions_out)
         torch.stack(log_probs, dim=1, out=log_probs_out)
+
+        print(actions_out.shape, actions_out.dtype)
+        actions_out.cpu().numpy().tofile(sampled_actions_dump)
 
     def action_stats(self, actions):
         log_probs = []
