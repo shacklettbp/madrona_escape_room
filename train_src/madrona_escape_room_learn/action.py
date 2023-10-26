@@ -6,12 +6,16 @@ class DiscreteActionDistributions:
         self.actions_num_buckets = actions_num_buckets
 
         self.dists = []
+        self.unnormalized_logits = []
         cur_bucket_offset = 0
 
         for num_buckets in self.actions_num_buckets:
-            self.dists.append(Categorical(logits = logits[
-                :, cur_bucket_offset:cur_bucket_offset + num_buckets],
-                validate_args=False))
+            sliced_logits = \
+                logits[:, cur_bucket_offset:cur_bucket_offset + num_buckets]
+
+            self.dists.append(Categorical(
+                logits=sliced_logits, validate_args=False))
+            self.unnormalized_logits.append(sliced_logits)
             cur_bucket_offset += num_buckets
 
     def best(self, out):
