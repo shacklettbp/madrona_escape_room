@@ -61,8 +61,8 @@ sim_step, init_sim_data = sim.jax(jax_gpu)
 def metrics_cb(metrics, epoch, mb, train_state):
     return metrics
 
-def host_cb(update_idx, metrics, train_state_mgr):
-    print(f"Update: {update_idx}")
+def host_cb(update_id, metrics, train_state_mgr):
+    print(f"Update: {update_id}")
 
     metrics.pretty_print()
     vnorm_mu = train_state_mgr.train_states.value_normalize_stats['mu'][0][0]
@@ -70,7 +70,8 @@ def host_cb(update_idx, metrics, train_state_mgr):
     print(f"    Value Normalizer => Mean: {vnorm_mu: .3e}, σ: {vnorm_sigma: .3e}")
     print()
 
-    train_state_mgr.save(update_idx, f"{args.ckpt_dir}/{update_idx}")
+    if update_id % 100 == 0:
+        train_state_mgr.save(update_id, f"{args.ckpt_dir}/{update_id}")
 
     return ()
 

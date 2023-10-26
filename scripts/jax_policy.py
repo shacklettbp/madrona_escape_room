@@ -6,6 +6,7 @@ from flax import linen as nn
 
 import argparse
 from functools import partial
+import math
 
 import madrona_learn
 from madrona_learn import (
@@ -25,6 +26,11 @@ from madrona_learn.rnn import LSTM
 def assert_valid_input(tensor):
     checkify.check(jnp.isnan(tensor).any() == False, "NaN!")
     checkify.check(jnp.isinf(tensor).any() == False, "Inf!")
+
+def pytorch_initializer():
+    scale = 2 / (1 + math.sqrt(2) ** 2)
+    return jax.nn.initializers.variance_scaling(
+        scale, mode='fan_in', distribution='normal')
 
 class ProcessObsCommon(nn.Module):
     dtype: jnp.dtype
@@ -95,6 +101,7 @@ def make_policy(dtype, use_simple_policy):
                 num_channels = 256,
                 num_layers = 3,
                 dtype = dtype,
+                weight_init = pytorch_initializer(),
             ),
             #rnn = LSTM(
             #    hidden_channels = 256,

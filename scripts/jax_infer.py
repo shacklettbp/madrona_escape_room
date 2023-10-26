@@ -3,6 +3,7 @@ from jax import lax, random, numpy as jnp
 from jax.experimental import checkify
 import flax
 from flax import linen as nn
+import numpy as np
 
 import argparse
 from functools import partial
@@ -47,10 +48,23 @@ def host_cb(obs, actions, action_probs, values, dones, rewards):
     print(obs)
 
     print("Actions:", actions)
-    print("    ", action_probs[0][0, 0], action_probs[0][0, 1])
-    print("    ", action_probs[1][0, 0], action_probs[1][0, 1])
-    print("    ", action_probs[2][0, 0], action_probs[2][0, 1])
-    print("    ", action_probs[3][0, 0], action_probs[3][0, 1])
+
+    print("Move Amount Probs")
+    print(" ", np.array_str(action_probs[0][0, 0], precision=2, suppress_small=True))
+    print(" ", np.array_str(action_probs[0][0, 1], precision=2, suppress_small=True))
+
+    print("Move Angle Probs")
+    print(" ", np.array_str(action_probs[1][0, 0], precision=2, suppress_small=True))
+    print(" ", np.array_str(action_probs[1][0, 1], precision=2, suppress_small=True))
+
+    print("Rotate Probs")
+    print(" ", np.array_str(action_probs[2][0, 0], precision=2, suppress_small=True))
+    print(" ", np.array_str(action_probs[2][0, 1], precision=2, suppress_small=True))
+
+    print("Grab Probs")
+    print(" ", np.array_str(action_probs[3][0, 0], precision=2, suppress_small=True))
+    print(" ", np.array_str(action_probs[3][0, 1], precision=2, suppress_small=True))
+
     print("Rewards:", rewards)
 
     if action_log:
