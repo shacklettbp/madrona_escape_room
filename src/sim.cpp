@@ -394,20 +394,20 @@ inline void collectObservationsSystem(Engine &ctx,
     // matching the components on which it is templated.
     {
         int idx = 0; // Context::iterateQuery() is serial, so this is safe.
-		ctx.iterateQuery(ctx.data().otherAgentQuery,
-			[&](Position &other_pos, GrabState &other_grab) {
-			    Vector3 to_other = other_pos - pos;
+        ctx.iterateQuery(ctx.data().otherAgentQuery,
+            [&](Position &other_pos, GrabState &other_grab) {
+                Vector3 to_other = other_pos - pos;
 
-				// Detect whether or not the other agent is the current agent.
-				if (to_other.length() == 0.0f) {
-					return;
-				}
+                // Detect whether or not the other agent is the current agent.
+                if (to_other.length() == 0.0f) {
+                    return;
+                }
 
-				partner_obs.obs[idx++] = {
-					.polar = xyToPolar(to_view.rotateVec(to_other)),
-					.isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
-				};
-			});
+                partner_obs.obs[idx++] = {
+                    .polar = xyToPolar(to_view.rotateVec(to_other)),
+                    .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
+                };
+            });
     }
 
     // Becase we iterate by component matching, we can encounter entities
@@ -418,26 +418,28 @@ inline void collectObservationsSystem(Engine &ctx,
     EntityObservation ob;
     ob.polar = { 0.f, 1.f };
     ob.encodedType = encodeType(EntityType::None);
-    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+    for (int i = 0; i < consts::maxObservationsPerAgent; ++i) {
         room_ent_obs.obs[i] = ob;
     }
 
     {
        int idx = 0;
-		ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
-			// We want information on cubes and buttons in the current room.
-			if (roomIndex(p) != cur_room_idx ||
-				(e != EntityType::Cube && e != EntityType::Button)) {
-				return;
-			}
+        ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
+            // We want information on cubes and buttons in the current room.
+            if (roomIndex(p) != cur_room_idx ||
+                (e != EntityType::Cube && e != EntityType::Button)) {
+                return;
+            }
 
-			EntityObservation ob;
-			Vector3 to_entity = p - pos;
-			ob.polar = xyToPolar(to_view.rotateVec(to_entity));
-			ob.encodedType = encodeType(e);
+            EntityObservation ob;
+            Vector3 to_entity = p - pos;
+            ob.polar = xyToPolar(to_view.rotateVec(to_entity));
+            ob.encodedType = encodeType(e);
 
-			room_ent_obs.obs[idx++] = ob;
-		});
+            if (idx < consts::maxObservationsPerAgent) {
+                room_ent_obs.obs[idx++] = ob;
+            }
+        });
     }
 
     // Context.query() version.

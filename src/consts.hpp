@@ -16,6 +16,10 @@ inline constexpr madrona::CountT numAgents = 2;
 // in order to setup the fixed-size learning tensors appropriately.
 inline constexpr madrona::CountT maxEntitiesPerRoom = 6;
 
+// Give the agents more observation space than the number of room
+// entities in case they push cubes into other rooms.
+inline constexpr madrona::CountT maxObservationsPerAgent = 9;
+
 // Various world / entity size parameters
 inline constexpr float worldLength = 40.f;
 inline constexpr float worldWidth = 20.f;

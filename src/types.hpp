@@ -96,7 +96,7 @@ struct EntityObservation {
 };
 
 struct RoomEntityObservations {
-    EntityObservation obs[consts::maxEntitiesPerRoom];
+    EntityObservation obs[consts::maxObservationsPerAgent];
 };
 
 // RoomEntityObservations is exported as a
