@@ -463,7 +463,7 @@ Tensor Manager::roomEntityObservationsTensor() const
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
-                                   consts::maxEntitiesPerRoom,
+                                   consts::maxObservationsPerAgent,
                                    3,
                                });
 }

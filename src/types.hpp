@@ -100,9 +100,9 @@ struct RoomEntityObservations {
 };
 
 // RoomEntityObservations is exported as a
-// [N, A, maxEntitiesPerRoom, 3] tensor to pytorch
+// [N, A, maxObservationsPerAgent, 3] tensor to pytorch
 static_assert(sizeof(RoomEntityObservations) == sizeof(float) *
-    consts::maxEntitiesPerRoom * 3);
+    consts::maxObservationsPerAgent * 3);
 
 // Observation of the current room's door. It's relative position and
 // whether or not it is ope
