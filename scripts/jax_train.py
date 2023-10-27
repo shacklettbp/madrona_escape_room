@@ -44,7 +44,7 @@ arg_parser.add_argument('--pbt-ensemble-size', type=int, default=1)
 arg_parser.add_argument('--pbt-history-len', type=int, default=1)
 
 arg_parser.add_argument('--gpu-sim', action='store_true')
-arg_parser.add_argument('--profile-report', action='store_true')
+arg_parser.add_argument('--profile-port', type=int, default=None)
 
 args = arg_parser.parse_args()
 
@@ -131,6 +131,7 @@ cfg = TrainConfig(
 policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, False)
 
 madrona_learn.train(dev, cfg, sim_step, init_sim_data, policy,
-    iter_cb, CustomMetricConfig(register_metrics = lambda metrics: metrics))
+    iter_cb, CustomMetricConfig(register_metrics = lambda metrics: metrics),
+    profile_port = args.profile_port)
 
 del sim
