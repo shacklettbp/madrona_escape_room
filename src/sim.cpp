@@ -36,12 +36,16 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
+    registry.registerSingleton<CheckpointState>();
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
     registry.registerArchetype<DoorEntity>();
     registry.registerArchetype<ButtonEntity>();
 
+    // TODO: ZM, guessing we will eventually we want this to make checkpoint
+    // state visible to the training code.
+    //registry.exportSingleton<CheckpointState>((uint32_t)ExportID::Checkpoint);
     registry.exportSingleton<WorldReset>(
         (uint32_t)ExportID::Reset);
     registry.exportColumn<Agent, Action>(
@@ -98,6 +102,13 @@ static inline void initWorld(Engine &ctx)
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
     generateWorld(ctx);
+}
+
+inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState) {
+    printf("Checkpoint Reached!\n");
+    // TODO: ZM, implement.
+
+    // OtherAgents observations can be filled in by this system.
 }
 
 // This system runs each frame and checks if the current episode is complete
@@ -677,12 +688,18 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Reward
         >>({reward_sys});
 
+    // Conditionally checkpoint the state of the system if we are on the Nth step.
+    auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+        checkpointSystem,
+        CheckpointState
+        >>({bonus_reward_sys});
+
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({bonus_reward_sys});
+        >>({checkpoint_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,

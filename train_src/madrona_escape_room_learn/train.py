@@ -364,6 +364,7 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         amp = amp,
     )
 
+    # Restore a previous policy, nothing to do with the state of the world.
     if restore_ckpt != None:
         start_update_idx = learning_state.load(restore_ckpt)
     else:

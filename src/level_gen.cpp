@@ -176,11 +176,6 @@ void createPersistentEntities(Engine &ctx)
             other_agents.e[out_idx++] = other_agent;
         }
     }
-
-    // Create the queries for collectObservations
-    ctx.data().otherAgentQuery = ctx.query<Position, GrabState>();
-    ctx.data().roomEntityQuery = ctx.query<Position, EntityType>();
-    ctx.data().doorQuery       = ctx.query<Position, OpenState>();
 }
 
 // Although agents and walls persist between episodes, we still need to

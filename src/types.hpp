@@ -193,6 +193,29 @@ struct LevelState {
     Room rooms[consts::numRooms];
 };
 
+struct PhysicsEntityState {
+    Position p;
+    Rotation r;
+    Velocity v;
+    JointConstraint j;
+    ObjectID i;
+    // TODO: other physics stuff that needs to be saved.
+}
+struct Checkpoint {
+
+    int dummyCheckpoint;
+    //SelfObservation agentStates[consts::numAgents];
+    //Position blockPositions[NUM_ENTITIES];
+    
+    // TODO: Grab all other state of the world here. Physics?
+
+};
+
+struct CheckpointState {
+    // TODO: how long are the rollouts
+    Checkpoint checkpoints[200]; // initial implementation checkpoints every state.
+};
+
 /* ECS Archetypes for the game */
 
 // There are 2 Agents in the environment trying to get to the destination
