@@ -16,8 +16,9 @@ from madrona_learn import (
 
 from madrona_learn.models import (
     EMANormalizeTree,
+    LayerNorm,
     MLP,
-    EgocentricSelfAttentionNet,
+    EntitySelfAttentionNet,
     DenseLayerDiscreteActor,
     DenseLayerCritic,
 )
@@ -45,26 +46,47 @@ class ProcessObsCommon(nn.Module):
 
         jax.tree_map(lambda x: assert_valid_input(x), obs)
 
-        obs = jax.tree_map(
-            lambda o: o.reshape(o.shape[0], -1), obs)
+        obs = EMANormalizeTree(0.99999)(obs, train)
 
-        normalized_obs = EMANormalizeTree(0.99999)(obs, train)
+        obs, self_ob = obs.pop('self')
+        obs, steps_remaining = obs.pop('stepsRemaining')
+        obs, lidar = obs.pop('lidar')
+        obs, agent_id = obs.pop('agentID')
 
-        normalized_obs, lidar = normalized_obs.pop('lidar')
+        #lidar = nn.Conv(
+        #        features=1,
+        #        kernel_size=(lidar.shape[-2],),
+        #        padding='CIRCULAR',
+        #        dtype=self.dtype,
+        #    )(lidar)
+        lidar = lidar.reshape(*lidar.shape[0:-2], -1)
 
-        lidar_processed = nn.Conv(
-                features=1,
-                kernel_size=(lidar.shape[-1],),
-                padding='CIRCULAR',
-                dtype=self.dtype,
-            )(jnp.expand_dims(lidar, axis=-1))
-        
-        lidar_processed = lidar_processed.squeeze(axis=-1)
-        lidar_processed = lidar
+        self_ob = jnp.concatenate([
+                self_ob,
+                steps_remaining,
+                lidar,
+                agent_id,
+            ], axis=-1)
 
-        return normalized_obs.copy({
-            'lidar': lidar_processed
+        return obs.copy({
+            'self': self_ob, 
         })
+        
+
+class ProcessObsCommonSimpleAdapter(nn.Module):
+    dtype: jnp.dtype
+
+    @nn.compact
+    def __call__(
+        self,
+        obs,
+        train,
+    ):
+        processed = ProcessObsCommon(dtype = self.dtype)(obs, train)
+
+        flattened, _ = jax.tree_util.tree_flatten(processed)
+
+        return jnp.concatenate(flattened, axis=-1)
 
 class ProcessObsMLP(nn.Module):
     dtype: jnp.dtype
@@ -92,6 +114,38 @@ class ProcessObsMLP(nn.Module):
 
         return jnp.concatenate(flattened, axis=-1)
 
+class PolicyLSTM(nn.Module):
+    num_hidden_channels: int
+    num_layers: int
+    dtype: jnp.dtype
+
+    def setup(self):
+        self.lstm = LSTM(
+            num_hidden_channels = self.num_hidden_channels,
+            num_layers = self.num_layers,
+            dtype = self.dtype,
+        )
+
+        self.layernorm = LayerNorm(dtype=self.dtype)
+
+    def __call__(
+        self,
+        cur_hiddens,
+        x,
+        train,
+    ):
+        return self.layernorm(self.lstm(cur_hiddens, x, train))
+
+    def sequence(
+        self,
+        start_hiddens,
+        seq_ends,
+        seq_x,
+        train,
+    ):
+        return self.layernorm(
+            self.lstm.sequence(start_hiddens, seq_ends, seq_x, train))
+
 def make_policy(dtype, use_simple_policy):
 
     if use_simple_policy:
@@ -104,7 +158,7 @@ def make_policy(dtype, use_simple_policy):
                 weight_init = pytorch_initializer(),
             ),
             #rnn = LSTM(
-            #    hidden_channels = 256,
+            #    num_hidden_channels = 256,
             #    num_layers = 1,
             #    dtype = dtype,
             #),
@@ -112,13 +166,13 @@ def make_policy(dtype, use_simple_policy):
     else:
         prefix = ProcessObsCommon(dtype)
         encoder = madrona_learn.BackboneEncoder(
-            net = EgocentricSelfAttentionNet(
-                num_embed_channels = 64,
-                num_heads = 2,
+            net = EntitySelfAttentionNet(
+                num_embed_channels = 128,
+                num_heads = 4,
                 dtype = dtype,
             ),
-            #rnn = LSTM(
-            #    hidden_channels = 256,
+            #rnn = PolicyLSTM(
+            #    num_hidden_channels = 256,
             #    num_layers = 1,
             #    dtype = dtype,
             #),

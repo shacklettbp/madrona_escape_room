@@ -79,7 +79,7 @@ def iter_cb(obs, actions, action_probs, action_logits, values, dones, rewards):
 
 dev = jax.devices()[0]
 
-policy = make_policy(jnp.float16, True)
+policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, False)
 
 cfg = madrona_learn.TrainConfig(
     num_worlds = args.num_worlds,
