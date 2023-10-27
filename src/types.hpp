@@ -197,23 +197,24 @@ struct PhysicsEntityState {
     Position p;
     Rotation r;
     Velocity v;
-    JointConstraint j;
     ObjectID i;
-    // TODO: other physics stuff that needs to be saved.
-}
+};
 struct Checkpoint {
+    // PhysicsState
+    PhysicsEntityState agentsPhysics[consts::numAgents];
+    PhysicsEntityState doorsPhysics[consts::numRooms];
+    PhysicsEntityState buttonsPhysics[consts::numRooms * 2];
+    PhysicsEntityState cubesPhysics[consts::numRooms * 3];
 
-    int dummyCheckpoint;
-    //SelfObservation agentStates[consts::numAgents];
-    //Position blockPositions[NUM_ENTITIES];
-    
-    // TODO: Grab all other state of the world here. Physics?
+    GrabState agentsGrabState[consts::numAgents];
 
+    OpenState doorsOpenState[consts::numRooms]; // 1 door/room.
 };
 
 struct CheckpointState {
     // TODO: how long are the rollouts
-    Checkpoint checkpoints[200]; // initial implementation checkpoints every state.
+    int currentCheckpointIdx = 0;
+    Checkpoint checkpoints[consts::maxCheckpoints]; // initial implementation checkpoints every state.
 };
 
 /* ECS Archetypes for the game */

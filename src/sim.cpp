@@ -105,10 +105,70 @@ static inline void initWorld(Engine &ctx)
 }
 
 inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState) {
-    printf("Checkpoint Reached!\n");
-    // TODO: ZM, implement.
 
-    // OtherAgents observations can be filled in by this system.
+    // Grab current checkpoint slot (per world).
+    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
+    {
+        // Agent parameters: physics state, grabstate
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, ObjectID, GrabState>(), 
+            [&](Position &p, Rotation &r, Velocity &v, ObjectID &i, GrabState& g)
+            {
+                ckpt.agentsPhysics[idx] = {
+                    p,
+                    r,
+                    v,
+                    i
+                };
+                ckpt.agentsGrabState[idx] = g;
+            }
+        );
+    }
+
+    {
+        // Door parameters
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, ObjectID, OpenState>(), 
+            [&](Position &p, Rotation &r, Velocity &v, ObjectID &i, OpenState& o)
+            {
+                ckpt.doorsPhysics[idx] = {
+                    p,
+                    r,
+                    v,
+                    i
+                };
+                ckpt.doorsOpenState[idx] = o;
+            }
+        );
+    }
+    
+    {
+        // Buttons and cubes
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, ObjectID>(), 
+            [&](Position &p, Rotation &r, Velocity &v, ObjectID &i)
+            {
+                if (i.idx == (int32_t)SimObject::Button) {
+                    ckpt.buttonsPhysics[idx] = {
+                        p,
+                        r,
+                        v,
+                        i
+                    };
+                }
+
+                if (i.idx == (int32_t)SimObject::Cube) {
+                    ckpt.cubesPhysics[idx] = {
+                        p,
+                        r,
+                        v,
+                        i
+                    };
+                }
+            }
+        );
+    }
+
 }
 
 // This system runs each frame and checks if the current episode is complete

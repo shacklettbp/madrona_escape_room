@@ -54,6 +54,9 @@ inline constexpr float doorSpeed = 30.f;
 // Number of physics substeps
 inline constexpr madrona::CountT numPhysicsSubsteps = 4.f;
 
+// Maximum checkpoints
+inline constexpr madrona::CountT maxCheckpoints = 200; // TODO: not constant.
+
 }
 
 }
