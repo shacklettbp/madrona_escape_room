@@ -94,33 +94,50 @@ static inline void initWorld(Engine &ctx)
 
     phys::RigidBodyPhysicsSystem::reset(ctx);
 
+    //static bool restart = true;
+
+    //if (restart) { // TODO: restore
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
     ctx.data().rng = RNG::make(episode_idx);
     ctx.data().curEpisodeIdx = episode_idx;
+    //}
+    //restart = false;
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
     generateWorld(ctx);
 }
 
-inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState) {
-
-    // Grab current checkpoint slot (per world).
-    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
+inline void debugCheckpointSystem(Engine &ctx, CheckpointState &ckptState) 
+{
+    if (ckptState.currentCheckpointIdx < 2) {
+        // 0 -> dummy first frame.
+        // 1 -> actual first frame.
+        return;
+    }
+    if (ckptState.currentCheckpointIdx % 2 == 1) {
+        return; // Don't reload.
+    }
+    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx - 1]; // Get the previous state.
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, ObjectID, GrabState>(), 
-            [&](Position &p, Rotation &r, Velocity &v, ObjectID &i, GrabState& g)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState>(), 
+            [&](Position &p, Rotation &r, Velocity &v, GrabState& g)
             {
-                ckpt.agentsPhysics[idx] = {
-                    p,
-                    r,
-                    v,
-                    i
-                };
-                ckpt.agentsGrabState[idx] = g;
+                //assert(p.x == ckpt.agentStates[idx].p.x);// || p.x == ckpt.agentStates[(idx + 1) % 2].p.x);
+                //assert(p.y == ckpt.agentStates[idx].p.y);// || p.y == ckpt.agentStates[(idx + 1) % 2].p.y);
+                //assert(p.z == ckpt.agentStates[idx].p.z);// || p.z == ckpt.agentStates[(idx + 1) % 2].p.z);
+                
+                //printf("table p.y= %f\n", p.y);
+                p = ckpt.agentStates[idx].p; 
+                r = ckpt.agentStates[idx].r; 
+                v = ckpt.agentStates[idx].v; 
+                g = ckpt.agentStates[idx].g;
+                idx++;
+                //printf("stored p.y: %f\n", p.y);
+
             }
         );
     }
@@ -128,43 +145,123 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState) {
     {
         // Door parameters
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, ObjectID, OpenState>(), 
-            [&](Position &p, Rotation &r, Velocity &v, ObjectID &i, OpenState& o)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, OpenState>(), 
+            [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
             {
-                ckpt.doorsPhysics[idx] = {
-                    p,
-                    r,
-                    v,
-                    i
-                };
-                ckpt.doorsOpenState[idx] = o;
+                p = ckpt.doorStates[idx].p;
+                r = ckpt.doorStates[idx].r;
+                v = ckpt.doorStates[idx].v;
+                o = ckpt.doorStates[idx].o;
+                idx++;
             }
         );
     }
     
     {
-        // Buttons and cubes
+        // Cubes
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, ObjectID>(), 
-            [&](Position &p, Rotation &r, Velocity &v, ObjectID &i)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, EntityType>(), 
+            [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
             {
-                if (i.idx == (int32_t)SimObject::Button) {
-                    ckpt.buttonsPhysics[idx] = {
-                        p,
-                        r,
-                        v,
-                        i
-                    };
+                // Cubes
+                if (e == EntityType::Cube) {
+                    p = ckpt.cubeStates[idx].p;
+                    r = ckpt.cubeStates[idx].r;
+                    v = ckpt.cubeStates[idx].v;
+                    idx++;
                 }
+            }
+        );
+    }
 
-                if (i.idx == (int32_t)SimObject::Cube) {
-                    ckpt.cubesPhysics[idx] = {
-                        p,
-                        r,
-                        v,
-                        i
-                    };
+    {
+        // Buttons
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, ButtonState>(), 
+            [&](Position &p, Rotation &r, ButtonState &b)
+            {
+                // Cubes
+                p = ckpt.buttonStates[idx].p;
+                r = ckpt.buttonStates[idx].r;
+                b = ckpt.buttonStates[idx].b;
+                idx++;
+            }
+        );
+    }
+}
+
+inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
+{
+    if (ckptState.currentCheckpointIdx == 0) {
+        ckptState.currentCheckpointIdx++;
+        // First frame is a dummy, don't bother checkpointing.
+        return;
+    }
+
+    // Grab current checkpoint slot (per world).
+    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx];
+    ckptState.currentCheckpointIdx++;
+    if (ckptState.currentCheckpointIdx % 2 == 1) {
+        return; // Don't checkpoint if it's a reset frame.
+    }
+    {
+        // Agent parameters: physics state, grabstate
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState>(), 
+            [&](Position &p, Rotation &r, Velocity &v, GrabState& g)
+            {
+                ckpt.agentStates[idx].p = p;
+                ckpt.agentStates[idx].r = r;
+                ckpt.agentStates[idx].v = v;
+                ckpt.agentStates[idx].g = g;
+                idx++;
+                
+                //printf("initial p.y = %f\n", p.y);
+            }
+        );
+    }
+
+    {
+        // Door parameters
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, OpenState>(), 
+            [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
+            {
+                ckpt.doorStates[idx].p = p;
+                ckpt.doorStates[idx].r = r;
+                ckpt.doorStates[idx].v = v;
+                ckpt.doorStates[idx].o = o;
+                idx++;
+            }
+        );
+    }
+    
+    {
+        // Cubes
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, EntityType>(), 
+            [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
+            {
+                if (e == EntityType::Cube) {
+                    ckpt.cubeStates[idx].p = p;
+                    ckpt.cubeStates[idx].r = r;
+                    ckpt.cubeStates[idx].v = v;
+                    idx++;
                 }
+            }
+        );
+    }
+
+    {
+        // Buttons
+        int idx = 0;
+        ctx.iterateQuery(ctx.query<Position, Rotation, ButtonState>(), 
+            [&](Position &p, Rotation &r, ButtonState &b)
+            {
+                ckpt.buttonStates[idx].p = p;
+                ckpt.buttonStates[idx].r = r;
+                ckpt.buttonStates[idx].b = b;
+                idx++;
             }
         );
     }
@@ -189,8 +286,12 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
         }
     }
 
+
+    // Reset every other checkpoint frame.
     if (should_reset != 0) {
         reset.reset = 0;
+
+        printf("reset=================================\n");
 
         cleanupWorld(ctx);
         initWorld(ctx);
@@ -447,7 +548,7 @@ inline void collectObservationsSystem(Engine &ctx,
                                       DoorObservation &door_obs)
 {
     const CountT cur_room_idx = roomIndex(pos);
-        
+
     self_obs.roomX = pos.x / (consts::worldWidth / 2.f);
     self_obs.roomY = (pos.y - cur_room_idx * consts::roomLength) /
         consts::roomLength;
@@ -673,6 +774,12 @@ TaskGraph::NodeID queueSortByWorld(TaskGraph::Builder &builder,
 // Build the task graph
 void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
 {
+
+    //auto debug_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+    //    debugCheckpointSystem,
+    //    CheckpointState
+    //    >>({});
+
     // Turn policy actions into movement
     auto move_sys = builder.addToGraph<ParallelForNode<Engine,
         movementSystem,
@@ -748,24 +855,39 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Reward
         >>({reward_sys});
 
-    // Conditionally checkpoint the state of the system if we are on the Nth step.
-    auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
-        checkpointSystem,
-        CheckpointState
-        >>({bonus_reward_sys});
+
+
+    //auto debugPosition = [&] (Engine &ctx, Position &p, GrabState &g) {
+    //    printf("DebugAgentPosition p.y = %f\n", p.y);
+    //};
+
+
+
+
 
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({checkpoint_sys});
+        >>({bonus_reward_sys});
+
+    //auto debug_pos_sys = builder.addToGraph<ParallelForNode<Engine,
+    //debugPosition, Position, GrabState>>({done_sys});
+
+    // Conditionally checkpoint the state of the system if we are on the Nth step.
+    //auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+    //    checkpointSystem,
+    //    CheckpointState
+    //    >>({done_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
             WorldReset
         >>({done_sys});
+    
+
 
     auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({reset_sys});
     (void)clear_tmp;

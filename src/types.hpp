@@ -193,22 +193,39 @@ struct LevelState {
     Room rooms[consts::numRooms];
 };
 
+// Checkpoint structs.
+struct ButtonSaveState {
+    Position p;
+    Rotation r;
+    ButtonState b;
+};
+
 struct PhysicsEntityState {
     Position p;
     Rotation r;
     Velocity v;
-    ObjectID i;
 };
+
+struct DoorState {
+    Position p;
+    Rotation r;
+    Velocity v;
+    OpenState o;
+};
+
+struct AgentState {
+    Position p;
+    Rotation r;
+    Velocity v;
+    GrabState g;
+};
+
 struct Checkpoint {
-    // PhysicsState
-    PhysicsEntityState agentsPhysics[consts::numAgents];
-    PhysicsEntityState doorsPhysics[consts::numRooms];
-    PhysicsEntityState buttonsPhysics[consts::numRooms * 2];
-    PhysicsEntityState cubesPhysics[consts::numRooms * 3];
-
-    GrabState agentsGrabState[consts::numAgents];
-
-    OpenState doorsOpenState[consts::numRooms]; // 1 door/room.
+    ButtonSaveState buttonStates[consts::numRooms * 2];
+    // Cubes
+    PhysicsEntityState cubeStates[consts::numRooms * 3];
+    DoorState doorStates[consts::numRooms];
+    AgentState agentStates[consts::numAgents];
 };
 
 struct CheckpointState {
