@@ -72,42 +72,23 @@ def host_cb(obs, actions, action_probs, values, dones, rewards):
 
     return ()
 
-def iter_cb(obs, actions, action_probs, action_logits, values, dones, rewards):
+def iter_cb(step_data):
     cb = partial(jax.experimental.io_callback, host_cb, ())
 
-    cb(obs, actions, action_probs, values, dones, rewards)
+    cb(step_data['obs'],
+       step_data['actions'],
+       step_data['action_probs'],
+       step_data['values'],
+       step_data['dones'],
+       step_data['rewards'])
 
 dev = jax.devices()[0]
 
-policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, False)
+dtype = jnp.float16 if args.fp16 else jnp.float32
 
-cfg = madrona_learn.TrainConfig(
-    num_worlds = args.num_worlds,
-    team_size = 2,
-    num_teams = 1,
-    num_updates = 0,
-    steps_per_update = 0,
-    num_bptt_chunks = 0,
-    lr = 0,
-    gamma = 0,
-    gae_lambda = 0.95,
-    algo = madrona_learn.PPOConfig(
-        num_mini_batches=1,
-        clip_coef=0.2,
-        value_loss_coef=0,
-        entropy_coef=0,
-        max_grad_norm=0.5,
-        num_epochs=2,
-        clip_value_loss=0,
-    ),
-    value_normalizer_decay = 0.999,
-    mixed_precision = args.fp16,
-    seed = 5,
-    pbt_ensemble_size = 1,
-    pbt_history_len = 1,
-)
+policy = make_policy(dtype, True)
 
-madrona_learn.eval_ckpt(dev, args.ckpt_path, args.num_steps, cfg, sim_step,
-    init_sim_data, policy, iter_cb)
+madrona_learn.eval_ckpt(dev, args.ckpt_path, args.num_steps, sim_step,
+    init_sim_data, policy, iter_cb, dtype)
 
 del sim

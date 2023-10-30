@@ -18,7 +18,7 @@ from madrona_learn import (
 from madrona_learn.rnn import LSTM
 from jax_policy import make_policy
 
-madrona_learn.init(0.6)
+madrona_learn.init(0.7)
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--gpu-id', type=int, default=0)
@@ -101,10 +101,17 @@ def iter_cb(update_idx, update_time, metrics, train_state_mgr):
 
 dev = jax.devices()[0]
 
+if args.pbt_ensemble_size > 1:
+    team_size = 1
+    num_teams = 2
+else:
+    team_size = 2
+    num_teams = 1
+
 cfg = TrainConfig(
     num_worlds = args.num_worlds,
-    team_size = 2,
-    num_teams = 1,
+    team_size = team_size,
+    num_teams = num_teams,
     num_updates = args.num_updates,
     steps_per_update = args.steps_per_update,
     num_bptt_chunks = args.num_bptt_chunks,
@@ -128,7 +135,7 @@ cfg = TrainConfig(
     pbt_history_len = args.pbt_history_len,
 )
 
-policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, False)
+policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, True)
 
 madrona_learn.train(dev, cfg, sim_step, init_sim_data, policy,
     iter_cb, CustomMetricConfig(register_metrics = lambda metrics: metrics),
