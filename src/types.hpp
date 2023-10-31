@@ -218,20 +218,21 @@ struct AgentState {
     Rotation r;
     Velocity v;
     GrabState g;
+    Reward re;
+    Done d;
+    StepsRemaining s;
 };
 
 struct Checkpoint {
     ButtonSaveState buttonStates[consts::numRooms * 2];
-    // Cubes
     PhysicsEntityState cubeStates[consts::numRooms * 3];
     DoorState doorStates[consts::numRooms];
     AgentState agentStates[consts::numAgents];
 };
 
 struct CheckpointState {
-    // TODO: how long are the rollouts
     int currentCheckpointIdx = 0;
-    Checkpoint checkpoints[consts::maxCheckpoints]; // initial implementation checkpoints every state.
+    Checkpoint checkpoints[consts::maxCheckpoints];
 };
 
 /* ECS Archetypes for the game */

@@ -94,16 +94,11 @@ static inline void initWorld(Engine &ctx)
 
     phys::RigidBodyPhysicsSystem::reset(ctx);
 
-    //static bool restart = true;
-
-    //if (restart) { // TODO: restore
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
     ctx.data().rng = RNG::make(episode_idx);
     ctx.data().curEpisodeIdx = episode_idx;
-    //}
-    //restart = false;
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
     generateWorld(ctx);
@@ -123,18 +118,21 @@ inline void debugCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState>(), 
-            [&](Position &p, Rotation &r, Velocity &v, GrabState& g)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, StepsRemaining>(), 
+            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, StepsRemaining &s)
             {
                 //assert(p.x == ckpt.agentStates[idx].p.x);// || p.x == ckpt.agentStates[(idx + 1) % 2].p.x);
                 //assert(p.y == ckpt.agentStates[idx].p.y);// || p.y == ckpt.agentStates[(idx + 1) % 2].p.y);
                 //assert(p.z == ckpt.agentStates[idx].p.z);// || p.z == ckpt.agentStates[(idx + 1) % 2].p.z);
                 
                 //printf("table p.y= %f\n", p.y);
-                p = ckpt.agentStates[idx].p; 
-                r = ckpt.agentStates[idx].r; 
-                v = ckpt.agentStates[idx].v; 
-                g = ckpt.agentStates[idx].g;
+                p  = ckpt.agentStates[idx].p; 
+                r  = ckpt.agentStates[idx].r; 
+                v  = ckpt.agentStates[idx].v; 
+                g  = ckpt.agentStates[idx].g;
+                re = ckpt.agentStates[idx].re;
+                d  = ckpt.agentStates[idx].d;
+                s  = ckpt.agentStates[idx].s;
                 idx++;
                 //printf("stored p.y: %f\n", p.y);
 
@@ -205,15 +203,18 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
         return; // Don't checkpoint if it's a reset frame.
     }
     {
-        // Agent parameters: physics state, grabstate
+        // Agent parameters: physics state, grabstate, reward, done.
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState>(), 
-            [&](Position &p, Rotation &r, Velocity &v, GrabState& g)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, StepsRemaining>(), 
+            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, StepsRemaining &s)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
                 ckpt.agentStates[idx].v = v;
                 ckpt.agentStates[idx].g = g;
+                ckpt.agentStates[idx].re = g;
+                ckpt.agentStates[idx].d = d;
+                ckpt.agentStates[idx].s = s;
                 idx++;
                 
                 //printf("initial p.y = %f\n", p.y);
@@ -862,9 +863,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     //};
 
 
-
-
-
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
@@ -875,17 +873,27 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     //auto debug_pos_sys = builder.addToGraph<ParallelForNode<Engine,
     //debugPosition, Position, GrabState>>({done_sys});
 
-    // Conditionally checkpoint the state of the system if we are on the Nth step.
-    //auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
-    //    checkpointSystem,
-    //    CheckpointState
-    //    >>({done_sys});
+
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
             WorldReset
         >>({done_sys});
+
+    // Conditionally checkpoint the state of the system if we are on the Nth step.
+    auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+        checkpointSystem,
+        CheckpointState
+        >>({reset_sys});
+    
+    // Load the checkpoint here including Done, Reward, and StepsRemaining.
+    // With Observations this should reconstruct all state that 
+    // the training code needs. 
+    //auto debug_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+    //    debugCheckpointSystem,
+    //    CheckpointState
+    //    >>({});
     
 
 
