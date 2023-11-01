@@ -218,6 +218,8 @@ struct AgentState {
     Rotation r;
     Velocity v;
     GrabState g;
+    // These last aren't needed for restoring, but they are needed 
+    // for determining if the state is worth restoring to.
     Reward re;
     Done d;
     StepsRemaining s;
@@ -231,7 +233,8 @@ struct Checkpoint {
 };
 
 struct CheckpointState {
-    int currentCheckpointIdx = 0;
+    int currentCheckpointIdx = -1; // Burn the first iteration.
+    Reward totalReward = Reward{0.0f};
     Checkpoint checkpoints[consts::maxCheckpoints];
 };
 

@@ -104,38 +104,52 @@ static inline void initWorld(Engine &ctx)
     generateWorld(ctx);
 }
 
-inline void debugCheckpointSystem(Engine &ctx, CheckpointState &ckptState) 
+// TODO: unify with equivalent function in leve_gen.cpp.
+static inline float randBetween(Engine &ctx, float min, float max)
 {
-    if (ckptState.currentCheckpointIdx < 2) {
-        // 0 -> dummy first frame.
-        // 1 -> actual first frame.
+    return ctx.data().rng.rand() * (max - min) + min;
+}
+
+inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState, WorldReset &reset) 
+{
+    if (reset.reset == 0) {
+        // No checkpoint load.
         return;
     }
-    if (ckptState.currentCheckpointIdx % 2 == 1) {
-        return; // Don't reload.
+
+    // Set reset back to 0 to ensure we don't reset after checkpoint load.
+    reset.reset = 0;
+
+    Reward randomToTotalReward = Reward{randBetween(ctx, 0.0f, ckptState.totalReward.v)};
+
+    // Resample saved states proportional to total 
+    // reward across both agents.
+    // This is technically still biased because we're not accounting for
+    // the probability relative to the policy of having these states in 
+    // the checkpoint buffer.
+    int chosenIdx = -1;
+    while (randomToTotalReward.v > 0.0f) {
+        chosenIdx++;
+        for (int i = 0; i < consts::numAgents; ++i) {
+            randomToTotalReward.v -= ckptState.checkpoints[chosenIdx].agentStates[i].re.v;
+        }
     }
-    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx - 1]; // Get the previous state.
+    
+    // Load a checkpoint.
+    Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, StepsRemaining>(), 
-            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, StepsRemaining &s)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>(), 
+            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s)
             {
-                //assert(p.x == ckpt.agentStates[idx].p.x);// || p.x == ckpt.agentStates[(idx + 1) % 2].p.x);
-                //assert(p.y == ckpt.agentStates[idx].p.y);// || p.y == ckpt.agentStates[(idx + 1) % 2].p.y);
-                //assert(p.z == ckpt.agentStates[idx].p.z);// || p.z == ckpt.agentStates[(idx + 1) % 2].p.z);
-                
-                //printf("table p.y= %f\n", p.y);
                 p  = ckpt.agentStates[idx].p; 
                 r  = ckpt.agentStates[idx].r; 
                 v  = ckpt.agentStates[idx].v; 
-                g  = ckpt.agentStates[idx].g;
                 re = ckpt.agentStates[idx].re;
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
                 idx++;
-                //printf("stored p.y: %f\n", p.y);
-
             }
         );
     }
@@ -190,34 +204,28 @@ inline void debugCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
 
 inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
 {
-    if (ckptState.currentCheckpointIdx == 0) {
+    if (ckptState.currentCheckpointIdx == -1) {
         ckptState.currentCheckpointIdx++;
         // First frame is a dummy, don't bother checkpointing.
         return;
     }
 
     // Grab current checkpoint slot (per world).
-    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx];
-    ckptState.currentCheckpointIdx++;
-    if (ckptState.currentCheckpointIdx % 2 == 1) {
-        return; // Don't checkpoint if it's a reset frame.
-    }
+    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
     {
-        // Agent parameters: physics state, grabstate, reward, done.
+        // Agent parameters: physics state, reward, done.
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, StepsRemaining>(), 
-            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, StepsRemaining &s)
+        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>(), 
+            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
                 ckpt.agentStates[idx].v = v;
-                ckpt.agentStates[idx].g = g;
-                ckpt.agentStates[idx].re = g;
+                ckpt.agentStates[idx].re = re;
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
                 idx++;
-                
-                //printf("initial p.y = %f\n", p.y);
+                ckptState.totalReward.v += re.v;
             }
         );
     }
@@ -288,11 +296,11 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
     }
 
 
-    // Reset every other checkpoint frame.
     if (should_reset != 0) {
-        reset.reset = 0;
-
-        printf("reset=================================\n");
+        // Conditionally load previous checkpoint here.
+        if (ctx.data().rng.rand() > 0.5f) {
+            reset.reset = 0; // Normal reset            
+        }
 
         cleanupWorld(ctx);
         initWorld(ctx);
@@ -776,11 +784,6 @@ TaskGraph::NodeID queueSortByWorld(TaskGraph::Builder &builder,
 void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
 {
 
-    //auto debug_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
-    //    debugCheckpointSystem,
-    //    CheckpointState
-    //    >>({});
-
     // Turn policy actions into movement
     auto move_sys = builder.addToGraph<ParallelForNode<Engine,
         movementSystem,
@@ -857,12 +860,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({reward_sys});
 
 
-
-    //auto debugPosition = [&] (Engine &ctx, Position &p, GrabState &g) {
-    //    printf("DebugAgentPosition p.y = %f\n", p.y);
-    //};
-
-
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
@@ -870,34 +867,30 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Done
         >>({bonus_reward_sys});
 
-    //auto debug_pos_sys = builder.addToGraph<ParallelForNode<Engine,
-    //debugPosition, Position, GrabState>>({done_sys});
-
-
-
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
             WorldReset
         >>({done_sys});
 
+    // Conditionally load the checkpoint here including Done, Reward, 
+    // and StepsRemaining. With Observations this should reconstruct 
+    // all state that the training code needs.
+    // This runs after the reset system resets the world.
+    auto load_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+        loadCheckpointSystem,
+        CheckpointState,
+        WorldReset
+        >>({reset_sys});
+
     // Conditionally checkpoint the state of the system if we are on the Nth step.
     auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
         checkpointSystem,
         CheckpointState
-        >>({reset_sys});
-    
-    // Load the checkpoint here including Done, Reward, and StepsRemaining.
-    // With Observations this should reconstruct all state that 
-    // the training code needs. 
-    //auto debug_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
-    //    debugCheckpointSystem,
-    //    CheckpointState
-    //    >>({});
-    
+        >>({load_checkpoint_sys});
 
 
-    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({reset_sys});
+    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({load_checkpoint_sys});
     (void)clear_tmp;
 
 #ifdef MADRONA_GPU_MODE
