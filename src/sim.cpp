@@ -9,6 +9,25 @@ using namespace madrona::phys;
 
 namespace madEscape {
 
+// Helper function for determining room membership.
+static inline CountT roomIndex(const Position &p)
+{
+    return std::max(CountT(0),
+    std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
+}
+
+static inline float computeZAngle(Quat q)
+{
+    float siny_cosp = 2.f * (q.w * q.z + q.x * q.y);
+    float cosy_cosp = 1.f - 2.f * (q.y * q.y + q.z * q.z);
+    return atan2f(siny_cosp, cosy_cosp);
+}
+
+static inline float angleObs(float v)
+{
+    return v / math::pi;
+}
+
 // Register all the ECS components and archetypes that will be
 // used in the simulation
 void Sim::registerTypes(ECSRegistry &registry, const Config &)
@@ -113,18 +132,38 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
         return;
     }
 
-    //printf("LOADING CKPT\n");
+    ckptState.maxCheckpointIdx = ckptState.currentCheckpointIdx;
     ckptState.currentCheckpointIdx = 0; // Zero the checkpoint index.
 
-    // debugging.
+    // Stochastically don't load from checkpoint.
+    if (ctx.data().rng.rand() < 0.5f) {
+        return;
+    }
+
     int chosenIdx = 0; // Load the first checkpoint as a test.
-    
+
+    // Importance sample states relative to room achieved.
+    int totalRoom = 0;
+    for (int i = 0; i < ckptState.maxCheckpointIdx; ++i) {
+        Checkpoint &ckpt = ckptState.checkpoints[i];
+        totalRoom += (int)fmax((float)roomIndex(ckpt.agentStates[0].p), (float)roomIndex(ckpt.agentStates[1].p)) + 1;
+    }
+    float roomProb = ctx.data().rng.rand() * totalRoom;
+    for (int i = 0; i < ckptState.maxCheckpointIdx; ++i) {
+        Checkpoint &ckpt = ckptState.checkpoints[i];
+        roomProb -= (int)fmax((float)roomIndex(ckpt.agentStates[0].p), (float)roomIndex(ckpt.agentStates[1].p)) + 1;
+        if (roomProb < 0) {
+            chosenIdx = i;
+            break;
+        }
+    }
+
     // Load the checkpoint from the beginning of the episode.
     Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>(), 
+        ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s)
             {
                 p  = ckpt.agentStates[idx].p; 
@@ -141,7 +180,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Door parameters
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, OpenState>(), 
+        ctx.iterateQuery(ctx.data().ckptDoorQuery, 
             [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
             {
                 p = ckpt.doorStates[idx].p;
@@ -155,7 +194,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
 
     {
         // Correct the walls now that we have the doors
-        ctx.iterateQuery(ctx.query<Position, Scale, EntityType>(),
+        ctx.iterateQuery(ctx.data().ckptWallQuery,
             [&](Position &p, Scale &s, EntityType &e)
             {
                 if (e == EntityType::Wall)
@@ -202,7 +241,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Cubes
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, EntityType>(), 
+        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
             [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
             {
                 if (e == EntityType::Cube) {
@@ -218,7 +257,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Buttons
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, ButtonState>(), 
+        ctx.iterateQuery(ctx.data().ckptButtonQuery, 
             [&](Position &p, Rotation &r, ButtonState &b)
             {
                 p = ckpt.buttonStates[idx].p;
@@ -241,14 +280,13 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
         return;
     }
 
-    //printf("SAVING CKPT %d\n", ckptState.currentCheckpointIdx);
     // Grab current checkpoint slot (per world).
     Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
 
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>(), 
+        ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s)
             {
                 ckpt.agentStates[idx].p = p;
@@ -265,7 +303,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Door parameters
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, OpenState>(), 
+        ctx.iterateQuery(ctx.data().ckptDoorQuery,
             [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
             {
                 ckpt.doorStates[idx].p = p;
@@ -280,7 +318,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Cubes
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, EntityType>(), 
+        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
             [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
             {
                 if (e == EntityType::Cube) {
@@ -296,7 +334,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
     {
         // Buttons
         int idx = 0;
-        ctx.iterateQuery(ctx.query<Position, Rotation, ButtonState>(), 
+        ctx.iterateQuery(ctx.data().ckptButtonQuery, 
             [&](Position &p, Rotation &r, ButtonState &b)
             {
                 ckpt.buttonStates[idx].p = p;
@@ -328,9 +366,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
 
     if (should_reset != 0) {
-        reset.reset = 1; // Will be reset later.
-        // We don't restore reset.reset here. Instead, that flag is
-        // used to encode checkpointing.
+        reset.reset = 1; // Will be reset later, used to encode checkpointing.
 
         cleanupWorld(ctx);
         initWorld(ctx);
@@ -534,11 +570,6 @@ static inline float globalPosObs(float v)
     return v / consts::worldLength;
 }
 
-static inline float angleObs(float v)
-{
-    return v / math::pi;
-}
-
 // Translate xy delta to polar observations for learning.
 static inline PolarObservation xyToPolar(Vector3 v)
 {
@@ -558,20 +589,6 @@ static inline PolarObservation xyToPolar(Vector3 v)
 static inline float encodeType(EntityType type)
 {
     return (float)type / (float)EntityType::NumTypes;
-}
-
-static inline float computeZAngle(Quat q)
-{
-    float siny_cosp = 2.f * (q.w * q.z + q.x * q.y);
-    float cosy_cosp = 1.f - 2.f * (q.y * q.y + q.z * q.z);
-    return atan2f(siny_cosp, cosy_cosp);
-}
-
-// Helper function for determining room membership.
-static inline CountT roomIndex(const Position &p)
-{
-    return std::max(CountT(0),
-    std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
 }
 
 // This system packages all the egocentric observations together 
@@ -598,6 +615,16 @@ inline void collectObservationsSystem(Engine &ctx,
     self_obs.theta = angleObs(computeZAngle(rot));
     self_obs.isGrabbing = grab.constraintEntity != Entity::none() ?
         1.f : 0.f;
+
+    assert(!isnan(self_obs.roomX));
+    assert(!isnan(self_obs.roomY));
+    assert(!isnan(self_obs.globalX));
+    assert(!isnan(self_obs.globalY));
+    assert(!isnan(self_obs.globalZ));
+    assert(!isnan(self_obs.maxY));
+    assert(!isnan(self_obs.theta));
+    assert(!isnan(self_obs.isGrabbing));
+
 
     Quat to_view = rot.inv();
 
@@ -1029,10 +1056,15 @@ Sim::Sim(Engine &ctx,
     ctx.data().doorQuery       = ctx.query<Position, OpenState>();
 
     ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>();
+    ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
+    ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType>();
+    ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
+    ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
 
     // Initialize checkpointing state
     CheckpointState &ckptState = ctx.singleton<CheckpointState>();
     ckptState.currentCheckpointIdx = 0;
+    ckptState.maxCheckpointIdx = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the
