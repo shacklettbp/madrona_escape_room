@@ -286,4 +286,10 @@ struct PhysicsEntity : public madrona::Archetype<
     EntityType
 > {};
 
+// Tracks global progress the agent has made through the challenge, used to add
+// reward when more progress has been made
+struct GlobalProgress {
+    float* progressPtr;
+};
+
 }

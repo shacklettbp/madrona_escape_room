@@ -12,6 +12,7 @@ struct WorldInit {
     EpisodeManager *episodeMgr;
     madrona::phys::ObjectManager *rigidBodyObjMgr;
     const madrona::viz::VizECSBridge *vizBridge;
+    float *progressPtr; // Added to track max progress
 };
 
 }

@@ -1,4 +1,5 @@
 #include <madrona/mw_gpu_entry.hpp>
+#include <iostream>
 
 #include "sim.hpp"
 #include "level_gen.hpp"
@@ -36,6 +37,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
+    registry.registerSingleton<GlobalProgress>(); // Progress tracking component, reuse existing struct
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
@@ -572,6 +574,7 @@ inline void denseRewardSystem3(Engine &ctx,
 
     // Provide reward for open doors
     CountT cur_room_idx = CountT(pos.y / consts::roomLength);
+    reward_pos += cur_room_idx*5;
     if (cur_room_idx < 3) {
         // Still in a room
         const LevelState &level = ctx.singleton<LevelState>();
@@ -581,10 +584,16 @@ inline void denseRewardSystem3(Engine &ctx,
         OpenState door_open_state = ctx.get<OpenState>(cur_door);
         //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
         float isOpen = door_open_state.isOpen ? 1.f : 0.f;
-        reward_pos += isOpen*3; // Maybe add scaling to this
+        reward_pos += isOpen*5; // Maybe add scaling to this
     }
 
-    float reward = 0.05 * exp(reward_pos / 10);
+    float reward = 0.0f;
+    float old_max_y = progress.maxY;
+    float new_progress = reward_pos - old_max_y;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    }
 
     out_reward.v = reward;
 }
@@ -943,6 +952,7 @@ Sim::Sim(Engine &ctx,
     : WorldBase(ctx),
       episodeMgr(init.episodeMgr)
 {
+    printf("About to access illegally the first time\n");
     // Currently the physics system needs an upper bound on the number of
     // entities that will be stored in the BVH. We plan to fix this in
     // a future release.
@@ -965,6 +975,11 @@ Sim::Sim(Engine &ctx,
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);
+
+    // Create the singleton component here?
+    printf("About to access illegally the first time\n");
+    GlobalProgress &globalProgress = ctx.singleton<GlobalProgress>();
+    globalProgress.progressPtr = init.progressPtr;
 
     // Generate initial world state
     initWorld(ctx);
