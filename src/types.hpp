@@ -22,6 +22,7 @@ using madrona::phys::ResponseType;
 using madrona::phys::ExternalForce;
 using madrona::phys::ExternalTorque;
 
+
 // WorldReset is a per-world singleton component that causes the current
 // episode to be terminated and the world regenerated
 // (Singleton components like WorldReset can be accessed via Context::singleton
@@ -233,8 +234,7 @@ struct Checkpoint {
 };
 
 struct CheckpointState {
-    int currentCheckpointIdx = -1; // Burn the first iteration.
-    Reward totalReward = Reward{0.0f};
+    int32_t currentCheckpointIdx;
     Checkpoint checkpoints[consts::maxCheckpoints];
 };
 

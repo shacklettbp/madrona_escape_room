@@ -97,6 +97,11 @@ struct Sim : public madrona::WorldBase {
     Query<Position, EntityType> roomEntityQuery;
     Query<Position, OpenState>  doorQuery;
 
+    // Queries for checkpointing
+    Query<Position, Rotation, Velocity, 
+    Reward, Done, StepsRemaining> ckptAgentQuery;
+
+
     // Should the environment automatically reset (generate a new episode)
     // at the end of each episode?
     bool autoReset;

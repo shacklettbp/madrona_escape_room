@@ -104,38 +104,22 @@ static inline void initWorld(Engine &ctx)
     generateWorld(ctx);
 }
 
-// TODO: unify with equivalent function in leve_gen.cpp.
-static inline float randBetween(Engine &ctx, float min, float max)
+inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState) 
 {
-    return ctx.data().rng.rand() * (max - min) + min;
-}
-
-inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState, WorldReset &reset) 
-{
-    if (reset.reset == 0) {
-        // No checkpoint load.
+    int should_reset = ctx.singleton<WorldReset>().reset;
+    if (should_reset == 0 || ckptState.currentCheckpointIdx == 0) {
+        // No reset, or first reset so nothing to load from checkpoint.
+        // reset will be zeroed by the checkpoint system.
         return;
     }
 
-    // Set reset back to 0 to ensure we don't reset after checkpoint load.
-    reset.reset = 0;
+    //printf("LOADING CKPT\n");
+    ckptState.currentCheckpointIdx = 0; // Zero the checkpoint index.
 
-    Reward randomToTotalReward = Reward{randBetween(ctx, 0.0f, ckptState.totalReward.v)};
-
-    // Resample saved states proportional to total 
-    // reward across both agents.
-    // This is technically still biased because we're not accounting for
-    // the probability relative to the policy of having these states in 
-    // the checkpoint buffer.
-    int chosenIdx = -1;
-    while (randomToTotalReward.v > 0.0f) {
-        chosenIdx++;
-        for (int i = 0; i < consts::numAgents; ++i) {
-            randomToTotalReward.v -= ckptState.checkpoints[chosenIdx].agentStates[i].re.v;
-        }
-    }
+    // debugging.
+    int chosenIdx = 0; // Load the first checkpoint as a test.
     
-    // Load a checkpoint.
+    // Load the checkpoint from the beginning of the episode.
     Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
     {
         // Agent parameters: physics state, grabstate
@@ -168,6 +152,52 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState, WorldR
             }
         );
     }
+
+    {
+        // Correct the walls now that we have the doors
+        ctx.iterateQuery(ctx.query<Position, Scale, EntityType>(),
+            [&](Position &p, Scale &s, EntityType &e)
+            {
+                if (e == EntityType::Wall)
+                {
+                    for (int i = 0; i < consts::numRooms; ++i)
+                    {
+                        // Check all doors.
+                        Position door_pos = ckpt.doorStates[i].p;
+                        constexpr float doorWidth = consts::worldWidth / 3.f;
+
+                        if (door_pos.y == p.y)
+                        {
+                            float door_center = door_pos.x + consts::worldWidth / 2.f;
+                            // We found one of two wall pairs for this door
+                            if (p.x < 0.f)
+                            {
+                                // Left door
+                                float left_len = door_center - 0.5f * doorWidth;
+                                p.x = (-consts::worldWidth + left_len) / 2.f;
+                                s = Diag3x3{
+                                    left_len,
+                                    consts::wallWidth,
+                                    1.75f,
+                                };
+                            }
+                            else
+                            {
+                                // Right door
+                                float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
+                                p.x = (consts::worldWidth - right_len) / 2.f;
+                                s = Diag3x3{
+                                    right_len,
+                                    consts::wallWidth,
+                                    1.75f,
+                                };
+                            }
+                        }
+                    }
+                }
+            });
+    }
+
     
     {
         // Cubes
@@ -175,7 +205,6 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState, WorldR
         ctx.iterateQuery(ctx.query<Position, Rotation, Velocity, EntityType>(), 
             [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
             {
-                // Cubes
                 if (e == EntityType::Cube) {
                     p = ckpt.cubeStates[idx].p;
                     r = ckpt.cubeStates[idx].r;
@@ -192,7 +221,6 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState, WorldR
         ctx.iterateQuery(ctx.query<Position, Rotation, ButtonState>(), 
             [&](Position &p, Rotation &r, ButtonState &b)
             {
-                // Cubes
                 p = ckpt.buttonStates[idx].p;
                 r = ckpt.buttonStates[idx].r;
                 b = ckpt.buttonStates[idx].b;
@@ -204,14 +232,19 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState, WorldR
 
 inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
 {
-    if (ckptState.currentCheckpointIdx == -1) {
-        ckptState.currentCheckpointIdx++;
-        // First frame is a dummy, don't bother checkpointing.
+
+    // This runs every frame
+    int32_t should_reset = ctx.singleton<WorldReset>().reset;
+    ctx.singleton<WorldReset>().reset = 0;
+    if (should_reset == 1) {
+        // The world was just reset, we should not checkpoint
         return;
     }
 
+    //printf("SAVING CKPT %d\n", ckptState.currentCheckpointIdx);
     // Grab current checkpoint slot (per world).
     Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
+
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
@@ -225,7 +258,6 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
                 idx++;
-                ckptState.totalReward.v += re.v;
             }
         );
     }
@@ -244,7 +276,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
             }
         );
     }
-    
+
     {
         // Cubes
         int idx = 0;
@@ -274,7 +306,6 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
             }
         );
     }
-
 }
 
 // This system runs each frame and checks if the current episode is complete
@@ -297,10 +328,9 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
 
     if (should_reset != 0) {
-        // Conditionally load previous checkpoint here.
-        if (ctx.data().rng.rand() > 0.5f) {
-            reset.reset = 0; // Normal reset            
-        }
+        reset.reset = 1; // Will be reset later.
+        // We don't restore reset.reset here. Instead, that flag is
+        // used to encode checkpointing.
 
         cleanupWorld(ctx);
         initWorld(ctx);
@@ -600,9 +630,9 @@ inline void collectObservationsSystem(Engine &ctx,
     ob.polar = { 0.f, 1.f };
     ob.encodedType = encodeType(EntityType::None);
     for (int i = 0; i < consts::maxObservationsPerAgent; ++i) {
-        room_ent_obs.obs[i] = ob;
+       room_ent_obs.obs[i] = ob;
     }
-
+    
     {
        int idx = 0;
         ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
@@ -870,7 +900,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
-            WorldReset
+        WorldReset
         >>({done_sys});
 
     // Conditionally load the checkpoint here including Done, Reward, 
@@ -879,8 +909,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // This runs after the reset system resets the world.
     auto load_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
         loadCheckpointSystem,
-        CheckpointState,
-        WorldReset
+        CheckpointState
         >>({reset_sys});
 
     // Conditionally checkpoint the state of the system if we are on the Nth step.
@@ -890,7 +919,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({load_checkpoint_sys});
 
 
-    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({load_checkpoint_sys});
+    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({checkpoint_sys});
     (void)clear_tmp;
 
 #ifdef MADRONA_GPU_MODE
@@ -904,7 +933,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // It's only necessary if the world was reset, but we don't have a way
     // to conditionally queue taskgraph nodes yet.
     auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
-        builder, {reset_sys});
+        builder, {checkpoint_sys});
 
     // The lidar system
 #ifdef MADRONA_GPU_MODE
@@ -972,7 +1001,7 @@ Sim::Sim(Engine &ctx,
     // entities that will be stored in the BVH. We plan to fix this in
     // a future release.
     constexpr CountT max_total_entities = consts::numAgents +
-        consts::numRooms * (consts::maxObservationsPerAgent + 3) +
+        consts::numRooms * (consts::maxEntitiesPerRoom + 3) +
         4; // side walls + floor
 
     phys::RigidBodyPhysicsSystem::init(ctx, init.rigidBodyObjMgr,
@@ -998,6 +1027,12 @@ Sim::Sim(Engine &ctx,
     ctx.data().otherAgentQuery = ctx.query<Position, GrabState>();
     ctx.data().roomEntityQuery = ctx.query<Position, EntityType>();
     ctx.data().doorQuery       = ctx.query<Position, OpenState>();
+
+    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>();
+
+    // Initialize checkpointing state
+    CheckpointState &ckptState = ctx.singleton<CheckpointState>();
+    ckptState.currentCheckpointIdx = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the
