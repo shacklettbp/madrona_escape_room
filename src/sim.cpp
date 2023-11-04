@@ -157,7 +157,6 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
             break;
         }
     }
-
     // Load the checkpoint from the beginning of the episode.
     Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
     {
@@ -282,6 +281,8 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
 
     // Grab current checkpoint slot (per world).
     Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
+
+    printf("Checkpoint size: %d\n", sizeof(ckpt));
 
     {
         // Agent parameters: physics state, reward, done.

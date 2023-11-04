@@ -242,6 +242,7 @@ def _update_iter(cfg : TrainConfig,
         actor_critic.eval()
         value_normalizer.eval()
 
+        # This is where the simulator loop happens that executes the TaskGraph.
         with profile('Collect Rollouts'):
             rollouts = rollout_mgr.collect(amp, sim, actor_critic)
     

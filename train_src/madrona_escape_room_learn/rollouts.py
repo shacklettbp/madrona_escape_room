@@ -121,6 +121,9 @@ class RolloutManager:
                         self.rnn_start_states, rnn_states_cur_in):
                     start_state[bptt_chunk].copy_(end_state)
 
+            # TODO: Run the minisim here to set state and initialize observations, 
+            # which will mean we no longer burn so many steps in the following.
+
             for slot in range(0, self.num_bptt_steps):
                 cur_obs_buffers = [obs[bptt_chunk, slot] for obs in self.obs]
 
