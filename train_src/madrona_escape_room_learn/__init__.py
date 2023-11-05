@@ -10,6 +10,7 @@ from madrona_escape_room_learn.actor_critic import (
 from madrona_escape_room_learn.profile import profile
 import madrona_escape_room_learn.models
 import madrona_escape_room_learn.rnn
+from madrona_escape_room_learn.replay_buffer import NStepReplay
 
 __all__ = [
         "train", "LearningState", "models", "rnn",
@@ -18,4 +19,5 @@ __all__ = [
         "ActorCritic", "DiscreteActor", "Critic",
         "BackboneEncoder", "RecurrentBackboneEncoder",
         "Backbone", "BackboneShared", "BackboneSeparate",
+        "NStepReplay",
     ]

@@ -19,6 +19,7 @@ from .amp import AMPState
 from .actor_critic import ActorCritic
 from .moving_avg import EMANormalizer
 from .learning_state import LearningState
+from .replay_buffer import NStepReplay
 
 import datetime
 
@@ -335,7 +336,8 @@ def _update_iter(cfg : TrainConfig,
                  actor_critic : ActorCritic,
                  optimizer : torch.optim.Optimizer,
                  scheduler : torch.optim.lr_scheduler.LRScheduler,
-                 value_normalizer : EMANormalizer
+                 value_normalizer : EMANormalizer,
+                 replay_buffer: NStepReplay,
             ):
     with torch.no_grad():
         actor_critic.eval()
@@ -343,6 +345,10 @@ def _update_iter(cfg : TrainConfig,
 
         with profile('Collect Rollouts'):
             rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
+            #print("Testing: adding to buffer")
+            #replay_buffer.add_to_buffer(rollouts)
+            #print("Testing: load oldest thing in buffer")
+            #rollouts = replay_buffer.get_last(rollouts)
 
         # Dump the rollout
         '''
@@ -422,7 +428,8 @@ def _update_loop(update_iter_fn : Callable,
                  sim : SimInterface,
                  rollout_mgr : RolloutManager,
                  learning_state : LearningState,
-                 start_update_idx : int):
+                 start_update_idx : int,
+                 replay_buffer: NStepReplay):
     num_train_seqs = num_agents * cfg.num_bptt_chunks
     assert(num_train_seqs % cfg.ppo.num_mini_batches == 0)
 
@@ -443,6 +450,7 @@ def _update_loop(update_iter_fn : Callable,
                 learning_state.optimizer,
                 learning_state.scheduler,
                 learning_state.value_normalizer,
+                replay_buffer,
             )
 
             gpu_sync_fn()
@@ -495,6 +503,9 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         def gpu_sync_fn():
             pass
 
+    buffer_size = 15
+    replay_buffer = NStepReplay(rollout_mgr, buffer_size, 'cuda')
+
     _update_loop(
         update_iter_fn=_update_iter,
         gpu_sync_fn=gpu_sync_fn,
@@ -505,6 +516,7 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         rollout_mgr=rollout_mgr,
         learning_state=learning_state,
         start_update_idx=start_update_idx,
+        replay_buffer=replay_buffer,
     )
 
     return actor_critic.cpu()
