@@ -57,6 +57,59 @@ class NStepReplay:
         # rollout.rnn_start_states = self.nstep_buf_rnn_start_state[self.filled_elems-1]
         print("Obs", obs)
         return Rollouts(obs, self.nstep_buf_action[-self.filled_elems], self.nstep_buf_log_probs[-self.filled_elems], self.nstep_buf_done[-self.filled_elems], self.nstep_buf_reward[-self.filled_elems], self.nstep_buf_return[-self.filled_elems], self.nstep_buf_value[-self.filled_elems], self.nstep_buf_bootstrap_value[-self.filled_elems], rollout.rnn_start_states)
+    
+    @torch.no_grad()
+    def get_multiple(self, rollout):
+        # For each var, first dimension is the different buffer entries, second dimension is 1, third dimension is batch_size
+        # We want to get a random portion of each filled element
+        # Such that in total we get batch_size elements
+
+        # Generate random indices corresponding to the elements of each of the self.filled_elems batches we should grab
+        indices = []
+        total_elems = 0
+        for i in range(self.filled_elems):
+            if i < self.filled_elems - 1:
+                elems_from_batch = torch.randint(0, rollout.actions.shape[2], ((int)(rollout.actions.shape[2]/self.filled_elems),), device=rollout.actions.device)
+                indices.append(elems_from_batch)
+                total_elems += elems_from_batch.shape[0]
+            else:
+                elems_from_batch = torch.randint(0, rollout.actions.shape[2], (rollout.actions.shape[2] - total_elems,), device=rollout.actions.device)
+                indices.append(elems_from_batch)
+                total_elems += elems_from_batch.shape[0]
+        print("indices", indices)
+
+        # Now we have a list of indices, each of which is a list of indices corresponding to the elements of each batch we should grab
+        obs = []
+        action = None
+        log_probs = None
+        done = None
+        reward = None
+        return_ = None
+        value = None
+        bootstrap_value = None
+        for j in range(len(indices)):
+            if j == 0:
+                for i in range(len(rollout.obs)):
+                    obs.append(self.nstep_buf_obs[i][-j,:,:,indices[j]])
+                action = self.nstep_buf_action[-j,:,:,indices[j]]
+                log_probs = self.nstep_buf_log_probs[-j,:,:,indices[j]]
+                done = self.nstep_buf_done[-j,:,:,indices[j]]
+                reward = self.nstep_buf_reward[-j,:,:,indices[j]]
+                return_ = self.nstep_buf_return[-j,:,:,indices[j]]
+                value = self.nstep_buf_value[-j,:,:,indices[j]]
+                bootstrap_value = self.nstep_buf_bootstrap_value[-j,indices[j]]
+            else:
+                for i in range(len(rollout.obs)):
+                    obs[i] = torch.cat((obs[i], self.nstep_buf_obs[i][-j,:,:,indices[j]]), dim=2)
+                action = torch.cat((action, self.nstep_buf_action[-j,:,:,indices[j]]), dim=2)
+                log_probs = torch.cat((log_probs, self.nstep_buf_log_probs[-j,:,:,indices[j]]), dim=2)
+                done = torch.cat((done, self.nstep_buf_done[-j,:,:,indices[j]]), dim=2)
+                reward = torch.cat((reward, self.nstep_buf_reward[-j,:,:,indices[j]]), dim=2)
+                return_ = torch.cat((return_, self.nstep_buf_return[-j,:,:,indices[j]]), dim=2)
+                value = torch.cat((value, self.nstep_buf_value[-j,:,:,indices[j]]), dim=2)
+                bootstrap_value = torch.cat((bootstrap_value, self.nstep_buf_bootstrap_value[-j,indices[j]]), dim=0)
+
+        return Rollouts(obs, action, log_probs, done, reward, return_, value, bootstrap_value, rollout.rnn_start_states)
 
     def fifo_shift(self, queue, new_tensor):
         queue = torch.cat((queue[1:, :], new_tensor.unsqueeze(0)), dim=0)

@@ -349,6 +349,8 @@ def _update_iter(cfg : TrainConfig,
             #replay_buffer.add_to_buffer(rollouts)
             #print("Testing: load oldest thing in buffer")
             #rollouts = replay_buffer.get_last(rollouts)
+            #print("Testing: load multiple from buffer")
+            #rollouts = replay_buffer.get_multiple(rollouts)
 
         # Dump the rollout
         '''
