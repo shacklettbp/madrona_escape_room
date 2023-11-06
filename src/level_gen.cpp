@@ -162,7 +162,7 @@ void createPersistentEntities(Engine &ctx)
         viz::VizRenderingSystem::makeEntityRenderable(ctx, agent);
         viz::VizRenderingSystem::attachEntityToView(ctx,
                                                     agent,
-                                                    90.f, 0.001f,
+                                                    100.f, 0.001f,
                                                     1.5f * math::up);
 
         ctx.get<Scale>(agent) = Diag3x3 { 1, 1, 1 };

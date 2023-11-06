@@ -122,6 +122,8 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .renderWidth = 2730/2,
         .renderHeight = 1536/2,
+        .batchWidth = 128,
+        .batchHeight = 128,
         .numWorlds = num_worlds,
         .maxViewsPerWorld = num_views,
         .maxInstancesPerWorld = 1000,
