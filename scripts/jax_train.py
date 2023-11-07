@@ -7,12 +7,13 @@ from flax import linen as nn
 import argparse
 from functools import partial
 from time import time
+from fractions import Fraction
 
 import madrona_escape_room
 
 import madrona_learn
 from madrona_learn import (
-    TrainConfig, CustomMetricConfig, PPOConfig,
+    TrainConfig, CustomMetricConfig, PPOConfig, PBTConfig,
 )
 
 from madrona_learn.rnn import LSTM
@@ -41,7 +42,7 @@ arg_parser.add_argument('--separate-value', action='store_true')
 arg_parser.add_argument('--fp16', action='store_true')
 
 arg_parser.add_argument('--pbt-ensemble-size', type=int, default=1)
-arg_parser.add_argument('--pbt-history-len', type=int, default=1)
+arg_parser.add_argument('--pbt-past-policies', type=int, default=0)
 
 arg_parser.add_argument('--gpu-sim', action='store_true')
 arg_parser.add_argument('--profile-port', type=int, default=None)
@@ -101,17 +102,26 @@ def iter_cb(update_idx, update_time, metrics, train_state_mgr):
 
 dev = jax.devices()[0]
 
-if args.pbt_ensemble_size > 1:
-    team_size = 1
-    num_teams = 2
+if args.pbt_ensemble_size != 1 or args.pbt_past_policies != 0:
+    pbt_cfg = PBTConfig(
+        num_teams = 2,
+        team_size = 1,
+        num_train_policies = args.pbt_ensemble_size,
+        num_past_policies = args.pbt_past_policies,
+        past_policy_update_interval = 20,
+        self_play_portion = 0.75,
+        cross_play_portion = 0.0,
+        past_play_portion = 0.25,
+        #self_play_portion = 0.8,
+        #cross_play_portion = 0.05,
+        #past_play_portion = 0.15,
+    )
 else:
-    team_size = 2
-    num_teams = 1
+    pbt_cfg = None
 
 cfg = TrainConfig(
     num_worlds = args.num_worlds,
-    team_size = team_size,
-    num_teams = num_teams,
+    num_agents_per_world = 2,
     num_updates = args.num_updates,
     steps_per_update = args.steps_per_update,
     num_bptt_chunks = args.num_bptt_chunks,
@@ -128,11 +138,10 @@ cfg = TrainConfig(
         clip_value_loss = args.clip_value_loss,
         huber_value_loss = False,
     ),
+    pbt = pbt_cfg,
     value_normalizer_decay = 0.999,
     mixed_precision = args.fp16,
     seed = 5,
-    pbt_ensemble_size = args.pbt_ensemble_size,
-    pbt_history_len = args.pbt_history_len,
 )
 
 policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, True)
