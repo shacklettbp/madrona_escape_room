@@ -89,6 +89,13 @@ struct Manager::CPUImpl final : Manager::Impl {
         madrona::Span<const int64_t> dims) const final
     {
         void *dev_ptr = cpuExec.getExported((uint32_t)slot);
+        // TODO:restore
+        if (slot == ExportID::Dummy) {
+            int* hackPtr = (int*)dev_ptr;
+            for (int i = 0; i < 8; ++i) {
+                printf("hackPtr[%d] = %d\n", i, hackPtr[i]);
+            }
+        }
         return Tensor(dev_ptr, type, dims, Optional<int>::none());
     }
 };
@@ -396,10 +403,20 @@ void Manager::step()
 
 Tensor Manager::checkpointTensor() const {
     return impl_->exportTensor(ExportID::Checkpoint,
-                               Tensor::ElementType::UInt8, // byte tensor
+                               Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
-                                   sizeof(CheckpointState)
+                                   2
+                               });
+}
+
+Tensor Manager::dummyTensor() const
+{
+    return impl_->exportTensor(ExportID::Dummy,
+                               Tensor::ElementType::Int32,
+                               {
+                                   impl_->cfg.numWorlds,
+                                   1,
                                });
 }
 

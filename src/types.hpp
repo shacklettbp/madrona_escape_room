@@ -234,9 +234,17 @@ struct Checkpoint {
     AgentState agentStates[consts::numAgents];
 };
 
-struct CheckpointState {
+struct CheckpointIndices {
     int32_t currentCheckpointIdx;
+    int32_t loadCheckpoint;
+};
+
+struct CheckpointState {
     Checkpoint checkpoints[consts::maxCheckpoints];
+};
+
+struct DummySingleton {
+    int32_t dummy;
 };
 
 /* ECS Archetypes for the game */

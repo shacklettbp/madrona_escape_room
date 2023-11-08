@@ -33,6 +33,7 @@ NB_MODULE(madrona_escape_room, m) {
         .def("step", &Manager::step)
         .def("checkpoint_tensor", &Manager::checkpointTensor)
         .def("reset_tensor", &Manager::resetTensor)
+        .def("dummy_tensor", &Manager::dummyTensor)
         .def("action_tensor", &Manager::actionTensor)
         .def("reward_tensor", &Manager::rewardTensor)
         .def("done_tensor", &Manager::doneTensor)

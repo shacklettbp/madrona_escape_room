@@ -56,7 +56,7 @@ inline constexpr madrona::CountT numPhysicsSubsteps = 4.f;
 
 // Maximum checkpoints
 inline constexpr int32_t checkpointFreq = 1;
-inline constexpr madrona::CountT maxCheckpoints = madrona::CountT(1 + episodeLen / checkpointFreq);
+inline constexpr madrona::CountT maxCheckpoints = madrona::CountT(episodeLen / checkpointFreq);
 
 }
 

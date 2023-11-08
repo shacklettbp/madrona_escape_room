@@ -7,6 +7,10 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 
+
+
+#define CKPT_ENABLED
+
 namespace madEscape {
 
 // Helper function for determining room membership.
@@ -56,6 +60,10 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
     registry.registerSingleton<CheckpointState>();
+    registry.registerSingleton<CheckpointIndices>();
+
+    // TODO: restore debugging
+    registry.registerSingleton<DummySingleton>();
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
@@ -64,7 +72,9 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // TODO: ZM, guessing we will eventually we want this to make checkpoint
     // state visible to the training code.
-    registry.exportSingleton<CheckpointState>(
+    registry.exportSingleton<DummySingleton>(
+        (uint32_t)ExportID::Dummy);
+    registry.exportSingleton<CheckpointIndices>(
         (uint32_t)ExportID::Checkpoint);
     registry.exportSingleton<WorldReset>(
         (uint32_t)ExportID::Reset);
@@ -119,25 +129,29 @@ static inline void initWorld(Engine &ctx)
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
     ctx.data().rng = RNG::make(episode_idx);
     ctx.data().curEpisodeIdx = episode_idx;
-
+    
     // Defined in src/level_gen.hpp / src/level_gen.cpp
     generateWorld(ctx);
 }
 
 inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState) 
 {
-    int should_reset = ctx.singleton<WorldReset>().reset;
-    if (should_reset == 0 || ckptState.currentCheckpointIdx == 0) {
+    //printf("Should restore %lu\n", (unsigned long)&ctx.data());
+    printf("load checkpoint %d\n", ctx.singleton<CheckpointIndices>().loadCheckpoint);
+    int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
+    int doCkpt = ctx.singleton<CheckpointIndices>().loadCheckpoint;
+    if (doCkpt == 0 || ckptIdx == 0) {
         // No reset, or first reset so nothing to load from checkpoint.
         // reset will be zeroed by the checkpoint system.
         return;
     }
 
+
     // Default value restores to the previous state.
     // Training code can override this.
-    int chosenIdx = ckptState.currentCheckpointIdx - 1;
+    int chosenIdx = ckptIdx - 1;
 
-    //printf("Restored ckpt %d\n", chosenIdx);
+    printf("Restored ckpt %d\n", chosenIdx);
     // Load the checkpoint from the beginning of the episode.
     Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
     {
@@ -154,7 +168,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
                 s  = ckpt.agentStates[idx].s;
                 pr = ckpt.agentStates[idx].pr;
                 idx++;
-                //printf("Restored agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
+                printf("Restored agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
             }
         );
     }
@@ -254,9 +268,8 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
 inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
 {
     // This runs every frame
-    int32_t should_reset = ctx.singleton<WorldReset>().reset;
-    ctx.singleton<WorldReset>().reset = 0;
-    if (should_reset == 1) {
+    int32_t loaded_checkpoint = ctx.singleton<CheckpointIndices>().loadCheckpoint;
+    if (loaded_checkpoint == 1) {
         // The world was just reset, we should not checkpoint
         // Check if we need to reset the checkpoint index.
         // We can't do this during the resetSystem because we need the
@@ -265,23 +278,27 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
         [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
         {
             // Reset the checkpoint index
-            ckptState.currentCheckpointIdx = (consts::maxCheckpoints - s.t) % consts::maxCheckpoints;
+            ctx.singleton<CheckpointIndices>().currentCheckpointIdx = (consts::maxCheckpoints - s.t) % consts::maxCheckpoints;
         });
-        //printf("Reset checkpoint idx to %d\n", ckptState.currentCheckpointIdx);
+        printf("Reset checkpoint idx to %d\n", ctx.singleton<CheckpointIndices>().currentCheckpointIdx);
+        ctx.singleton<CheckpointIndices>().loadCheckpoint = 0;
         return;
     }
 
-    bool update = 
-    ckptState.currentCheckpointIdx % 40 == 0 ||
-    (ckptState.currentCheckpointIdx + 1) % 40 == 0 ||
-    (ckptState.currentCheckpointIdx - 1) % 40 == 0;
+    int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx++;
 
-    if (update) {
-        //printf("writing ckpt idx %d\n", ckptState.currentCheckpointIdx);
+    bool update = 
+     ckptIdx % 40 == 0 ||
+    (ckptIdx + 1) % 40 == 0 ||
+    (ckptIdx - 1) % 40 == 0;
+
+    if (true || update) {
+     //   printf("writing ckpt idx %d\n", ckptIdx);
     }
 
+
     // Grab current checkpoint slot (per world).
-    Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
+    Checkpoint &ckpt = ckptState.checkpoints[ckptIdx];
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
@@ -296,9 +313,9 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
                 ckpt.agentStates[idx].s = s;
                 ckpt.agentStates[idx].pr = pr;
                 idx++;
-                //if (update) {
-                //    printf("Agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
-                //}
+                if (update) {
+                  // printf("Agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
+                }
             }
         );
     }
@@ -349,6 +366,12 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
     }
 }
 
+inline void debugSystem(Engine &ctx, DummySingleton &ds)
+{
+    printf("dummy %d\n", ds.dummy);
+    //ctx.singleton<DummySingleton>().dummy = 7;
+}
+
 // This system runs each frame and checks if the current episode is complete
 // or if code external to the application has forced a reset by writing to the
 // WorldReset singleton.
@@ -356,6 +379,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
 // If a reset is needed, cleanup the existing world and generate a new one.
 inline void resetSystem(Engine &ctx, WorldReset &reset)
 {
+
     int32_t should_reset = reset.reset;
     if (ctx.data().autoReset) {
         for (CountT i = 0; i < consts::numAgents; i++) {
@@ -367,9 +391,8 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
         }
     }
 
-
     if (should_reset != 0) {
-
+        reset.reset = 9; // TODO: restore
         cleanupWorld(ctx);
         initWorld(ctx);
 
@@ -627,19 +650,16 @@ inline void collectObservationsSystem(Engine &ctx,
     assert(!isnan(self_obs.theta));
     assert(!isnan(self_obs.isGrabbing));
 
-    int ckptIdx = ctx.singleton<CheckpointState>().currentCheckpointIdx;
-    // if (ckptIdx % 40 == 0 ||
-    //     (ckptIdx + 1) % 40 == 0 ||
-    //     (ckptIdx - 1) % 40 == 0) {
-    //         printf("SelfObs roomx %f\n", self_obs.roomX);
-    //         printf("SelfObs roomY %f\n", self_obs.roomY);
-    //         printf("SelfObs globalX %f\n", self_obs.globalX);
-    //         printf("SelfObs globalY %f\n", self_obs.globalY);
-    //         printf("SelfObs globalZ %f\n", self_obs.globalZ);
-    //         printf("SelfObs maxY %f\n", self_obs.maxY);
-    //         printf("SelfObs theta %f\n", self_obs.theta);
-    //         printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
-    //     }
+    //int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
+
+    //printf("SelfObs roomx %f\n", self_obs.roomX);
+    //printf("SelfObs roomY %f\n", self_obs.roomY);
+    //printf("SelfObs globalX %f\n", self_obs.globalX);
+    //printf("SelfObs globalY %f\n", self_obs.globalY);
+    //printf("SelfObs globalZ %f\n", self_obs.globalZ);
+    //printf("SelfObs maxY %f\n", self_obs.maxY);
+    //printf("SelfObs theta %f\n", self_obs.theta);
+    //printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
 
 
     Quat to_view = rot.inv();
@@ -941,11 +961,18 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({bonus_reward_sys});
 
     // Conditionally reset the world if the episode is over
+    auto debug_sys = builder.addToGraph<ParallelForNode<Engine,
+        debugSystem,
+        DummySingleton
+        >>({done_sys});
+
+    // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
         WorldReset
-        >>({done_sys});
+        >>({debug_sys});
 
+#ifdef CKPT_ENABLED
     // Conditionally load the checkpoint here including Done, Reward, 
     // and StepsRemaining. With Observations this should reconstruct 
     // all state that the training code needs.
@@ -960,15 +987,27 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         checkpointSystem,
         CheckpointState
         >>({load_checkpoint_sys});
+#endif
 
-
-    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({checkpoint_sys});
+    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({
+#ifdef CKPT_ENABLED
+        checkpoint_sys
+#else
+        reset_sys
+#endif
+    });
     (void)clear_tmp;
 
 #ifdef MADRONA_GPU_MODE
     // RecycleEntitiesNode is required on the GPU backend in order to reclaim
     // deleted entity IDs.
-    auto recycle_sys = builder.addToGraph<RecycleEntitiesNode>({checkpoint_sys});
+    auto recycle_sys = builder.addToGraph<RecycleEntitiesNode>({
+#ifdef CKPT_ENABLED
+        checkpoint_sys
+#else
+        reset_sys
+#endif
+    });
     (void)recycle_sys;
 #endif
 
@@ -976,7 +1015,13 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // It's only necessary if the world was reset, but we don't have a way
     // to conditionally queue taskgraph nodes yet.
     auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
-        builder, {checkpoint_sys});
+        builder, {
+#ifdef CKPT_ENABLED
+        checkpoint_sys
+#else
+        reset_sys
+#endif
+        });
 
     // The lidar system
 #ifdef MADRONA_GPU_MODE
@@ -1079,8 +1124,9 @@ Sim::Sim(Engine &ctx,
     ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
 
     // Initialize checkpointing state
-    CheckpointState &ckptState = ctx.singleton<CheckpointState>();
-    ckptState.currentCheckpointIdx = 0;
+    //CheckpointState &ckptState = ctx.singleton<CheckpointState>();
+    ctx.singleton<CheckpointIndices>().currentCheckpointIdx = 5; // TODO: restore
+    ctx.singleton<CheckpointIndices>().loadCheckpoint = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the

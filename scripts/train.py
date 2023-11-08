@@ -26,7 +26,8 @@ class LearningCallback:
         fps = args.num_worlds * args.steps_per_update / update_time
         self.mean_fps += (fps - self.mean_fps) / update_id
 
-        if update_id != 1 and  update_id % 10 != 0:
+        # TODO: restore
+        if update_id != 1 and  update_id % 4 != 0:
             return
 
         ppo = update_results.ppo_stats
@@ -123,6 +124,13 @@ dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
 checkpoints = sim.checkpoint_tensor().to_torch()
 resets = sim.reset_tensor().to_torch()
+dummys = sim.dummy_tensor().to_torch()
+print(dummys)
+for i in range(8):
+    dummys[i] = 99
+print(dummys)
+print(resets)
+
 
 # Flatten N, A, ... tensors to N * A, ...
 actions = actions.view(-1, *actions.shape[2:])
@@ -143,7 +151,7 @@ train(
             dones = dones,
             rewards = rewards,
             checkpoints = checkpoints,
-            resets = resets
+            resets = dummys # TODO: restore
     ),
     TrainConfig(
         num_updates = args.num_updates,
