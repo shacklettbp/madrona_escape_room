@@ -241,7 +241,6 @@ def _update_iter(cfg : TrainConfig,
     with torch.no_grad():
         actor_critic.eval()
         value_normalizer.eval()
-
         # This is where the simulator loop happens that executes the TaskGraph.
         with profile('Collect Rollouts'):
             rollouts = rollout_mgr.collect(amp, sim, actor_critic)
@@ -315,6 +314,17 @@ def _update_loop(update_iter_fn : Callable,
 
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
+
+        if False and update_idx > 0:
+            print("EXTRA STEP===============")
+            # Run the minisim here to set state and initialize observations, 
+            resets = sim.resets
+
+            for i in range(resets.shape[0]):
+                resets[i] = 1 #trigger the reset.
+
+            # After reset, step to collect observations for the next rollout.
+            sim.step()
 
         with profile("Update Iter Timing"):
             update_result = update_iter_fn(

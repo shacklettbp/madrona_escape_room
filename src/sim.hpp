@@ -25,6 +25,7 @@ enum class ExportID : uint32_t {
     DoorObservation,
     Lidar,
     StepsRemaining,
+    Checkpoint,
     NumExports,
 };
 
@@ -98,7 +99,7 @@ struct Sim : public madrona::WorldBase {
     Query<Position, OpenState>  doorQuery;
 
     // Queries for checkpointing
-    Query<Position, Rotation, Velocity, Reward, Done, StepsRemaining> ckptAgentQuery;
+    Query<Position, Rotation, Velocity, Reward, Done, StepsRemaining, Progress> ckptAgentQuery;
     Query<Position, Rotation, Velocity, OpenState> ckptDoorQuery;
     Query<Position, Rotation, Velocity, EntityType> ckptCubeQuery;
     Query<Position, Rotation, ButtonState> ckptButtonQuery;

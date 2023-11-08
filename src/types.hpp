@@ -224,6 +224,7 @@ struct AgentState {
     Reward re;
     Done d;
     StepsRemaining s;
+    Progress pr;
 };
 
 struct Checkpoint {
@@ -235,7 +236,6 @@ struct Checkpoint {
 
 struct CheckpointState {
     int32_t currentCheckpointIdx;
-    int32_t maxCheckpointIdx;
     Checkpoint checkpoints[consts::maxCheckpoints];
 };
 

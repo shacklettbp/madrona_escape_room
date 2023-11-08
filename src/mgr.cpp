@@ -394,15 +394,14 @@ void Manager::step()
 }
 
 
-// TODO: restore, ZM implement stuff around this function so the export is correct.
-// Tensor Manager::checkpointTensor() const {
-//     return impl_->exportTensor(ExportID::Checkpoint,
-//                                Tensor::ElementType::UInt8, // byte tensor
-//                                {
-//                                    impl_->cfg.numWorlds,
-//                                    sizeof(CheckpointState)
-//                                }):
-// }
+Tensor Manager::checkpointTensor() const {
+    return impl_->exportTensor(ExportID::Checkpoint,
+                               Tensor::ElementType::UInt8, // byte tensor
+                               {
+                                   impl_->cfg.numWorlds,
+                                   sizeof(CheckpointState)
+                               });
+}
 
 Tensor Manager::resetTensor() const
 {

@@ -96,6 +96,7 @@ arg_parser.add_argument('--profile-report', action='store_true')
 
 args = arg_parser.parse_args()
 
+
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
@@ -120,6 +121,8 @@ policy = make_policy(num_obs_features, args.num_channels, args.separate_value)
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
+checkpoints = sim.checkpoint_tensor().to_torch()
+resets = sim.reset_tensor().to_torch()
 
 # Flatten N, A, ... tensors to N * A, ...
 actions = actions.view(-1, *actions.shape[2:])
@@ -139,6 +142,8 @@ train(
             actions = actions,
             dones = dones,
             rewards = rewards,
+            checkpoints = checkpoints,
+            resets = resets
     ),
     TrainConfig(
         num_updates = args.num_updates,

@@ -64,7 +64,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // TODO: ZM, guessing we will eventually we want this to make checkpoint
     // state visible to the training code.
-    //registry.exportSingleton<CheckpointState>((uint32_t)ExportID::Checkpoint);
+    registry.exportSingleton<CheckpointState>(
+        (uint32_t)ExportID::Checkpoint);
     registry.exportSingleton<WorldReset>(
         (uint32_t)ExportID::Reset);
     registry.exportColumn<Agent, Action>(
@@ -132,46 +133,28 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
         return;
     }
 
-    ckptState.maxCheckpointIdx = ckptState.currentCheckpointIdx;
-    ckptState.currentCheckpointIdx = 0; // Zero the checkpoint index.
+    // Default value restores to the previous state.
+    // Training code can override this.
+    int chosenIdx = ckptState.currentCheckpointIdx - 1;
 
-    // Stochastically don't load from checkpoint.
-    if (ctx.data().rng.rand() < 0.5f) {
-        return;
-    }
-
-    int chosenIdx = 0; // Load the first checkpoint as a test.
-
-    // Importance sample states relative to room achieved.
-    int totalRoom = 0;
-    for (int i = 0; i < ckptState.maxCheckpointIdx; ++i) {
-        Checkpoint &ckpt = ckptState.checkpoints[i];
-        totalRoom += (int)fmax((float)roomIndex(ckpt.agentStates[0].p), (float)roomIndex(ckpt.agentStates[1].p)) + 1;
-    }
-    float roomProb = ctx.data().rng.rand() * totalRoom;
-    for (int i = 0; i < ckptState.maxCheckpointIdx; ++i) {
-        Checkpoint &ckpt = ckptState.checkpoints[i];
-        roomProb -= (int)fmax((float)roomIndex(ckpt.agentStates[0].p), (float)roomIndex(ckpt.agentStates[1].p)) + 1;
-        if (roomProb < 0) {
-            chosenIdx = i;
-            break;
-        }
-    }
+    //printf("Restored ckpt %d\n", chosenIdx);
     // Load the checkpoint from the beginning of the episode.
     Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s)
+            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
             {
-                p  = ckpt.agentStates[idx].p; 
-                r  = ckpt.agentStates[idx].r; 
-                v  = ckpt.agentStates[idx].v; 
+                p  = ckpt.agentStates[idx].p;
+                r  = ckpt.agentStates[idx].r;
+                v  = ckpt.agentStates[idx].v;
                 re = ckpt.agentStates[idx].re;
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
+                pr = ckpt.agentStates[idx].pr;
                 idx++;
+                //printf("Restored agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
             }
         );
     }
@@ -270,25 +253,40 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
 
 inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
 {
-
     // This runs every frame
     int32_t should_reset = ctx.singleton<WorldReset>().reset;
     ctx.singleton<WorldReset>().reset = 0;
     if (should_reset == 1) {
         // The world was just reset, we should not checkpoint
+        // Check if we need to reset the checkpoint index.
+        // We can't do this during the resetSystem because we need the
+        // checkpoint index during loading.
+        ctx.iterateQuery(ctx.data().ckptAgentQuery, 
+        [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
+        {
+            // Reset the checkpoint index
+            ckptState.currentCheckpointIdx = (consts::maxCheckpoints - s.t) % consts::maxCheckpoints;
+        });
+        //printf("Reset checkpoint idx to %d\n", ckptState.currentCheckpointIdx);
         return;
+    }
+
+    bool update = 
+    ckptState.currentCheckpointIdx % 40 == 0 ||
+    (ckptState.currentCheckpointIdx + 1) % 40 == 0 ||
+    (ckptState.currentCheckpointIdx - 1) % 40 == 0;
+
+    if (update) {
+        //printf("writing ckpt idx %d\n", ckptState.currentCheckpointIdx);
     }
 
     // Grab current checkpoint slot (per world).
     Checkpoint &ckpt = ckptState.checkpoints[ckptState.currentCheckpointIdx++];
-
-    printf("Checkpoint size: %d\n", sizeof(ckpt));
-
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s)
+            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
@@ -296,7 +294,11 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
                 ckpt.agentStates[idx].re = re;
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
+                ckpt.agentStates[idx].pr = pr;
                 idx++;
+                //if (update) {
+                //    printf("Agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
+                //}
             }
         );
     }
@@ -367,7 +369,6 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
 
     if (should_reset != 0) {
-        reset.reset = 1; // Will be reset later, used to encode checkpointing.
 
         cleanupWorld(ctx);
         initWorld(ctx);
@@ -625,6 +626,20 @@ inline void collectObservationsSystem(Engine &ctx,
     assert(!isnan(self_obs.maxY));
     assert(!isnan(self_obs.theta));
     assert(!isnan(self_obs.isGrabbing));
+
+    int ckptIdx = ctx.singleton<CheckpointState>().currentCheckpointIdx;
+    // if (ckptIdx % 40 == 0 ||
+    //     (ckptIdx + 1) % 40 == 0 ||
+    //     (ckptIdx - 1) % 40 == 0) {
+    //         printf("SelfObs roomx %f\n", self_obs.roomX);
+    //         printf("SelfObs roomY %f\n", self_obs.roomY);
+    //         printf("SelfObs globalX %f\n", self_obs.globalX);
+    //         printf("SelfObs globalY %f\n", self_obs.globalY);
+    //         printf("SelfObs globalZ %f\n", self_obs.globalZ);
+    //         printf("SelfObs maxY %f\n", self_obs.maxY);
+    //         printf("SelfObs theta %f\n", self_obs.theta);
+    //         printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
+    //     }
 
 
     Quat to_view = rot.inv();
@@ -953,7 +968,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
 #ifdef MADRONA_GPU_MODE
     // RecycleEntitiesNode is required on the GPU backend in order to reclaim
     // deleted entity IDs.
-    auto recycle_sys = builder.addToGraph<RecycleEntitiesNode>({reset_sys});
+    auto recycle_sys = builder.addToGraph<RecycleEntitiesNode>({checkpoint_sys});
     (void)recycle_sys;
 #endif
 
@@ -1056,7 +1071,8 @@ Sim::Sim(Engine &ctx,
     ctx.data().roomEntityQuery = ctx.query<Position, EntityType>();
     ctx.data().doorQuery       = ctx.query<Position, OpenState>();
 
-    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining>();
+    // Create the queries for checkpointing.
+    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining, Progress>();
     ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
     ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
@@ -1065,7 +1081,6 @@ Sim::Sim(Engine &ctx,
     // Initialize checkpointing state
     CheckpointState &ckptState = ctx.singleton<CheckpointState>();
     ckptState.currentCheckpointIdx = 0;
-    ckptState.maxCheckpointIdx = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the
