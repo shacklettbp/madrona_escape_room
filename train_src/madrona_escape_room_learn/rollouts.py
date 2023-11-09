@@ -124,11 +124,15 @@ class RolloutManager:
             for slot in range(0, self.num_bptt_steps):
                 cur_obs_buffers = [obs[bptt_chunk, slot] for obs in self.obs]
 
+                
+
                 with profile('Policy Infer', gpu=True):
                     for obs_idx, step_obs in enumerate(sim.obs):
                         cur_obs_buffers[obs_idx].copy_(step_obs, non_blocking=True)
 
                     cur_actions_store = self.actions[bptt_chunk, slot]
+
+                    
 
                     with amp.enable():
                         actor_critic.fwd_rollout(
@@ -164,6 +168,13 @@ class RolloutManager:
 
                     for rnn_states in rnn_states_cur_in:
                         rnn_states.masked_fill_(cur_dones_store, 0)
+
+                # TODO: Restore
+                    #with open("obs.txt", "a") as f:
+                    #    f.write(str(cur_obs_buffers))
+                    #    f.write(str(cur_actions_store))
+                    #    f.write(str(cur_dones_store))
+                    #    f.write(str(self.rewards))
 
                 profile.gpu_measure(sync=True)
 

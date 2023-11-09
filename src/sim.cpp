@@ -116,7 +116,7 @@ static inline void cleanupWorld(Engine &ctx)
     }
 }
 
-static inline void initWorld(Engine &ctx)
+static inline void initWorld(Engine &ctx, bool shouldGenEpisodeID)
 {
     if (ctx.data().enableVizRender) {
         viz::VizRenderingSystem::reset(ctx);
@@ -124,9 +124,10 @@ static inline void initWorld(Engine &ctx)
 
     phys::RigidBodyPhysicsSystem::reset(ctx);
 
+
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
-    int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
+    int32_t episode_idx = shouldGenEpisodeID ? episode_mgr.curEpisode.fetch_add<sync::relaxed>(1) : ctx.data().curEpisodeIdx;
     ctx.data().rng = RNG::make(episode_idx);
     ctx.data().curEpisodeIdx = episode_idx;
     
@@ -349,23 +350,24 @@ inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
 // If a reset is needed, cleanup the existing world and generate a new one.
 inline void resetSystem(Engine &ctx, WorldReset &reset)
 {
-
     int32_t should_reset = reset.reset;
     if (ctx.data().autoReset) {
         for (CountT i = 0; i < consts::numAgents; i++) {
             Entity agent = ctx.data().agents[i];
             Done done = ctx.get<Done>(agent);
             if (done.v) {
+                printf("Agent done!\n");
                 should_reset = 1;
             }
         }
     }
 
     if (should_reset != 0) {
-        reset.reset = 0;
+        printf("Reseting!\n");
         
         cleanupWorld(ctx);
-        initWorld(ctx);
+        initWorld(ctx, ctx.singleton<CheckpointReset>().reset == 0);
+        reset.reset = 0;
 
         if (ctx.data().enableVizRender) {
             viz::VizRenderingSystem::markEpisode(ctx);
@@ -381,12 +383,6 @@ inline void movementSystem(Engine &,
                            ExternalForce &external_force,
                            ExternalTorque &external_torque)
 {
-
-    printf("movementSystem, action: %d, %d, %d, %d\n", 
-    action.moveAmount,
-    action.moveAngle,
-    action.rotate,
-    action.grab);
 
     constexpr float move_max = 1000;
     constexpr float turn_max = 320;
@@ -634,18 +630,18 @@ inline void collectObservationsSystem(Engine &ctx,
 
     //int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
 
-    printf("SelfObs roomx %f\n", self_obs.roomX);
-    printf("SelfObs roomY %f\n", self_obs.roomY);
-    printf("SelfObs globalX %f\n", self_obs.globalX);
-    printf("SelfObs globalY %f\n", self_obs.globalY);
-    printf("SelfObs globalZ %f\n", self_obs.globalZ);
-    printf("SelfObs maxY %f\n", self_obs.maxY);
-    printf("SelfObs theta %f\n", self_obs.theta);
-    printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
-    printf("SelfObs reward %f\n", reward.v);
-    printf("SelfObs steps %d\n", steps.t);
-    printf("SelfObs Force %f, %f, %f\n", force.x, force.y, force.z);
-    printf("SelfObs Torque %f, %f, %f\n", torque.x, torque.y, torque.z);
+    // printf("SelfObs roomx %f\n", self_obs.roomX);
+    // printf("SelfObs roomY %f\n", self_obs.roomY);
+    // printf("SelfObs globalX %f\n", self_obs.globalX);
+    // printf("SelfObs globalY %f\n", self_obs.globalY);
+    // printf("SelfObs globalZ %f\n", self_obs.globalZ);
+    // printf("SelfObs maxY %f\n", self_obs.maxY);
+    // printf("SelfObs theta %f\n", self_obs.theta);
+    // printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
+    // printf("SelfObs reward %f\n", reward.v);
+    // printf("SelfObs steps %d\n", steps.t);
+    // printf("SelfObs Force %f, %f, %f\n", force.x, force.y, force.z);
+    // printf("SelfObs Torque %f, %f, %f\n", torque.x, torque.y, torque.z);
 
 
     Quat to_view = rot.inv();
@@ -668,10 +664,10 @@ inline void collectObservationsSystem(Engine &ctx,
                     .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
                 };
 
-                printf("partner_obs (r, theta, grabbing): %f, %f, %f\n", 
-                partner_obs.obs[idx - 1].polar.r,
-                partner_obs.obs[idx - 1].polar.theta,
-                partner_obs.obs[idx - 1].isGrabbing);
+                // printf("partner_obs (r, theta, grabbing): %f, %f, %f\n", 
+                // partner_obs.obs[idx - 1].polar.r,
+                // partner_obs.obs[idx - 1].polar.theta,
+                // partner_obs.obs[idx - 1].isGrabbing);
             });
     }
 
@@ -701,14 +697,14 @@ inline void collectObservationsSystem(Engine &ctx,
             ob.polar = xyToPolar(to_view.rotateVec(to_entity));
             ob.encodedType = encodeType(e);
 
-            if (idx < consts::maxObservationsPerAgent) {
-                room_ent_obs.obs[idx++] = ob;
+            // if (idx < consts::maxObservationsPerAgent) {
+            //     room_ent_obs.obs[idx++] = ob;
 
-                printf("room_obs (r, theta, type): %f, %f, %f\n", 
-                room_ent_obs.obs[idx - 1].polar.r,
-                room_ent_obs.obs[idx - 1].polar.theta,
-                room_ent_obs.obs[idx - 1].encodedType);
-            }
+            //     printf("room_obs (r, theta, type): %f, %f, %f\n", 
+            //     room_ent_obs.obs[idx - 1].polar.r,
+            //     room_ent_obs.obs[idx - 1].polar.theta,
+            //     room_ent_obs.obs[idx - 1].encodedType);
+            // }
         });
     }
 
@@ -720,10 +716,10 @@ inline void collectObservationsSystem(Engine &ctx,
        door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
        door_obs.isOpen = os.isOpen ? 1.f : 0.f;
 
-       printf("Door obs (r, theta, isOpen): %f, %f, %f\n", 
-       door_obs.polar.r,
-       door_obs.polar.theta,
-       door_obs.isOpen);
+    //    printf("Door obs (r, theta, isOpen): %f, %f, %f\n", 
+    //    door_obs.polar.r,
+    //    door_obs.polar.theta,
+    //    door_obs.isOpen);
     });
 }
 
@@ -769,7 +765,6 @@ inline void lidarSystem(Engine &ctx,
                 .encodedType = encodeType(entity_type),
             };
         }
-        printf("Lidar[%d] = %f, %f\n", idx, lidar.samples[idx].depth, lidar.samples[idx].encodedType);
     };
 
 
@@ -1109,7 +1104,7 @@ Sim::Sim(Engine &ctx,
     createPersistentEntities(ctx);
 
     // Generate initial world state
-    initWorld(ctx);
+    initWorld(ctx, true);
 
     // Create the queries for collectObservations
     ctx.data().otherAgentQuery = ctx.query<Position, GrabState>();
