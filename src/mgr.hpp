@@ -41,7 +41,6 @@ public:
     // simulation state to the python bindings / PyTorch tensors (src/bindings.cpp)
     MGR_EXPORT madrona::py::Tensor checkpointTensor() const;
     MGR_EXPORT madrona::py::Tensor resetTensor() const;
-    MGR_EXPORT madrona::py::Tensor dummyTensor() const;
     MGR_EXPORT madrona::py::Tensor actionTensor() const;
     MGR_EXPORT madrona::py::Tensor rewardTensor() const;
     MGR_EXPORT madrona::py::Tensor doneTensor() const;

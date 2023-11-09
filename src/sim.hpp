@@ -26,7 +26,6 @@ enum class ExportID : uint32_t {
     Lidar,
     StepsRemaining,
     Checkpoint,
-    Dummy,
     NumExports,
 };
 

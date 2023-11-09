@@ -243,10 +243,6 @@ struct CheckpointState {
     Checkpoint checkpoints[consts::maxCheckpoints];
 };
 
-struct DummySingleton {
-    int32_t dummy;
-};
-
 /* ECS Archetypes for the game */
 
 // There are 2 Agents in the environment trying to get to the destination

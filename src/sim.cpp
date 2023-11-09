@@ -62,9 +62,6 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerSingleton<CheckpointState>();
     registry.registerSingleton<CheckpointIndices>();
 
-    // TODO: restore debugging
-    registry.registerSingleton<DummySingleton>();
-
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
     registry.registerArchetype<DoorEntity>();
@@ -72,8 +69,6 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // TODO: ZM, guessing we will eventually we want this to make checkpoint
     // state visible to the training code.
-    registry.exportSingleton<DummySingleton>(
-        (uint32_t)ExportID::Dummy);
     registry.exportSingleton<CheckpointIndices>(
         (uint32_t)ExportID::Checkpoint);
     registry.exportSingleton<WorldReset>(
@@ -366,12 +361,6 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
     }
 }
 
-inline void debugSystem(Engine &ctx, DummySingleton &ds)
-{
-    printf("dummy %d\n", ds.dummy);
-    //ctx.singleton<DummySingleton>().dummy = 7;
-}
-
 // This system runs each frame and checks if the current episode is complete
 // or if code external to the application has forced a reset by writing to the
 // WorldReset singleton.
@@ -392,7 +381,8 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
     }
 
     if (should_reset != 0) {
-        reset.reset = 9; // TODO: restore
+        reset.reset = 0;
+
         cleanupWorld(ctx);
         initWorld(ctx);
 
@@ -961,16 +951,10 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({bonus_reward_sys});
 
     // Conditionally reset the world if the episode is over
-    auto debug_sys = builder.addToGraph<ParallelForNode<Engine,
-        debugSystem,
-        DummySingleton
-        >>({done_sys});
-
-    // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
         WorldReset
-        >>({debug_sys});
+        >>({done_sys});
 
 #ifdef CKPT_ENABLED
     // Conditionally load the checkpoint here including Done, Reward, 
@@ -1125,7 +1109,7 @@ Sim::Sim(Engine &ctx,
 
     // Initialize checkpointing state
     //CheckpointState &ckptState = ctx.singleton<CheckpointState>();
-    ctx.singleton<CheckpointIndices>().currentCheckpointIdx = 5; // TODO: restore
+    ctx.singleton<CheckpointIndices>().currentCheckpointIdx = 0;
     ctx.singleton<CheckpointIndices>().loadCheckpoint = 0;
 }
 

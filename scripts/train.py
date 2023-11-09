@@ -124,12 +124,6 @@ dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
 checkpoints = sim.checkpoint_tensor().to_torch()
 resets = sim.reset_tensor().to_torch()
-dummys = sim.dummy_tensor().to_torch()
-print(dummys)
-for i in range(8):
-    dummys[i] = 99
-print(dummys)
-print(resets)
 
 
 # Flatten N, A, ... tensors to N * A, ...
@@ -151,7 +145,7 @@ train(
             dones = dones,
             rewards = rewards,
             checkpoints = checkpoints,
-            resets = dummys # TODO: restore
+            resets = resets
     ),
     TrainConfig(
         num_updates = args.num_updates,
