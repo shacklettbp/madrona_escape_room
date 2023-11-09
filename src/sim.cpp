@@ -59,8 +59,10 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
-    registry.registerSingleton<CheckpointState>();
-    registry.registerSingleton<CheckpointIndices>();
+
+    // Checkpoint state.
+    registry.registerSingleton<Checkpoint>();
+    registry.registerSingleton<CheckpointReset>();
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
@@ -69,10 +71,13 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     // TODO: ZM, guessing we will eventually we want this to make checkpoint
     // state visible to the training code.
-    registry.exportSingleton<CheckpointIndices>(
+    registry.exportSingleton<Checkpoint>(
         (uint32_t)ExportID::Checkpoint);
+    registry.exportSingleton<CheckpointReset>(
+        (uint32_t)ExportID::CheckpointReset);
     registry.exportSingleton<WorldReset>(
         (uint32_t)ExportID::Reset);
+
     registry.exportColumn<Agent, Action>(
         (uint32_t)ExportID::Action);
     registry.exportColumn<Agent, SelfObservation>(
@@ -129,31 +134,26 @@ static inline void initWorld(Engine &ctx)
     generateWorld(ctx);
 }
 
-inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState) 
+inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset) 
 {
-    //printf("Should restore %lu\n", (unsigned long)&ctx.data());
-    printf("load checkpoint %d\n", ctx.singleton<CheckpointIndices>().loadCheckpoint);
-    int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
-    int doCkpt = ctx.singleton<CheckpointIndices>().loadCheckpoint;
-    if (doCkpt == 0 || ckptIdx == 0) {
-        // No reset, or first reset so nothing to load from checkpoint.
-        // reset will be zeroed by the checkpoint system.
+    // Decide if we should load a checkpoint.
+    if (reset.reset == 0) {
         return;
     }
 
+    reset.reset = 0;
+    printf("Restored checkpoint\n");
 
-    // Default value restores to the previous state.
-    // Training code can override this.
-    int chosenIdx = ckptIdx - 1;
-
-    printf("Restored ckpt %d\n", chosenIdx);
-    // Load the checkpoint from the beginning of the episode.
-    Checkpoint &ckpt = ckptState.checkpoints[chosenIdx]; // Get the previous state.
+    Checkpoint& ckpt = ctx.singleton<Checkpoint>();
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
+            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, 
+            StepsRemaining &s, Progress &pr, Action &a, ExternalForce &f, ExternalTorque &t,
+            madrona::phys::solver::SubstepPrevState &sps,
+            madrona::phys::solver::PreSolvePositional &psp,
+            madrona::phys::solver::PreSolveVelocity &psv)
             {
                 p  = ckpt.agentStates[idx].p;
                 r  = ckpt.agentStates[idx].r;
@@ -162,8 +162,13 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
                 pr = ckpt.agentStates[idx].pr;
+                a = ckpt.agentStates[idx].a;
+                f = ckpt.agentStates[idx].f;
+
+                sps = ckpt.agentStates[idx].sps;
+                psp = ckpt.agentStates[idx].psp;
+                psv = ckpt.agentStates[idx].psv;
                 idx++;
-                printf("Restored agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
             }
         );
     }
@@ -260,45 +265,18 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointState &ckptState)
     }
 }
 
-inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
+inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
 {
-    // This runs every frame
-    int32_t loaded_checkpoint = ctx.singleton<CheckpointIndices>().loadCheckpoint;
-    if (loaded_checkpoint == 1) {
-        // The world was just reset, we should not checkpoint
-        // Check if we need to reset the checkpoint index.
-        // We can't do this during the resetSystem because we need the
-        // checkpoint index during loading.
-        ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-        [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
-        {
-            // Reset the checkpoint index
-            ctx.singleton<CheckpointIndices>().currentCheckpointIdx = (consts::maxCheckpoints - s.t) % consts::maxCheckpoints;
-        });
-        printf("Reset checkpoint idx to %d\n", ctx.singleton<CheckpointIndices>().currentCheckpointIdx);
-        ctx.singleton<CheckpointIndices>().loadCheckpoint = 0;
-        return;
-    }
-
-    int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx++;
-
-    bool update = 
-     ckptIdx % 40 == 0 ||
-    (ckptIdx + 1) % 40 == 0 ||
-    (ckptIdx - 1) % 40 == 0;
-
-    if (true || update) {
-     //   printf("writing ckpt idx %d\n", ckptIdx);
-    }
-
-
-    // Grab current checkpoint slot (per world).
-    Checkpoint &ckpt = ckptState.checkpoints[ckptIdx];
+    Checkpoint &ckpt = ctx.singleton<Checkpoint>();
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, StepsRemaining &s, Progress &pr)
+            [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, 
+            StepsRemaining &s, Progress &pr, Action &a, ExternalForce &f, ExternalTorque &t,
+                        madrona::phys::solver::SubstepPrevState &sps,
+            madrona::phys::solver::PreSolvePositional &psp,
+            madrona::phys::solver::PreSolveVelocity &psv)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
@@ -307,10 +285,13 @@ inline void checkpointSystem(Engine &ctx, CheckpointState &ckptState)
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
                 ckpt.agentStates[idx].pr = pr;
+                ckpt.agentStates[idx].a = a;
+                ckpt.agentStates[idx].f = f;
+                ckpt.agentStates[idx].t = t;
+                ckpt.agentStates[idx].sps = sps;
+                ckpt.agentStates[idx].psp = psp;
+                ckpt.agentStates[idx].psv = psv;
                 idx++;
-                if (update) {
-                  // printf("Agent %d position = %f, %f, %f\n", idx, p.x, p.y, p.z);
-                }
             }
         );
     }
@@ -382,7 +363,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
     if (should_reset != 0) {
         reset.reset = 0;
-
+        
         cleanupWorld(ctx);
         initWorld(ctx);
 
@@ -400,6 +381,13 @@ inline void movementSystem(Engine &,
                            ExternalForce &external_force,
                            ExternalTorque &external_torque)
 {
+
+    printf("movementSystem, action: %d, %d, %d, %d\n", 
+    action.moveAmount,
+    action.moveAngle,
+    action.rotate,
+    action.grab);
+
     constexpr float move_max = 1000;
     constexpr float turn_max = 320;
 
@@ -613,6 +601,10 @@ inline void collectObservationsSystem(Engine &ctx,
                                       Rotation rot,
                                       const Progress &progress,
                                       const GrabState &grab,
+                                      const Reward &reward,
+                                      const StepsRemaining &steps,
+                                      const ExternalForce &force,
+                                      const ExternalTorque &torque,
                                       SelfObservation &self_obs,
                                       PartnerObservations &partner_obs,
                                       RoomEntityObservations &room_ent_obs,
@@ -642,14 +634,18 @@ inline void collectObservationsSystem(Engine &ctx,
 
     //int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
 
-    //printf("SelfObs roomx %f\n", self_obs.roomX);
-    //printf("SelfObs roomY %f\n", self_obs.roomY);
-    //printf("SelfObs globalX %f\n", self_obs.globalX);
-    //printf("SelfObs globalY %f\n", self_obs.globalY);
-    //printf("SelfObs globalZ %f\n", self_obs.globalZ);
-    //printf("SelfObs maxY %f\n", self_obs.maxY);
-    //printf("SelfObs theta %f\n", self_obs.theta);
-    //printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
+    printf("SelfObs roomx %f\n", self_obs.roomX);
+    printf("SelfObs roomY %f\n", self_obs.roomY);
+    printf("SelfObs globalX %f\n", self_obs.globalX);
+    printf("SelfObs globalY %f\n", self_obs.globalY);
+    printf("SelfObs globalZ %f\n", self_obs.globalZ);
+    printf("SelfObs maxY %f\n", self_obs.maxY);
+    printf("SelfObs theta %f\n", self_obs.theta);
+    printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
+    printf("SelfObs reward %f\n", reward.v);
+    printf("SelfObs steps %d\n", steps.t);
+    printf("SelfObs Force %f, %f, %f\n", force.x, force.y, force.z);
+    printf("SelfObs Torque %f, %f, %f\n", torque.x, torque.y, torque.z);
 
 
     Quat to_view = rot.inv();
@@ -671,6 +667,11 @@ inline void collectObservationsSystem(Engine &ctx,
                     .polar = xyToPolar(to_view.rotateVec(to_other)),
                     .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
                 };
+
+                printf("partner_obs (r, theta, grabbing): %f, %f, %f\n", 
+                partner_obs.obs[idx - 1].polar.r,
+                partner_obs.obs[idx - 1].polar.theta,
+                partner_obs.obs[idx - 1].isGrabbing);
             });
     }
 
@@ -702,6 +703,11 @@ inline void collectObservationsSystem(Engine &ctx,
 
             if (idx < consts::maxObservationsPerAgent) {
                 room_ent_obs.obs[idx++] = ob;
+
+                printf("room_obs (r, theta, type): %f, %f, %f\n", 
+                room_ent_obs.obs[idx - 1].polar.r,
+                room_ent_obs.obs[idx - 1].polar.theta,
+                room_ent_obs.obs[idx - 1].encodedType);
             }
         });
     }
@@ -713,6 +719,11 @@ inline void collectObservationsSystem(Engine &ctx,
        }
        door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
        door_obs.isOpen = os.isOpen ? 1.f : 0.f;
+
+       printf("Door obs (r, theta, isOpen): %f, %f, %f\n", 
+       door_obs.polar.r,
+       door_obs.polar.theta,
+       door_obs.isOpen);
     });
 }
 
@@ -758,6 +769,7 @@ inline void lidarSystem(Engine &ctx,
                 .encodedType = encodeType(entity_type),
             };
         }
+        printf("Lidar[%d] = %f, %f\n", idx, lidar.samples[idx].depth, lidar.samples[idx].encodedType);
     };
 
 
@@ -963,13 +975,13 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // This runs after the reset system resets the world.
     auto load_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
         loadCheckpointSystem,
-        CheckpointState
+        CheckpointReset
         >>({reset_sys});
 
     // Conditionally checkpoint the state of the system if we are on the Nth step.
     auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
         checkpointSystem,
-        CheckpointState
+        CheckpointReset
         >>({load_checkpoint_sys});
 #endif
 
@@ -1052,6 +1064,10 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Rotation,
             Progress,
             GrabState,
+            Reward,
+            StepsRemaining,
+            ExternalForce,
+            ExternalTorque,
             SelfObservation,
             PartnerObservations,
             RoomEntityObservations,
@@ -1101,16 +1117,17 @@ Sim::Sim(Engine &ctx,
     ctx.data().doorQuery       = ctx.query<Position, OpenState>();
 
     // Create the queries for checkpointing.
-    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, StepsRemaining, Progress>();
+    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, 
+    StepsRemaining, Progress, Action, ExternalForce, ExternalTorque,
+    madrona::phys::solver::SubstepPrevState,
+            madrona::phys::solver::PreSolvePositional,
+            madrona::phys::solver::PreSolveVelocity>();
     ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
     ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
     ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
 
-    // Initialize checkpointing state
-    //CheckpointState &ckptState = ctx.singleton<CheckpointState>();
-    ctx.singleton<CheckpointIndices>().currentCheckpointIdx = 0;
-    ctx.singleton<CheckpointIndices>().loadCheckpoint = 0;
+    ctx.singleton<CheckpointReset>().reset = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the

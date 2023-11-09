@@ -27,7 +27,7 @@ class LearningCallback:
         self.mean_fps += (fps - self.mean_fps) / update_id
 
         # TODO: restore
-        if update_id != 1 and  update_id % 4 != 0:
+        if update_id != 1 and  update_id % 2 != 0:
             return
 
         ppo = update_results.ppo_stats
@@ -123,6 +123,7 @@ actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
 checkpoints = sim.checkpoint_tensor().to_torch()
+checkpoint_resets = sim.checkpoint_reset_tensor().to_torch()
 resets = sim.reset_tensor().to_torch()
 
 
@@ -145,7 +146,8 @@ train(
             dones = dones,
             rewards = rewards,
             checkpoints = checkpoints,
-            resets = resets
+            resets = resets,
+            checkpoint_resets = checkpoint_resets
     ),
     TrainConfig(
         num_updates = args.num_updates,

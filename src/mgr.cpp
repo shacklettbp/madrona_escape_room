@@ -394,13 +394,21 @@ void Manager::step()
     impl_->run();
 }
 
-
-Tensor Manager::checkpointTensor() const {
-    return impl_->exportTensor(ExportID::Checkpoint,
+Tensor Manager::checkpointResetTensor() const {
+    return impl_->exportTensor(ExportID::CheckpointReset,
                                Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
-                                   2
+                                   1
+                               });
+}
+
+Tensor Manager::checkpointTensor() const {
+    return impl_->exportTensor(ExportID::Checkpoint,
+                               Tensor::ElementType::UInt8,
+                               {
+                                   impl_->cfg.numWorlds,
+                                   sizeof(Checkpoint)
                                });
 }
 

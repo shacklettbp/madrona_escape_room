@@ -225,6 +225,12 @@ struct AgentState {
     Done d;
     StepsRemaining s;
     Progress pr;
+    Action a;
+    ExternalForce f;
+    ExternalTorque t;
+    madrona::phys::solver::SubstepPrevState sps;
+    madrona::phys::solver::PreSolvePositional psp;
+    madrona::phys::solver::PreSolveVelocity psv;
 };
 
 struct Checkpoint {
@@ -234,13 +240,8 @@ struct Checkpoint {
     AgentState agentStates[consts::numAgents];
 };
 
-struct CheckpointIndices {
-    int32_t currentCheckpointIdx;
-    int32_t loadCheckpoint;
-};
-
-struct CheckpointState {
-    Checkpoint checkpoints[consts::maxCheckpoints];
+struct CheckpointReset {
+    int32_t reset;
 };
 
 /* ECS Archetypes for the game */

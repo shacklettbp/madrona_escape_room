@@ -48,5 +48,8 @@ class SimInterface:
     actions: torch.Tensor
     dones: torch.Tensor
     rewards: torch.Tensor
-    checkpoints: torch.Tensor
     resets: torch.Tensor
+    checkpoints: torch.Tensor
+    checkpoint_resets: torch.Tensor
+
+

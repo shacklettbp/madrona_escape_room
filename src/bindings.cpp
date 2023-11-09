@@ -31,6 +31,7 @@ NB_MODULE(madrona_escape_room, m) {
            nb::arg("num_worlds"),
            nb::arg("auto_reset"))
         .def("step", &Manager::step)
+        .def("checkpoint_reset_tensor", &Manager::checkpointResetTensor)
         .def("checkpoint_tensor", &Manager::checkpointTensor)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)

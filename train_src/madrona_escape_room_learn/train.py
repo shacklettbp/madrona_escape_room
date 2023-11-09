@@ -315,18 +315,15 @@ def _update_loop(update_iter_fn : Callable,
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
-
-        print(sim.checkpoints)
         if update_idx > 0:
             print("EXTRA STEP===============")
             # Run the minisim here to set state and initialize observations, 
-            checkpoints = sim.checkpoints
-            print(checkpoints.shape)
-            for i in range(8):
-                sim.checkpoints[i][1] = 88 #trigger the checkpoint.
-                sim.resets[i] = 99
+            checkpoints_resets = sim.checkpoint_resets
+            print(checkpoints_resets.shape)
+            for i in range(checkpoints_resets.shape[0]):
+                sim.resets[i] = 1
+                sim.checkpoint_resets[i] = 1
 
-            print(sim.checkpoints)
             # After reset, step to collect observations for the next rollout.
             sim.step()
 
