@@ -84,6 +84,12 @@ class ProcessObsCommonSimpleAdapter(nn.Module):
     ):
         processed = ProcessObsCommon(dtype = self.dtype)(obs, train)
 
+        processed, self = processed.pop('self')
+        processed = jax.tree_map(
+            lambda x: x.reshape(*x.shape[:-2], -1), processed)
+
+        processed = processed.copy({'self': self})
+
         flattened, _ = jax.tree_util.tree_flatten(processed)
 
         return jnp.concatenate(flattened, axis=-1)
