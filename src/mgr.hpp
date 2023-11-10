@@ -13,6 +13,8 @@
 #include <madrona/render/mw.hpp>
 #include <madrona/viz/system.hpp>
 
+#include "reward_mode.hpp"
+
 namespace madEscape {
 
 // The Manager class encapsulates the linkage between the outside training
@@ -29,6 +31,7 @@ public:
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
         bool useFixedWorld;
+        RewardMode rewardMode;
     };
 
     MGR_EXPORT Manager(

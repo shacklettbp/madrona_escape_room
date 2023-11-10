@@ -544,6 +544,8 @@ inline void denseRewardSystem2(Engine &,
                          Progress &progress,
                          Reward &out_reward)
 {
+    (void)progress;
+
     // Just in case agents do something crazy, clamp total reward
     float reward_pos = fminf(pos.y, consts::worldLength * 2);
     if (reward_pos < 14.0f && reward_pos > 9.0f) {
@@ -646,6 +648,8 @@ inline void sparseRewardSystem2(Engine &ctx,
                          Progress &progress,
                          Reward &out_reward)
 {
+    (void)progress;
+
     // Just in case agents do something crazy, clamp total reward
     float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
@@ -846,29 +850,62 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             DoorProperties
         >>({button_sys});
 
-    // Compute initial reward now that physics has updated the world state
-    /*
-    auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         rewardSystem,
-            Position,
-            Progress,
-            Reward
-        >>({door_open_sys});
+    TaskGraphNodeID reward_sys;
 
-    // Assign partner's reward
-    auto bonus_reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         bonusRewardSystem,
-            OtherAgents,
-            Progress,
-            Reward
-        >>({reward_sys});
-    */
-    auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         denseRewardSystem3,
-            Position,
-            Progress,
-            Reward
-        >>({door_open_sys});
+    if (cfg.rewardMode == RewardMode::OG) {
+        // Compute initial reward now that physics has updated the world state
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             rewardSystem,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+
+        // Assign partner's reward
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             bonusRewardSystem,
+                OtherAgents,
+                Progress,
+                Reward
+            >>({reward_sys});
+    } else if (cfg.rewardMode == RewardMode::Dense1) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             denseRewardSystem,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+    } else if (cfg.rewardMode == RewardMode::Dense2) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             denseRewardSystem2,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+    } else if (cfg.rewardMode == RewardMode::Dense3) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             denseRewardSystem3,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+    } else if (cfg.rewardMode == RewardMode::Sparse1) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             sparseRewardSystem,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+    } else if (cfg.rewardMode == RewardMode::Sparse2) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             sparseRewardSystem2,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+    } else {
+        assert(false);
+    }
     
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,

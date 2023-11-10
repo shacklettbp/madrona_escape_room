@@ -7,6 +7,7 @@
 #include "types.hpp"
 #include "init.hpp"
 #include "rng.hpp"
+#include "reward_mode.hpp"
 
 namespace madEscape {
 
@@ -53,6 +54,7 @@ struct Sim : public madrona::WorldBase {
         bool enableViewer;
         bool autoReset;
         bool useFixedWorld;
+        RewardMode rewardMode;
     };
 
     // Sim::registerTypes is called during initialization

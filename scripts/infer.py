@@ -38,6 +38,7 @@ sim = madrona_escape_room.SimManager(
     num_worlds = args.num_worlds,
     auto_reset = True,
     use_fixed_world = args.use_fixed_world,
+    reward_mode = madrona_escape_room.RewardMode.OG,
 )
 
 obs, num_obs_features = setup_obs(sim)

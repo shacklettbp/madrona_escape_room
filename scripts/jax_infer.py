@@ -34,6 +34,7 @@ sim = madrona_escape_room.SimManager(
     num_worlds = args.num_worlds,
     auto_reset = True,
     use_fixed_world = False,
+    reward_mode = madrona_escape_room.RewardMode.OG,
 )
 
 jax_gpu = jax.devices()[0].platform == 'gpu'

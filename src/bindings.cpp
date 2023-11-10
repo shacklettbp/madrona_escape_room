@@ -16,25 +16,38 @@ NB_MODULE(madrona_escape_room, m) {
     // like Tensor and PyExecMode.
     setupMadronaSubmodule(m);
 
+    nb::enum_<RewardMode>(m, "RewardMode")
+        .value("OG", RewardMode::OG)
+        .value("Dense1", RewardMode::Dense1)
+        .value("Dense2", RewardMode::Dense2)
+        .value("Dense3", RewardMode::Dense3)
+        .value("Sparse1", RewardMode::Sparse1)
+        .value("Sparse2", RewardMode::Sparse2)
+        .export_values()
+    ;
+
     auto mgr_class = nb::class_<Manager> (m, "SimManager")
         .def("__init__", [](Manager *self,
                             PyExecMode exec_mode,
                             int64_t gpu_id,
                             int64_t num_worlds,
                             bool auto_reset,
-                            bool use_fixed_world) {
+                            bool use_fixed_world,
+                            RewardMode reward_mode) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
                 .numWorlds = (uint32_t)num_worlds,
                 .autoReset = auto_reset,
                 .useFixedWorld = use_fixed_world,
+                .rewardMode = reward_mode,
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
            nb::arg("num_worlds"),
            nb::arg("auto_reset"),
-           nb::arg("use_fixed_world"))
+           nb::arg("use_fixed_world"),
+           nb::arg("reward_mode"))
         .def("step", &Manager::step)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)

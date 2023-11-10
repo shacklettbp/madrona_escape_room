@@ -23,6 +23,7 @@ arg_parser.add_argument('--run-name', type=str, required=True)
 arg_parser.add_argument('--restore', type=int)
 
 arg_parser.add_argument('--use-fixed-world', action='store_true')
+arg_parser.add_argument('--reward-mode', type=str, required=True)
 
 arg_parser.add_argument('--num-worlds', type=int, required=True)
 arg_parser.add_argument('--num-updates', type=int, required=True)
@@ -89,10 +90,10 @@ class LearningCallback:
                 return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
 
             # compute visits to second and third room
-            second_room_count = (update_results.obs[0][:,:,:,3] > 0.34).sum()
-            third_room_count = (update_results.obs[0][:,:,:,3] > 0.67).sum()
-            exit_count = (update_results.obs[0][:,:,:,3] > 1.01).sum()
-            door_count = (update_results.obs[3][:,:,:,2] > 0.5).sum()
+            second_room_count = (update_results.obs[0][:,:,3] > 0.34).sum()
+            third_room_count = (update_results.obs[0][:,:,3] > 0.67).sum()
+            exit_count = (update_results.obs[0][:,:,3] > 1.01).sum()
+            door_count = (update_results.obs[3][:,:,2] > 0.5).sum()
 
             value_mean = update_results.values.mean().cpu().item()
             value_min = update_results.values.min().cpu().item()
@@ -151,12 +152,15 @@ class LearningCallback:
         if update_id % 100 == 0:
             learning_state.save(update_idx, self.ckpt_dir / f"{update_id}.pth")
 
+reward_mode = getattr(madrona_escape_room.RewardMode, args.reward_mode)
+
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
     use_fixed_world = args.use_fixed_world,
+    reward_mode = reward_mode,
 )
 
 use_warm_up = True

@@ -342,6 +342,7 @@ Manager::Impl * Manager::Impl::init(
         viz_bridge != nullptr,
         mgr_cfg.autoReset,
         mgr_cfg.useFixedWorld,
+        mgr_cfg.rewardMode,
     };
 
     switch (mgr_cfg.execMode) {
