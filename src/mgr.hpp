@@ -28,6 +28,7 @@ public:
         int gpuID; // Which GPU for CUDA backend?
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
+        bool useFixedWorld;
     };
 
     MGR_EXPORT Manager(

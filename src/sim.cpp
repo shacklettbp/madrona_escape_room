@@ -1,4 +1,5 @@
 #include <madrona/mw_gpu_entry.hpp>
+#include <iostream>
 
 #include "sim.hpp"
 #include "level_gen.hpp"
@@ -37,6 +38,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
+    registry.registerSingleton<GlobalProgress>(); // Progress tracking component, reuse existing struct
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
@@ -96,7 +98,13 @@ static inline void initWorld(Engine &ctx)
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
-    ctx.data().rng = RNG::make(episode_idx);
+    int32_t seed;
+    if (ctx.data().useFixedWorld) {
+        seed = 0;
+    } else {
+        seed = episode_idx;
+    }
+    ctx.data().rng = RNG::make(seed);
     ctx.data().curEpisodeIdx = episode_idx;
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
@@ -498,6 +506,178 @@ inline void lidarSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
+inline void denseRewardSystem(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float reward = 0.0f;
+
+    if (reward_pos > 14.0f && old_max_y < 14.0f) {
+        // Passed the first room
+        reward += 1.0f;
+    } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
+        reward += 10.0f;
+    } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
+        reward += 100.0f;
+    }
+
+    // Update maxY
+    if (reward_pos > old_max_y) {
+        reward += (reward_pos * 0.025) * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    }
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void denseRewardSystem2(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    if (reward_pos < 14.0f && reward_pos > 9.0f) {
+        // Passed the first room
+        reward_pos = 10.0f;
+    } else if (reward_pos < 27.0f && reward_pos > 22.0f) {
+        reward_pos = 22.0f;
+    } else if (reward_pos < 41.0f && reward_pos > 36.0f) {
+        reward_pos = 36.0f;
+    }
+
+    float reward = 0.05 * exp(reward_pos / 10);
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void denseRewardSystem3(Engine &ctx,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    if (reward_pos < 14.0f && reward_pos > 9.0f) {
+        // Passed the first room
+        reward_pos = 10.0f;
+    } else if (reward_pos < 27.0f && reward_pos > 22.0f) {
+        reward_pos = 22.0f;
+    } else if (reward_pos < 40.0f && reward_pos > 36.0f) {
+        reward_pos = 36.0f;
+    } else if (reward_pos >= 40.0f) {
+        reward_pos += 10.0f; // Not sure if this one is necessary
+    }
+
+    // Provide reward for open doors
+    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
+    reward_pos += cur_room_idx*5;
+    if (cur_room_idx < 3) {
+        // Still in a room
+        const LevelState &level = ctx.singleton<LevelState>();
+        const Room &room = level.rooms[cur_room_idx];
+        Entity cur_door = room.door;
+        //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
+        OpenState door_open_state = ctx.get<OpenState>(cur_door);
+        //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
+        float isOpen = door_open_state.isOpen ? 1.f : 0.f;
+        reward_pos += isOpen*5; // Maybe add scaling to this
+    }
+
+    float reward = 0.0f;
+    float old_max_y = progress.maxY;
+    float new_progress = reward_pos - old_max_y;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    }
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void sparseRewardSystem(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float reward = 0.0f;
+    if (reward_pos > 14.0f && old_max_y < 14.0f) {
+        // Passed the first room
+        reward = 1.0f;
+    } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
+        reward = 1.0f;
+    } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
+        reward = 1.0f;
+    }
+
+    // Update maxY
+    if (reward_pos > old_max_y) {
+        progress.maxY = reward_pos;
+    }
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void sparseRewardSystem2(Engine &ctx,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float reward = 0.0f;
+    if (reward_pos > 14.0f) {
+        // Passed the first room
+        reward += 0.01f;
+    }
+    if (reward_pos > 28.0f) {
+        reward += 0.01f;
+    }
+    if (reward_pos > 41.0f) {
+        reward += 0.01f;
+    }
+
+    // Provide reward for open doors
+    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
+    const LevelState &level = ctx.singleton<LevelState>();
+    const Room &room = level.rooms[cur_room_idx];
+    Entity cur_door = room.door;
+    //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
+    OpenState door_open_state = ctx.get<OpenState>(cur_door);
+    //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
+    float isOpen = door_open_state.isOpen ? 1.f : 0.f;
+    reward += isOpen*0.01f; // Maybe add scaling to this
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
 inline void rewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
@@ -518,6 +698,30 @@ inline void rewardSystem(Engine &,
         reward = consts::slackReward;
     }
 
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void rewardSystemFixed(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float new_progress = reward_pos - old_max_y;
+
+    float reward = 0.0f;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    } 
+    
     out_reward.v = reward;
 }
 
@@ -643,6 +847,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({button_sys});
 
     // Compute initial reward now that physics has updated the world state
+    /*
     auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
          rewardSystem,
             Position,
@@ -657,13 +862,21 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Progress,
             Reward
         >>({reward_sys});
-
+    */
+    auto reward_sys = builder.addToGraph<ParallelForNode<Engine,
+         denseRewardSystem3,
+            Position,
+            Progress,
+            Reward
+        >>({door_open_sys});
+    
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({bonus_reward_sys});
+    //    >>({bonus_reward_sys});
+        >>({reward_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
@@ -747,6 +960,7 @@ Sim::Sim(Engine &ctx,
     : WorldBase(ctx),
       episodeMgr(init.episodeMgr)
 {
+    printf("About to access illegally the first time\n");
     // Currently the physics system needs an upper bound on the number of
     // entities that will be stored in the BVH. We plan to fix this in
     // a future release.
@@ -769,6 +983,11 @@ Sim::Sim(Engine &ctx,
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);
+
+    // Create the singleton component here?
+    printf("About to access illegally the first time\n");
+    GlobalProgress &globalProgress = ctx.singleton<GlobalProgress>();
+    globalProgress.progressPtr = init.progressPtr;
 
     // Generate initial world state
     initWorld(ctx);

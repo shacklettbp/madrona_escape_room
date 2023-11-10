@@ -1,4 +1,5 @@
 #include "level_gen.hpp"
+#include <iostream>
 
 namespace madEscape {
 
@@ -191,9 +192,20 @@ static void resetPersistentEntities(Engine &ctx)
          registerRigidBodyEntity(ctx, wall_entity, SimObject::Wall);
      }
 
+     auto second_rng = RNG::make(ctx.data().curEpisodeIdx);
+     // VISHNU MOD: RETRIEVE PROGRESS SO FAR
+     //printf("About to access illegally\n");
+     GlobalProgress& progress = ctx.singleton<GlobalProgress>();
+     //printf("About to access illegally %f \n", *(progress.progressPtr));
+     // VISHNU MOD: what if we place them in any room we want
+     float max_room = 0.999 + (int)(fmax(0.f, fmin(3.0f, (*(progress.progressPtr)) * 3 / consts::worldLength))); 
+     int rand_room = ((int)(second_rng.rand() * max_room));
      for (CountT i = 0; i < consts::numAgents; i++) {
          Entity agent_entity = ctx.data().agents[i];
          registerRigidBodyEntity(ctx, agent_entity, SimObject::Agent);
+
+         // VISHNU MOD: LOG PROGRESS SO FAR
+         *(progress.progressPtr) = fmax(*(progress.progressPtr), ctx.get<Position>(agent_entity)[1]);
 
          ctx.get<viz::VizCamera>(agent_entity) =
              viz::VizRenderingSystem::setupView(ctx, 90.f, 0.001f,
@@ -206,6 +218,13 @@ static void resetPersistentEntities(Engine &ctx)
              randBetween(ctx, consts::agentRadius * 1.1f,  2.f),
              0.f,
          };
+
+         pos[1] += consts::worldLength * rand_room / 3;
+         if (rand_room > 0) {
+            float range = consts::worldWidth / 2.f - 2.5f * consts::agentRadius;
+            float x_pos = second_rng.rand() * range - range / 2.f;
+            pos[0] = x_pos;
+         }
 
          if (i % 2 == 0) {
              pos.x += consts::worldWidth / 4.f;

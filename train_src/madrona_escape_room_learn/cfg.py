@@ -13,15 +13,29 @@ class PPOConfig:
     num_epochs: int = 1
     clip_value_loss: bool = False
     adaptive_entropy: bool = True
+    no_advantages: bool = False # Override to use values instead of advantages
+
+@dataclass(frozen=True)
+class AWRConfig:
+    num_mini_batches: int
+    beta_inverse: float
+    value_loss_coef: float
+    entropy_coef: float
+    max_grad_norm: float
+    num_epochs: int = 1
+    clip_value_loss: bool = False
+    adaptive_entropy: bool = True
 
 @dataclass(frozen=True)
 class TrainConfig:
+    run_name: str
     num_updates: int
     steps_per_update: int
     num_bptt_chunks: int
     lr: float
     gamma: float
     ppo: PPOConfig
+    #awr: AWRConfig
     gae_lambda: float = 1.0
     normalize_advantages: bool = True
     normalize_values : bool = True

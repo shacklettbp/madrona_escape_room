@@ -52,6 +52,7 @@ struct Sim : public madrona::WorldBase {
     struct Config {
         bool enableViewer;
         bool autoReset;
+        bool useFixedWorld;
     };
 
     // Sim::registerTypes is called during initialization
@@ -96,6 +97,8 @@ struct Sim : public madrona::WorldBase {
     // Should the environment automatically reset (generate a new episode)
     // at the end of each episode?
     bool autoReset;
+
+    bool useFixedWorld;
 
     // Are we visualizing the simulation in the viewer?
     bool enableVizRender;

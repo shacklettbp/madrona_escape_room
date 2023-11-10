@@ -21,17 +21,20 @@ NB_MODULE(madrona_escape_room, m) {
                             PyExecMode exec_mode,
                             int64_t gpu_id,
                             int64_t num_worlds,
-                            bool auto_reset) {
+                            bool auto_reset,
+                            bool use_fixed_world) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
                 .numWorlds = (uint32_t)num_worlds,
                 .autoReset = auto_reset,
+                .useFixedWorld = use_fixed_world,
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
            nb::arg("num_worlds"),
            nb::arg("auto_reset"))
+           nb::arg("use_fixed_world"))
         .def("step", &Manager::step)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)

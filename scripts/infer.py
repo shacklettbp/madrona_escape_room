@@ -19,6 +19,8 @@ arg_parser.add_argument('--gpu-id', type=int, default=0)
 arg_parser.add_argument('--ckpt-path', type=str, required=True)
 arg_parser.add_argument('--action-dump-path', type=str)
 
+arg_parser.add_argument('--use-fixed-world', action='store_true')
+
 arg_parser.add_argument('--num-worlds', type=int, required=True)
 arg_parser.add_argument('--num-steps', type=int, required=True)
 
@@ -35,6 +37,7 @@ sim = madrona_escape_room.SimManager(
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
+    use_fixed_world = args.use_fixed_world,
 )
 
 obs, num_obs_features = setup_obs(sim)

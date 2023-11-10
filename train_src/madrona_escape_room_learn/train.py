@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch._dynamo
 from torch import optim
 from torch.func import vmap
+import os
 from os import environ as env_vars
 from typing import Callable
 from dataclasses import dataclass
@@ -18,6 +19,9 @@ from .amp import AMPState
 from .actor_critic import ActorCritic
 from .moving_avg import EMANormalizer
 from .learning_state import LearningState
+from .replay_buffer import NStepReplay
+
+import datetime
 
 @dataclass(frozen = True)
 class MiniBatch:
@@ -43,8 +47,11 @@ class PPOStats:
 
 @dataclass(frozen = True)
 class UpdateResult:
+    obs: torch.Tensor
     actions : torch.Tensor
     rewards : torch.Tensor
+    returns : torch.Tensor
+    dones: torch.Tensor
     values : torch.Tensor
     advantages : torch.Tensor
     bootstrap_values : torch.Tensor
@@ -72,6 +79,11 @@ def _gather_minibatch(rollouts : Rollouts,
                       inds : torch.Tensor,
                       amp : AMPState):
     obs_slice = tuple(_mb_slice(obs, inds) for obs in rollouts.obs)
+
+    # Print if in third room
+    #third_room_count = (obs_slice[0][:,3] > 0.65).sum()
+    #if third_room_count > 0:
+    #    print("There are ", third_room_count, "agents in the third room")
     
     actions_slice = _mb_slice(rollouts.actions, inds)
     log_probs_slice = _mb_slice(rollouts.log_probs, inds).to(
@@ -125,8 +137,12 @@ def _compute_advantages(cfg : TrainConfig,
         next_valid = 1.0 - cur_dones
 
         # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)
-        td_err = (cur_rewards + 
-            cfg.gamma * next_valid * next_values - cur_values)
+        if cfg.ppo.no_advantages:
+            td_err = (cur_rewards + 
+                cfg.gamma * next_valid * next_values) # Don't subtract off cur_values
+        else:
+            td_err = (cur_rewards + 
+                cfg.gamma * next_valid * next_values - cur_values)
 
         # A_t = sum (gamma * lambda)^(l - 1) * delta_l (EQ 16 GAE)
         #     = delta_t + gamma * lambda * A_t+1
@@ -150,6 +166,87 @@ def _compute_action_scores(cfg, amp, advantages):
 
             return action_scores.to(dtype=amp.compute_dtype)
 
+# Keep value loss the same as PPO, but make the policy loss be advantage-weighted regression
+# Introduce buffer if needed
+def _awr_update(cfg : TrainConfig,
+                amp : AMPState,
+                mb : MiniBatch,
+                actor_critic : ActorCritic,
+                optimizer : torch.optim.Optimizer,
+                value_normalizer : EMANormalizer,
+            ):
+    with amp.enable():
+        with profile('AC Forward', gpu=True):
+            new_log_probs, entropies, new_values = actor_critic.fwd_update(
+                mb.rnn_start_states, mb.dones, mb.actions, *mb.obs)
+
+        with torch.no_grad():
+            action_scores = _compute_action_scores(cfg, amp, mb.advantages)
+
+        '''
+        ratio = torch.exp(new_log_probs - mb.log_probs)
+        surr1 = action_scores * ratio
+        surr2 = action_scores * (
+            torch.clamp(ratio, 1.0 - cfg.ppo.clip_coef, 1.0 + cfg.ppo.clip_coef))
+
+        action_obj = torch.min(surr1, surr2)
+        '''
+        action_obj = new_log_probs * torch.exp(action_scores * cfg.awr.beta_inverse) 
+
+        returns = mb.advantages + mb.values
+
+        if cfg.awr.clip_value_loss:
+            with torch.no_grad():
+                low = mb.values - cfg.ppo.clip_coef
+                high = mb.values + cfg.ppo.clip_coef
+
+            new_values = torch.clamp(new_values, low, high)
+
+        normalized_returns = value_normalizer(amp, returns)
+        value_loss = 0.5 * F.mse_loss(
+            new_values, normalized_returns, reduction='none')
+
+        action_obj = torch.mean(action_obj)
+        value_loss = torch.mean(value_loss)
+        entropies = torch.mean(entropies)
+
+        loss = (
+            - action_obj # Maximize the action objective function
+            + cfg.ppo.value_loss_coef * value_loss
+            - cfg.ppo.entropy_coef * entropies # Maximize entropy
+        )
+
+    with profile('Optimize'):
+        if amp.scaler is None:
+            loss.backward()
+            nn.utils.clip_grad_norm_(
+                actor_critic.parameters(), cfg.ppo.max_grad_norm)
+            optimizer.step()
+        else:
+            amp.scaler.scale(loss).backward()
+            amp.scaler.unscale_(optimizer)
+            nn.utils.clip_grad_norm_(
+                actor_critic.parameters(), cfg.ppo.max_grad_norm)
+            amp.scaler.step(optimizer)
+            amp.scaler.update()
+
+        optimizer.zero_grad()
+
+    with torch.no_grad():
+        returns_var, returns_mean = torch.var_mean(normalized_returns)
+        returns_stddev = torch.sqrt(returns_var)
+
+        stats = PPOStats(
+            loss = loss.cpu().float().item(),
+            action_loss = -(action_obj.cpu().float().item()),
+            value_loss = value_loss.cpu().float().item(),
+            entropy_loss = -(entropies.cpu().float().item()),
+            returns_mean = returns_mean.cpu().float().item(),
+            returns_stddev = returns_stddev.cpu().float().item(),
+        )
+
+    return stats
+
 def _ppo_update(cfg : TrainConfig,
                 amp : AMPState,
                 mb : MiniBatch,
@@ -164,6 +261,9 @@ def _ppo_update(cfg : TrainConfig,
 
         with torch.no_grad():
             action_scores = _compute_action_scores(cfg, amp, mb.advantages)
+
+        #if mb.dones.sum() > 0: # VISHNU LOGGING
+        #    print("We have a done!")
 
         ratio = torch.exp(new_log_probs - mb.log_probs)
         surr1 = action_scores * ratio
@@ -254,7 +354,8 @@ def _update_iter(cfg : TrainConfig,
                  actor_critic : ActorCritic,
                  optimizer : torch.optim.Optimizer,
                  scheduler : torch.optim.lr_scheduler.LRScheduler,
-                 value_normalizer : EMANormalizer
+                 value_normalizer : EMANormalizer,
+                 replay_buffer: NStepReplay,
             ):
     with torch.no_grad():
         actor_critic.eval()
@@ -262,6 +363,26 @@ def _update_iter(cfg : TrainConfig,
 
         with profile('Collect Rollouts'):
             rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
+            #print("Testing: adding to buffer")
+            #replay_buffer.add_to_buffer(rollouts)
+            #print("Testing: load oldest thing in buffer")
+            #rollouts = replay_buffer.get_last(rollouts)
+            #print("Testing: load multiple from buffer")
+            #rollouts = replay_buffer.get_multiple(rollouts)
+
+        # Dump the rollout
+        '''
+        curr_rand = torch.rand((1,))[0]
+        if curr_rand < 0.05:
+            # Dump the features
+            now = datetime.datetime.now()
+            dir_path = "/data/rl/madrona_3d_example/data_dump/" + cfg.run_name + "/"
+            isExist = os.path.exists(dir_path)
+            if not isExist:
+                # Create a new directory because it does not exist
+                os.makedirs(dir_path)
+            torch.save(rollouts, dir_path + str(now) + ".pt")
+        '''
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values
@@ -307,8 +428,11 @@ def _update_iter(cfg : TrainConfig,
                         cur_stats.returns_stddev - aggregate_stats.returns_stddev) / num_stats
 
     return UpdateResult(
+        obs = rollouts.obs,
         actions = rollouts.actions.view(-1, *rollouts.actions.shape[2:]),
         rewards = rollouts.rewards.view(-1, *rollouts.rewards.shape[2:]),
+        returns = rollouts.returns.view(-1, *rollouts.returns.shape[2:]),
+        dones = rollouts.dones.view(-1, *rollouts.dones.shape[2:]),
         values = rollouts.values.view(-1, *rollouts.values.shape[2:]),
         advantages = advantages.view(-1, *advantages.shape[2:]),
         bootstrap_values = rollouts.bootstrap_values,
@@ -323,7 +447,8 @@ def _update_loop(update_iter_fn : Callable,
                  sim : SimInterface,
                  rollout_mgr : RolloutManager,
                  learning_state : LearningState,
-                 start_update_idx : int):
+                 start_update_idx : int,
+                 replay_buffer: NStepReplay):
     num_train_seqs = num_agents * cfg.num_bptt_chunks
     assert(num_train_seqs % cfg.ppo.num_mini_batches == 0)
 
@@ -344,6 +469,7 @@ def _update_loop(update_iter_fn : Callable,
                 learning_state.optimizer,
                 learning_state.scheduler,
                 learning_state.value_normalizer,
+                replay_buffer,
             )
 
             gpu_sync_fn()
@@ -396,6 +522,9 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         def gpu_sync_fn():
             pass
 
+    buffer_size = 15
+    replay_buffer = NStepReplay(rollout_mgr, buffer_size, 'cuda')
+
     _update_loop(
         update_iter_fn=_update_iter,
         gpu_sync_fn=gpu_sync_fn,
@@ -406,6 +535,7 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         rollout_mgr=rollout_mgr,
         learning_state=learning_state,
         start_update_idx=start_update_idx,
+        replay_buffer=replay_buffer,
     )
 
     return actor_critic

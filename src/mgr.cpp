@@ -341,6 +341,7 @@ Manager::Impl * Manager::Impl::init(
     Sim::Config sim_cfg {
         viz_bridge != nullptr,
         mgr_cfg.autoReset,
+        mgr_cfg.useFixedWorld,
     };
 
     switch (mgr_cfg.execMode) {
@@ -351,6 +352,10 @@ Manager::Impl * Manager::Impl::init(
         EpisodeManager *episode_mgr = 
             (EpisodeManager *)cu::allocGPU(sizeof(EpisodeManager));
         REQ_CUDA(cudaMemset(episode_mgr, 0, sizeof(EpisodeManager)));
+
+        // Allocate what I want here with allocGPU
+        float *progress_ptr = (float *)cu::allocGPU(sizeof(float));
+        REQ_CUDA(cudaMemset(progress_ptr, 0, sizeof(float)));
 
         PhysicsLoader phys_loader(ExecMode::CUDA, 10);
         loadPhysicsObjects(phys_loader);
@@ -364,6 +369,7 @@ Manager::Impl * Manager::Impl::init(
                 episode_mgr,
                 phys_obj_mgr,
                 viz_bridge,
+                progress_ptr, // Add progress_ptr to WorldInit
             };
         }
 
@@ -404,6 +410,9 @@ Manager::Impl * Manager::Impl::init(
     case ExecMode::CPU: {
         EpisodeManager *episode_mgr = new EpisodeManager { 0 };
 
+        // Allocate what I want here on heap
+        float *progress_ptr = new float(0.f);
+
         PhysicsLoader phys_loader(ExecMode::CPU, 10);
         loadPhysicsObjects(phys_loader);
 
@@ -416,6 +425,7 @@ Manager::Impl * Manager::Impl::init(
                 episode_mgr,
                 phys_obj_mgr,
                 viz_bridge,
+                progress_ptr, // CPU version
             };
         }
 
