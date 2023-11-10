@@ -33,7 +33,7 @@ NB_MODULE(madrona_escape_room, m) {
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
            nb::arg("num_worlds"),
-           nb::arg("auto_reset"))
+           nb::arg("auto_reset"),
            nb::arg("use_fixed_world"))
         .def("step", &Manager::step)
         .def("reset_tensor", &Manager::resetTensor)

@@ -981,6 +981,8 @@ Sim::Sim(Engine &ctx,
 
     autoReset = cfg.autoReset;
 
+    useFixedWorld = cfg.useFixedWorld;
+
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);
 

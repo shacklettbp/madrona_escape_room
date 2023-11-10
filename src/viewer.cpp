@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
+        .useFixedWorld = false,
     }, viewer.rendererBridge());
 
     auto replayStep = [&]() {
