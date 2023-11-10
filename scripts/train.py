@@ -26,8 +26,7 @@ class LearningCallback:
         fps = args.num_worlds * args.steps_per_update / update_time
         self.mean_fps += (fps - self.mean_fps) / update_id
 
-        # TODO: restore
-        if update_id != 1 and  update_id % 1 != 0:
+        if update_id != 1 and  update_id % 5 != 0:
             return
 
         ppo = update_results.ppo_stats

@@ -110,6 +110,7 @@ class RolloutManager:
             amp : AMPState,
             sim : SimInterface,
             actor_critic : ActorCritic,
+            filename : str
         ):
         rnn_states_cur_in = self.rnn_end_states
         rnn_states_cur_out = self.rnn_alt_states
@@ -124,7 +125,11 @@ class RolloutManager:
             for slot in range(0, self.num_bptt_steps):
                 cur_obs_buffers = [obs[bptt_chunk, slot] for obs in self.obs]
 
-                
+                if filename != "":
+                    with open(filename, "a") as f:
+                        f.write(str(sim.obs))
+                        f.write(str(sim.dones))
+                        f.write(str(sim.rewards))
 
                 with profile('Policy Infer', gpu=True):
                     for obs_idx, step_obs in enumerate(sim.obs):
@@ -169,12 +174,7 @@ class RolloutManager:
                     for rnn_states in rnn_states_cur_in:
                         rnn_states.masked_fill_(cur_dones_store, 0)
 
-                # TODO: Restore
-                    #with open("obs.txt", "a") as f:
-                    #    f.write(str(cur_obs_buffers))
-                    #    f.write(str(cur_actions_store))
-                    #    f.write(str(cur_dones_store))
-                    #    f.write(str(self.rewards))
+
 
                 profile.gpu_measure(sync=True)
 

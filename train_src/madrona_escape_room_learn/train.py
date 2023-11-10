@@ -11,6 +11,7 @@ from typing import List, Optional, Dict
 from .profile import profile
 from time import time
 from pathlib import Path
+import os
 
 from .cfg import TrainConfig, SimInterface
 from .rollouts import RolloutManager, Rollouts
@@ -236,14 +237,15 @@ def _update_iter(cfg : TrainConfig,
                  actor_critic : ActorCritic,
                  optimizer : torch.optim.Optimizer,
                  scheduler : torch.optim.lr_scheduler.LRScheduler,
-                 value_normalizer : EMANormalizer
+                 value_normalizer : EMANormalizer,
+                 filename : str
             ):
     with torch.no_grad():
         actor_critic.eval()
         value_normalizer.eval()
         # This is where the simulator loop happens that executes the TaskGraph.
         with profile('Collect Rollouts'):
-            rollouts = rollout_mgr.collect(amp, sim, actor_critic)
+            rollouts = rollout_mgr.collect(amp, sim, actor_critic, filename)
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values
@@ -263,7 +265,8 @@ def _update_iter(cfg : TrainConfig,
         num_stats = 0
 
         for epoch in range(cfg.ppo.num_epochs):
-            for inds in torch.randperm(num_train_seqs).chunk(
+            for inds in torch.arange(num_train_seqs).chunk(
+            #for inds in torch.randperm(num_train_seqs).chunk(
                     cfg.ppo.num_mini_batches):
                 with torch.no_grad(), profile('Gather Minibatch', gpu=True):
                     mb = _gather_minibatch(rollouts, advantages, inds, amp)
@@ -312,19 +315,31 @@ def _update_loop(update_iter_fn : Callable,
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
 
+    useCKPT = False
+    obsFile = "ckpt_obs.txt" if useCKPT else "obs.txt"
+    if os.path.exists(obsFile):
+        os.remove(obsFile)
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
-        print(sim.checkpoint_resets)
-        print(sim.resets)
-        if update_idx % 5 > 0:
-            print("EXTRA STEP===============")
+        if useCKPT and update_idx > 0:
+            #print("EXTRA STEP===============")
             # Run the minisim here to set state and initialize observations, 
             checkpoints_resets = sim.checkpoint_resets
-            print(checkpoints_resets.shape)
+            #print(checkpoints_resets.shape)
+
+            #print(sim.checkpoints[0])
+            #print(sim.checkpoints[1])
+            #ckpt0 = torch.clone(sim.checkpoints[0])
+            #sim.checkpoints[0] = torch.clone(sim.checkpoints[1])
+            #sim.checkpoints[1] = torch.clone(ckpt0)
             for i in range(checkpoints_resets.shape[0]):
                 sim.checkpoint_resets[i] = 1
-                sim.resets[i] = 1
+                #if i < checkpoints_resets.shape[0] - 1:
+                #    sim.checkpoints[i] = sim.checkpoints[i + 1]
+
+            #print(sim.checkpoints[0])
+            #print(sim.checkpoints[1])
 
             # After reset, step to collect observations for the next rollout.
             sim.step()
@@ -341,6 +356,7 @@ def _update_loop(update_iter_fn : Callable,
                 learning_state.optimizer,
                 learning_state.scheduler,
                 learning_state.value_normalizer,
+                ""#obsFile
             )
 
             gpu_sync_fn()
