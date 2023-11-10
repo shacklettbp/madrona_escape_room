@@ -26,6 +26,9 @@ arg_parser.add_argument('--gpu-id', type=int, default=0)
 arg_parser.add_argument('--ckpt-dir', type=str, required=True)
 arg_parser.add_argument('--restore', type=int)
 
+arg_parser.add_argument('--use-fixed-world', action='store_true')
+arg_parser.add_argument('--reward-mode', type=str, required=True)
+
 arg_parser.add_argument('--num-worlds', type=int, required=True)
 arg_parser.add_argument('--num-updates', type=int, required=True)
 arg_parser.add_argument('--steps-per-update', type=int, default=40)
@@ -49,12 +52,15 @@ arg_parser.add_argument('--profile-port', type=int, default=None)
 
 args = arg_parser.parse_args()
 
+reward_mode = getattr(madrona_escape_room.RewardMode, args.reward_mode)
+
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
-    use_fixed_world = False,
+    use_fixed_world = args.use_fixed_world,
+    reward_mode = reward_mode,
 )
 
 jax_gpu = jax.devices()[0].platform == 'gpu'
