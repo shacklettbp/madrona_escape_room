@@ -315,7 +315,7 @@ def _update_loop(update_iter_fn : Callable,
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
 
-    useCKPT = True
+    useCKPT = False
     obsFile = "ckpt_obs.txt" if useCKPT else "obs.txt"
     if os.path.exists(obsFile):
         os.remove(obsFile)

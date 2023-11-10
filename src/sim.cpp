@@ -397,7 +397,6 @@ inline void grabSystem(Engine &ctx,
                        Action action,
                        GrabState &grab)
 {
-    return; // TODO: Restore, don't grab.
     if (action.grab == 0) {
         return;
     }
