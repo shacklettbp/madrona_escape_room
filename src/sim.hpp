@@ -7,7 +7,7 @@
 #include "types.hpp"
 #include "init.hpp"
 #include "rng.hpp"
-#include "reward_mode.hpp"
+#include "sim_flags.hpp"
 
 namespace madEscape {
 
@@ -53,7 +53,7 @@ struct Sim : public madrona::WorldBase {
     struct Config {
         bool enableViewer;
         bool autoReset;
-        bool useFixedWorld;
+        SimFlags simFlags;
         RewardMode rewardMode;
     };
 
@@ -100,7 +100,7 @@ struct Sim : public madrona::WorldBase {
     // at the end of each episode?
     bool autoReset;
 
-    bool useFixedWorld;
+    SimFlags simFlags;
 
     // Are we visualizing the simulation in the viewer?
     bool enableVizRender;

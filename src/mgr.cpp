@@ -341,7 +341,7 @@ Manager::Impl * Manager::Impl::init(
     Sim::Config sim_cfg {
         viz_bridge != nullptr,
         mgr_cfg.autoReset,
-        mgr_cfg.useFixedWorld,
+        mgr_cfg.simFlags,
         mgr_cfg.rewardMode,
     };
 

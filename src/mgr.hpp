@@ -13,7 +13,7 @@
 #include <madrona/render/mw.hpp>
 #include <madrona/viz/system.hpp>
 
-#include "reward_mode.hpp"
+#include "sim_flags.hpp"
 
 namespace madEscape {
 
@@ -30,7 +30,7 @@ public:
         int gpuID; // Which GPU for CUDA backend?
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
-        bool useFixedWorld;
+        SimFlags simFlags;
         RewardMode rewardMode;
     };
 

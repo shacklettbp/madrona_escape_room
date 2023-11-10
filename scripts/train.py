@@ -1,4 +1,5 @@
 import madrona_escape_room
+from madrona_escape_room import SimFlags, RewardMode
 
 from madrona_escape_room_learn import (
     train, profile, TrainConfig, PPOConfig, SimInterface,
@@ -23,6 +24,7 @@ arg_parser.add_argument('--run-name', type=str, required=True)
 arg_parser.add_argument('--restore', type=int)
 
 arg_parser.add_argument('--use-fixed-world', action='store_true')
+arg_parser.add_argument('--start-in-discovered-rooms', action='store_true')
 arg_parser.add_argument('--reward-mode', type=str, required=True)
 
 arg_parser.add_argument('--num-worlds', type=int, required=True)
@@ -152,14 +154,21 @@ class LearningCallback:
         if update_id % 100 == 0:
             learning_state.save(update_idx, self.ckpt_dir / f"{update_id}.pth")
 
-reward_mode = getattr(madrona_escape_room.RewardMode, args.reward_mode)
+
+sim_flags = SimFlags.Default
+if args.use_fixed_world:
+    sim_flags |= SimFlags.UseFixedWorld
+if args.start_in_discovered_rooms:
+    sim_flags |= SimFlags.StartInDiscoveredRooms
+
+reward_mode = getattr(RewardMode, args.reward_mode)
 
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
-    use_fixed_world = args.use_fixed_world,
+    sim_flags = sim_flags,
     reward_mode = reward_mode,
 )
 

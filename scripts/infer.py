@@ -37,7 +37,7 @@ sim = madrona_escape_room.SimManager(
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
-    use_fixed_world = args.use_fixed_world,
+    sim_flags = madrona_escape_room.SimFlags.Default,
     reward_mode = madrona_escape_room.RewardMode.OG,
 )
 

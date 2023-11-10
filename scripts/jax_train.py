@@ -10,6 +10,7 @@ from time import time
 from fractions import Fraction
 
 import madrona_escape_room
+from madrona_escape_room import SimFlags, RewardMode
 
 import madrona_learn
 from madrona_learn import (
@@ -52,14 +53,18 @@ arg_parser.add_argument('--profile-port', type=int, default=None)
 
 args = arg_parser.parse_args()
 
-reward_mode = getattr(madrona_escape_room.RewardMode, args.reward_mode)
+sim_flags = SimFlags.Default
+if args.use_fixed_world:
+    sim_flags |= SimFlags.UseFixedWorld
+
+reward_mode = getattr(RewardMode, args.reward_mode)
 
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
-    use_fixed_world = args.use_fixed_world,
+    sim_flags = sim_flags,
     reward_mode = reward_mode,
 )
 

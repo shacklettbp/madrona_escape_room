@@ -99,7 +99,8 @@ static inline void initWorld(Engine &ctx)
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
     int32_t seed;
-    if (ctx.data().useFixedWorld) {
+    if ((ctx.data().simFlags & SimFlags::UseFixedWorld) ==
+            SimFlags::UseFixedWorld) {
         seed = 0;
     } else {
         seed = episode_idx;
@@ -1018,7 +1019,7 @@ Sim::Sim(Engine &ctx,
 
     autoReset = cfg.autoReset;
 
-    useFixedWorld = cfg.useFixedWorld;
+    simFlags = cfg.simFlags;
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);

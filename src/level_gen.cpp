@@ -219,12 +219,15 @@ static void resetPersistentEntities(Engine &ctx)
              0.f,
          };
 
-         pos[1] += consts::worldLength * rand_room / 3;
-         if (rand_room > 0) {
-            float range = consts::worldWidth / 2.f - 2.5f * consts::agentRadius;
-            float x_pos = second_rng.rand() * range - range / 2.f;
-            pos[0] = x_pos;
-         }
+        if ((ctx.data().simFlags & SimFlags::StartInDiscoveredRooms) ==
+                SimFlags::StartInDiscoveredRooms) {
+            pos[1] += consts::worldLength * rand_room / 3;
+            if (rand_room > 0) {
+               float range = consts::worldWidth / 2.f - 2.5f * consts::agentRadius;
+               float x_pos = second_rng.rand() * range - range / 2.f;
+               pos[0] = x_pos;
+            }
+        }
 
          if (i % 2 == 0) {
              pos.x += consts::worldWidth / 4.f;

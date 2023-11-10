@@ -1,5 +1,5 @@
 set(SIMULATOR_SRCS
-    reward_mode.hpp
+    sim_flags.hpp sim_flags.inl
     types.hpp 
     sim.hpp sim.cpp
     init.hpp rng.hpp
