@@ -149,10 +149,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr, Action &a, ExternalForce &f, ExternalTorque &t,
-            madrona::phys::solver::SubstepPrevState &sps,
-            madrona::phys::solver::PreSolvePositional &psp,
-            madrona::phys::solver::PreSolveVelocity &psv)
+            StepsRemaining &s, Progress &pr)
             {
                 p  = ckpt.agentStates[idx].p;
                 r  = ckpt.agentStates[idx].r;
@@ -161,12 +158,6 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
                 pr = ckpt.agentStates[idx].pr;
-                a = ckpt.agentStates[idx].a;
-                f = ckpt.agentStates[idx].f;
-
-                sps = ckpt.agentStates[idx].sps;
-                psp = ckpt.agentStates[idx].psp;
-                psv = ckpt.agentStates[idx].psv;
                 idx++;
             }
         );
@@ -272,10 +263,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr, Action &a, ExternalForce &f, ExternalTorque &t,
-                        madrona::phys::solver::SubstepPrevState &sps,
-            madrona::phys::solver::PreSolvePositional &psp,
-            madrona::phys::solver::PreSolveVelocity &psv)
+            StepsRemaining &s, Progress &pr)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
@@ -284,12 +272,6 @@ inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
                 ckpt.agentStates[idx].pr = pr;
-                ckpt.agentStates[idx].a = a;
-                ckpt.agentStates[idx].f = f;
-                ckpt.agentStates[idx].t = t;
-                ckpt.agentStates[idx].sps = sps;
-                ckpt.agentStates[idx].psp = psp;
-                ckpt.agentStates[idx].psv = psv;
                 idx++;
             }
         );
@@ -1112,10 +1094,7 @@ Sim::Sim(Engine &ctx,
 
     // Create the queries for checkpointing.
     ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, Reward, Done, 
-    StepsRemaining, Progress, Action, ExternalForce, ExternalTorque,
-    madrona::phys::solver::SubstepPrevState,
-            madrona::phys::solver::PreSolvePositional,
-            madrona::phys::solver::PreSolveVelocity>();
+    StepsRemaining, Progress>();
     ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
     ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();

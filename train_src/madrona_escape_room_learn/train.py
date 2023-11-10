@@ -265,8 +265,8 @@ def _update_iter(cfg : TrainConfig,
         num_stats = 0
 
         for epoch in range(cfg.ppo.num_epochs):
-            for inds in torch.arange(num_train_seqs).chunk(
-            #for inds in torch.randperm(num_train_seqs).chunk(
+            #for inds in torch.arange(num_train_seqs).chunk(
+            for inds in torch.randperm(num_train_seqs).chunk(
                     cfg.ppo.num_mini_batches):
                 with torch.no_grad(), profile('Gather Minibatch', gpu=True):
                     mb = _gather_minibatch(rollouts, advantages, inds, amp)
@@ -315,7 +315,7 @@ def _update_loop(update_iter_fn : Callable,
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
 
-    useCKPT = False
+    useCKPT = True
     obsFile = "ckpt_obs.txt" if useCKPT else "obs.txt"
     if os.path.exists(obsFile):
         os.remove(obsFile)

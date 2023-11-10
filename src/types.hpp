@@ -225,12 +225,6 @@ struct AgentState {
     Done d;
     StepsRemaining s;
     Progress pr;
-    Action a;
-    ExternalForce f;
-    ExternalTorque t;
-    madrona::phys::solver::SubstepPrevState sps;
-    madrona::phys::solver::PreSolvePositional psp;
-    madrona::phys::solver::PreSolveVelocity psv;
 };
 
 struct Checkpoint {
