@@ -639,8 +639,6 @@ TrainInterface Manager::trainInterface() const
         rewardTensor(),
         doneTensor(),
         resetTensor(),
-        checkpointTensor(),
-        checkpointResetTensor(),
         Optional<Tensor>::none(),
     };
 }
