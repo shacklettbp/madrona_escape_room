@@ -315,7 +315,7 @@ def _update_loop(update_iter_fn : Callable,
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
 
-    useCKPT = False
+    useCKPT = True
     obsFile = "ckpt_obs.txt" if useCKPT else "obs.txt"
     if os.path.exists(obsFile):
         os.remove(obsFile)
@@ -334,6 +334,7 @@ def _update_loop(update_iter_fn : Callable,
             #sim.checkpoints[0] = torch.clone(sim.checkpoints[1])
             #sim.checkpoints[1] = torch.clone(ckpt0)
             for i in range(checkpoints_resets.shape[0]):
+                sim.resets[i] = 1 # Trigger a reset.
                 sim.checkpoint_resets[i] = 1
                 #if i < checkpoints_resets.shape[0] - 1:
                 #    sim.checkpoints[i] = sim.checkpoints[i + 1]

@@ -100,7 +100,7 @@ struct Sim : public madrona::WorldBase {
     Query<Position, OpenState>  doorQuery;
 
     // Queries for checkpointing
-    Query<Position, Rotation, Velocity, Reward, Done, 
+    Query<Position, Rotation, Velocity, GrabState, Reward, Done, 
     StepsRemaining, Progress> ckptAgentQuery;
     Query<Position, Rotation, Velocity, OpenState> ckptDoorQuery;
     Query<Position, Rotation, Velocity, EntityType> ckptCubeQuery;
