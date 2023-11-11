@@ -170,6 +170,8 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
                 pr = ckpt.agentStates[idx].pr;
+                // For some reason, modifying grabstate directly causes a crash after
+                // about 50 update steps.
                 f.x = ckpt.agentStates[idx].g.constraintEntity.gen == 0 ? 1.0f : 0.0f;
                 idx++;
             }
