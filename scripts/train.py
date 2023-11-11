@@ -244,7 +244,7 @@ train(
             value_loss_coef=args.value_loss_coef,
             entropy_coef=args.entropy_loss_coef,
             max_grad_norm=0.5,
-            num_epochs=1,
+            num_epochs=2,
             clip_value_loss=args.clip_value_loss,
             no_advantages=args.no_advantages,
         ),
