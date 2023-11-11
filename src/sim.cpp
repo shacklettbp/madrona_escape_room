@@ -8,7 +8,29 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 
+
+
+
 namespace madEscape {
+
+// Helper function for determining room membership.
+static inline CountT roomIndex(const Position &p)
+{
+    return std::max(CountT(0),
+    std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
+}
+
+static inline float computeZAngle(Quat q)
+{
+    float siny_cosp = 2.f * (q.w * q.z + q.x * q.y);
+    float cosy_cosp = 1.f - 2.f * (q.y * q.y + q.z * q.z);
+    return atan2f(siny_cosp, cosy_cosp);
+}
+
+static inline float angleObs(float v)
+{
+    return v / math::pi;
+}
 
 // Register all the ECS components and archetypes that will be
 // used in the simulation
@@ -40,13 +62,24 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerSingleton<LevelState>();
     registry.registerSingleton<GlobalProgress>(); // Progress tracking component, reuse existing struct
 
+    // Checkpoint state.
+    registry.registerSingleton<Checkpoint>();
+    registry.registerSingleton<CheckpointReset>();
+
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
     registry.registerArchetype<DoorEntity>();
     registry.registerArchetype<ButtonEntity>();
 
+    // TODO: ZM, guessing we will eventually we want this to make checkpoint
+    // state visible to the training code.
+    registry.exportSingleton<Checkpoint>(
+        (uint32_t)ExportID::Checkpoint);
+    registry.exportSingleton<CheckpointReset>(
+        (uint32_t)ExportID::CheckpointReset);
     registry.exportSingleton<WorldReset>(
         (uint32_t)ExportID::Reset);
+
     registry.exportColumn<Agent, Action>(
         (uint32_t)ExportID::Action);
     registry.exportColumn<Agent, SelfObservation>(
@@ -107,9 +140,204 @@ static inline void initWorld(Engine &ctx)
     }
     ctx.data().rng = RNG::make(seed);
     ctx.data().curEpisodeIdx = episode_idx;
-
+    
     // Defined in src/level_gen.hpp / src/level_gen.cpp
     generateWorld(ctx);
+}
+
+inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset) 
+{
+    // Decide if we should load a checkpoint.
+    if (reset.reset == 0) {
+        return;
+    }
+
+    // This is taken care of during checkpointing.
+    //reset.reset = 0;
+
+    Checkpoint& ckpt = ctx.singleton<Checkpoint>();
+    {
+        // Agent parameters: physics state, grabstate
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptAgentQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
+            StepsRemaining &s, Progress &pr, ExternalForce &f)
+            {
+                p  = ckpt.agentStates[idx].p;
+                r  = ckpt.agentStates[idx].r;
+                v  = ckpt.agentStates[idx].v;
+                re = ckpt.agentStates[idx].re;
+                d  = ckpt.agentStates[idx].d;
+                s  = ckpt.agentStates[idx].s;
+                pr = ckpt.agentStates[idx].pr;
+                f.x = ckpt.agentStates[idx].g.constraintEntity.gen == 0 ? 1.0f : 0.0f;
+                idx++;
+            }
+        );
+    }
+
+    {
+        // Door parameters
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptDoorQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
+            {
+                p = ckpt.doorStates[idx].p;
+                r = ckpt.doorStates[idx].r;
+                v = ckpt.doorStates[idx].v;
+                o = ckpt.doorStates[idx].o;
+                idx++;
+            }
+        );
+    }
+
+    {
+        // Correct the walls now that we have the doors
+        ctx.iterateQuery(ctx.data().ckptWallQuery,
+            [&](Position &p, Scale &s, EntityType &e)
+            {
+                if (e == EntityType::Wall)
+                {
+                    for (int i = 0; i < consts::numRooms; ++i)
+                    {
+                        // Check all doors.
+                        Position door_pos = ckpt.doorStates[i].p;
+                        constexpr float doorWidth = consts::worldWidth / 3.f;
+
+                        if (door_pos.y == p.y)
+                        {
+                            float door_center = door_pos.x + consts::worldWidth / 2.f;
+                            // We found one of two wall pairs for this door
+                            if (p.x < 0.f)
+                            {
+                                // Left door
+                                float left_len = door_center - 0.5f * doorWidth;
+                                p.x = (-consts::worldWidth + left_len) / 2.f;
+                                s = Diag3x3{
+                                    left_len,
+                                    consts::wallWidth,
+                                    1.75f,
+                                };
+                            }
+                            else
+                            {
+                                // Right door
+                                float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
+                                p.x = (consts::worldWidth - right_len) / 2.f;
+                                s = Diag3x3{
+                                    right_len,
+                                    consts::wallWidth,
+                                    1.75f,
+                                };
+                            }
+                        }
+                    }
+                }
+            });
+    }
+
+    
+    {
+        // Cubes
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
+            {
+                if (e == EntityType::Cube) {
+                    p = ckpt.cubeStates[idx].p;
+                    r = ckpt.cubeStates[idx].r;
+                    v = ckpt.cubeStates[idx].v;
+                    idx++;
+                }
+            }
+        );
+    }
+
+    {
+        // Buttons
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptButtonQuery, 
+            [&](Position &p, Rotation &r, ButtonState &b)
+            {
+                p = ckpt.buttonStates[idx].p;
+                r = ckpt.buttonStates[idx].r;
+                b = ckpt.buttonStates[idx].b;
+                idx++;
+            }
+        );
+    }
+}
+
+inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
+{
+    // Always reset
+    reset.reset = 0;
+
+    Checkpoint &ckpt = ctx.singleton<Checkpoint>();
+    {
+        // Agent parameters: physics state, reward, done.
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptAgentQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
+            StepsRemaining &s, Progress &pr, ExternalForce &f)
+            {
+                ckpt.agentStates[idx].p = p;
+                ckpt.agentStates[idx].r = r;
+                ckpt.agentStates[idx].v = v;
+                ckpt.agentStates[idx].re = re;
+                ckpt.agentStates[idx].d = d;
+                ckpt.agentStates[idx].s = s;
+                ckpt.agentStates[idx].pr = pr;
+                ckpt.agentStates[idx].g = g;
+                idx++;
+            }
+        );
+    }
+
+    {
+        // Door parameters
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptDoorQuery,
+            [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
+            {
+                ckpt.doorStates[idx].p = p;
+                ckpt.doorStates[idx].r = r;
+                ckpt.doorStates[idx].v = v;
+                ckpt.doorStates[idx].o = o;
+                idx++;
+            }
+        );
+    }
+
+    {
+        // Cubes
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
+            {
+                if (e == EntityType::Cube) {
+                    ckpt.cubeStates[idx].p = p;
+                    ckpt.cubeStates[idx].r = r;
+                    ckpt.cubeStates[idx].v = v;
+                    idx++;
+                }
+            }
+        );
+    }
+
+    {
+        // Buttons
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptButtonQuery, 
+            [&](Position &p, Rotation &r, ButtonState &b)
+            {
+                ckpt.buttonStates[idx].p = p;
+                ckpt.buttonStates[idx].r = r;
+                ckpt.buttonStates[idx].b = b;
+                idx++;
+            }
+        );
+    }
 }
 
 // This system runs each frame and checks if the current episode is complete
@@ -130,9 +358,10 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
         }
     }
 
+
     if (should_reset != 0) {
         reset.reset = 0;
-
+        
         cleanupWorld(ctx);
         initWorld(ctx);
 
@@ -144,12 +373,13 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
 // Translates discrete actions from the Action component to forces
 // used by the physics simulation.
-inline void movementSystem(Engine &,
+inline void movementSystem(Engine &ctx,
                            Action &action, 
                            Rotation &rot, 
                            ExternalForce &external_force,
                            ExternalTorque &external_torque)
 {
+
     constexpr float move_max = 1000;
     constexpr float turn_max = 320;
 
@@ -173,6 +403,74 @@ inline void movementSystem(Engine &,
 
     external_force = cur_rot.rotateVec({ f_x, f_y, 0 });
     external_torque = Vector3 { 0, 0, t_z };
+}
+
+// Implements the grab action by casting a short ray in front of the agent
+// and creating a joint constraint if a grabbable entity is hit.
+inline void ckptGrabSystem(Engine &ctx,
+                           Entity e,
+                           Position pos,
+                           Rotation rot,
+                           Action a,
+                           ExternalForce f,
+                           GrabState &grab)
+{
+
+    // If we didn't load a checkpoint, or if the checkpoint
+    // did not have an agent grabbing something, no
+    // grab action is necessary.
+    if (ctx.singleton<CheckpointReset>().reset == 0 ||
+        f.x == 0.0f) {
+        return;
+    }
+
+
+
+    // Get the per-world BVH singleton component
+    auto &bvh = ctx.singleton<broadphase::BVH>();
+    float hit_t;
+    Vector3 hit_normal;
+
+    Vector3 ray_o = pos + 0.5f * math::up;
+    Vector3 ray_d = rot.rotateVec(math::fwd);
+
+
+    Entity grab_entity =
+        bvh.traceRay(ray_o, ray_d, &hit_t, &hit_normal, 2.0f);
+
+    if (grab_entity == Entity::none()) {
+        return;
+    }
+
+    auto response_type = ctx.get<ResponseType>(grab_entity);
+    if (response_type != ResponseType::Dynamic) {
+        return;
+    }
+
+    auto entity_type = ctx.get<EntityType>(grab_entity);
+    if (entity_type == EntityType::Agent) {
+        return;
+    }
+
+    Entity constraint_entity = ctx.makeEntity<ConstraintData>();
+    grab.constraintEntity = constraint_entity;
+
+    Vector3 other_pos = ctx.get<Position>(grab_entity);
+    Quat other_rot = ctx.get<Rotation>(grab_entity);
+
+    Vector3 r1 = 1.25f * math::fwd + 0.5f * math::up;
+
+    Vector3 hit_pos = ray_o + ray_d * hit_t;
+    Vector3 r2 =
+        other_rot.inv().rotateVec(hit_pos - other_pos);
+
+    Quat attach1 = { 1, 0, 0, 0 };
+    Quat attach2 = (other_rot.inv() * rot).normalize();
+
+    float separation = hit_t - 1.25f;
+
+    ctx.get<JointConstraint>(constraint_entity) = JointConstraint::setupFixed(
+        e, grab_entity, attach1, attach2, r1, r2, separation);
 }
 
 // Implements the grab action by casting a short ray in front of the agent
@@ -335,11 +633,6 @@ static inline float globalPosObs(float v)
     return v / consts::worldLength;
 }
 
-static inline float angleObs(float v)
-{
-    return v / math::pi;
-}
-
 // Translate xy delta to polar observations for learning.
 static inline PolarObservation xyToPolar(Vector3 v)
 {
@@ -361,13 +654,6 @@ static inline float encodeType(EntityType type)
     return (float)type / (float)EntityType::NumTypes;
 }
 
-static inline float computeZAngle(Quat q)
-{
-    float siny_cosp = 2.f * (q.w * q.z + q.x * q.y);
-    float cosy_cosp = 1.f - 2.f * (q.y * q.y + q.z * q.z);
-    return atan2f(siny_cosp, cosy_cosp);
-}
-
 // This system packages all the egocentric observations together 
 // for the policy inputs.
 inline void collectObservationsSystem(Engine &ctx,
@@ -375,15 +661,17 @@ inline void collectObservationsSystem(Engine &ctx,
                                       Rotation rot,
                                       const Progress &progress,
                                       const GrabState &grab,
-                                      const OtherAgents &other_agents,
+                                      const Reward &reward,
+                                      const StepsRemaining &steps,
+                                      const ExternalForce &force,
+                                      const ExternalTorque &torque,
                                       SelfObservation &self_obs,
                                       PartnerObservations &partner_obs,
                                       RoomEntityObservations &room_ent_obs,
                                       DoorObservation &door_obs)
 {
-    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    cur_room_idx = std::max(CountT(0), 
-        std::min(consts::numRooms - 1, cur_room_idx));
+
+    const CountT cur_room_idx = roomIndex(pos);
 
     self_obs.roomX = pos.x / (consts::worldWidth / 2.f);
     self_obs.roomY = (pos.y - cur_room_idx * consts::roomLength) /
@@ -396,51 +684,108 @@ inline void collectObservationsSystem(Engine &ctx,
     self_obs.isGrabbing = grab.constraintEntity != Entity::none() ?
         1.f : 0.f;
 
+    assert(!isnan(self_obs.roomX));
+    assert(!isnan(self_obs.roomY));
+    assert(!isnan(self_obs.globalX));
+    assert(!isnan(self_obs.globalY));
+    assert(!isnan(self_obs.globalZ));
+    assert(!isnan(self_obs.maxY));
+    assert(!isnan(self_obs.theta));
+    assert(!isnan(self_obs.isGrabbing));
+
+    //int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
+
+    //printf("SelfObs roomx %f\n", self_obs.roomX);
+    //printf("SelfObs roomY %f\n", self_obs.roomY);
+    //printf("SelfObs globalX %f\n", self_obs.globalX);
+    //printf("SelfObs globalY %f\n", self_obs.globalY);
+    //printf("SelfObs globalZ %f\n", self_obs.globalZ);
+    //printf("SelfObs maxY %f\n", self_obs.maxY);
+    //printf("SelfObs theta %f\n", self_obs.theta);
+    //printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
+    //printf("SelfObs reward %f\n", reward.v);
+    //printf("SelfObs steps %d\n", steps.t);
+    //printf("SelfObs Force %f, %f, %f\n", force.x, force.y, force.z);
+    //printf("SelfObs Torque %f, %f, %f\n", torque.x, torque.y, torque.z);
+
+
     Quat to_view = rot.inv();
 
-#pragma unroll
-    for (CountT i = 0; i < consts::numAgents - 1; i++) {
-        Entity other = other_agents.e[i];
+    // Context::iterateQuery() runs serially over archteypes
+    // matching the components on which it is templated.
+    {
+        int idx = 0; // Context::iterateQuery() is serial, so this is safe.
+        ctx.iterateQuery(ctx.data().otherAgentQuery,
+            [&](Position &other_pos, GrabState &other_grab) {
+                Vector3 to_other = other_pos - pos;
 
-        Vector3 other_pos = ctx.get<Position>(other);
-        GrabState other_grab = ctx.get<GrabState>(other);
-        Vector3 to_other = other_pos - pos;
+                // Detect whether or not the other agent is the current agent.
+                if (to_other.length() == 0.0f) {
+                    return;
+                }
 
-        partner_obs.obs[i] = {
-            .polar = xyToPolar(to_view.rotateVec(to_other)),
-            .isGrabbing = other_grab.constraintEntity != Entity::none() ?
-                1.f : 0.f,
-        };
+                partner_obs.obs[idx++] = {
+                    .polar = xyToPolar(to_view.rotateVec(to_other)),
+                    .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
+                };
+
+                // printf("partner_obs (r, theta, grabbing): %f, %f, %f\n", 
+                // partner_obs.obs[idx - 1].polar.r,
+                // partner_obs.obs[idx - 1].polar.theta,
+                // partner_obs.obs[idx - 1].isGrabbing);
+            });
     }
 
-    const LevelState &level = ctx.singleton<LevelState>();
-    const Room &room = level.rooms[cur_room_idx];
+    // Becase we iterate by component matching, we can encounter entities
+    // that are in the current room, have EntityType::None, but were never 
+    // Cubes or Buttons, so shouldn't be allowed to zero entries of the 
+    // RoomEntityObservations table. Therefore, we zero the table manually 
+    // here, and let only the current Cubes and Buttons that exist update it.
+    EntityObservation ob;
+    ob.polar = { 0.f, 1.f };
+    ob.encodedType = encodeType(EntityType::None);
+    for (int i = 0; i < consts::maxObservationsPerAgent; ++i) {
+       room_ent_obs.obs[i] = ob;
+    }
+    
+    {
+       int idx = 0;
+        ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
+            // We want information on cubes and buttons in the current room.
+            if (roomIndex(p) != cur_room_idx ||
+                (e != EntityType::Cube && e != EntityType::Button)) {
+                return;
+            }
 
-    for (CountT i = 0; i < consts::maxEntitiesPerRoom; i++) {
-        Entity entity = room.entities[i];
-
-        EntityObservation ob;
-        if (entity == Entity::none()) {
-            ob.polar = { 0.f, 1.f };
-            ob.encodedType = encodeType(EntityType::None);
-        } else {
-            Vector3 entity_pos = ctx.get<Position>(entity);
-            EntityType entity_type = ctx.get<EntityType>(entity);
-
-            Vector3 to_entity = entity_pos - pos;
+            EntityObservation ob;
+            Vector3 to_entity = p - pos;
             ob.polar = xyToPolar(to_view.rotateVec(to_entity));
-            ob.encodedType = encodeType(entity_type);
-        }
+            ob.encodedType = encodeType(e);
 
-        room_ent_obs.obs[i] = ob;
+            if (idx < consts::maxObservationsPerAgent) {
+                room_ent_obs.obs[idx++] = ob;
+
+                //printf("room_obs (r, theta, type): %f, %f, %f\n", 
+                //room_ent_obs.obs[idx - 1].polar.r,
+                //room_ent_obs.obs[idx - 1].polar.theta,
+                //room_ent_obs.obs[idx - 1].encodedType);
+            }
+        });
     }
 
-    Entity cur_door = room.door;
-    Vector3 door_pos = ctx.get<Position>(cur_door);
-    OpenState door_open_state = ctx.get<OpenState>(cur_door);
+    // Context.query() version.
+    ctx.iterateQuery(ctx.data().doorQuery, [&](Position &p, OpenState &os) {
+       if (roomIndex(p) != cur_room_idx) {
+           return;
+       }
+       door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
+       door_obs.isOpen = os.isOpen ? 1.f : 0.f;
 
-    door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
-    door_obs.isOpen = door_open_state.isOpen ? 1.f : 0.f;
+    //    printf("Door obs (r, theta, isOpen): %f, %f, %f\n", 
+    //    door_obs.polar.r,
+    //    door_obs.polar.theta,
+    //    door_obs.isOpen);
+    });
 }
 
 // Launches consts::numLidarSamples per agent.
@@ -792,6 +1137,7 @@ TaskGraph::NodeID queueSortByWorld(TaskGraph::Builder &builder,
 // Build the task graph
 void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
 {
+
     // Turn policy actions into movement
     auto move_sys = builder.addToGraph<ParallelForNode<Engine,
         movementSystem,
@@ -919,38 +1265,58 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
         resetSystem,
-            WorldReset
+        WorldReset
         >>({done_sys});
 
-    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({reset_sys});
+    // Conditionally load the checkpoint here including Done, Reward, 
+    // and StepsRemaining. With Observations this should reconstruct 
+    // all state that the training code needs.
+    // This runs after the reset system resets the world.
+    auto load_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+        loadCheckpointSystem,
+        CheckpointReset
+        >>({reset_sys});
+
+    
+    // This second BVH build is a limitation of the current taskgraph API.
+    // It's only necessary if the world was reset, but we don't have a way
+    // to conditionally queue taskgraph nodes yet.
+    auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
+        builder, {
+        load_checkpoint_sys
+        });
+
+    // Grab action, post BVH build to allow raycasting
+    auto post_checkpoint_grab = builder.addToGraph<ParallelForNode<Engine,
+        ckptGrabSystem,
+            Entity,
+            Position,
+            Rotation,
+            Action,
+            ExternalForce,
+            GrabState
+        >>({post_reset_broadphase});
+
+    // Conditionally checkpoint the state of the system if we are on the Nth step.
+    auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
+        checkpointSystem,
+        CheckpointReset
+        >>({post_checkpoint_grab});
+
+    auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({
+        checkpoint_sys
+    });
     (void)clear_tmp;
 
 #ifdef MADRONA_GPU_MODE
     // RecycleEntitiesNode is required on the GPU backend in order to reclaim
     // deleted entity IDs.
-    auto recycle_sys = builder.addToGraph<RecycleEntitiesNode>({reset_sys});
+    auto recycle_sys = builder.addToGraph<RecycleEntitiesNode>({
+        checkpoint_sys
+    });
     (void)recycle_sys;
 #endif
 
-    // This second BVH build is a limitation of the current taskgraph API.
-    // It's only necessary if the world was reset, but we don't have a way
-    // to conditionally queue taskgraph nodes yet.
-    auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
-        builder, {reset_sys});
-
-    // Finally, collect observations for the next step.
-    auto collect_obs = builder.addToGraph<ParallelForNode<Engine,
-        collectObservationsSystem,
-            Position,
-            Rotation,
-            Progress,
-            GrabState,
-            OtherAgents,
-            SelfObservation,
-            PartnerObservations,
-            RoomEntityObservations,
-            DoorObservation
-        >>({post_reset_broadphase});
 
     // The lidar system
 #ifdef MADRONA_GPU_MODE
@@ -976,7 +1342,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // Sort entities, this could be conditional on reset like the second
     // BVH build above.
     auto sort_agents = queueSortByWorld<Agent>(
-        builder, {lidar, collect_obs});
+        builder, {lidar});
     auto sort_phys_objects = queueSortByWorld<PhysicsEntity>(
         builder, {sort_agents});
     auto sort_buttons = queueSortByWorld<ButtonEntity>(
@@ -988,8 +1354,28 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     (void)sort_walls;
 #else
     (void)lidar;
-    (void)collect_obs;
 #endif
+
+    // Finally, collect observations for the next step.
+    builder.addToGraph<ParallelForNode<Engine,
+        collectObservationsSystem,
+            Position,
+            Rotation,
+            Progress,
+            GrabState,
+            Reward,
+            StepsRemaining,
+            ExternalForce,
+            ExternalTorque,
+            SelfObservation,
+            PartnerObservations,
+            RoomEntityObservations,
+            DoorObservation
+        >>({checkpoint_sys, 
+#ifdef MADRONA_GPU_MODE
+        sort_constraints
+#endif
+        });
 }
 
 Sim::Sim(Engine &ctx,
@@ -1031,6 +1417,21 @@ Sim::Sim(Engine &ctx,
 
     // Generate initial world state
     initWorld(ctx);
+
+    // Create the queries for collectObservations
+    ctx.data().otherAgentQuery = ctx.query<Position, GrabState>();
+    ctx.data().roomEntityQuery = ctx.query<Position, EntityType>();
+    ctx.data().doorQuery       = ctx.query<Position, OpenState>();
+
+    // Create the queries for checkpointing.
+    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, 
+    StepsRemaining, Progress, ExternalForce>();
+    ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
+    ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType>();
+    ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
+    ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
+
+    ctx.singleton<CheckpointReset>().reset = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the

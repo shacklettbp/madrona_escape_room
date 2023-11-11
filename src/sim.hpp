@@ -27,6 +27,8 @@ enum class ExportID : uint32_t {
     DoorObservation,
     Lidar,
     StepsRemaining,
+    Checkpoint,
+    CheckpointReset,
     NumExports,
 };
 
@@ -95,6 +97,19 @@ struct Sim : public madrona::WorldBase {
 
     // Episode ID number
     int32_t curEpisodeIdx;
+
+    // Queries for the collectObservations system.
+    Query<Position, GrabState>  otherAgentQuery;
+    Query<Position, EntityType> roomEntityQuery;
+    Query<Position, OpenState>  doorQuery;
+
+    // Queries for checkpointing
+    Query<Position, Rotation, Velocity, GrabState, Reward, Done, 
+    StepsRemaining, Progress, ExternalForce> ckptAgentQuery;
+    Query<Position, Rotation, Velocity, OpenState> ckptDoorQuery;
+    Query<Position, Rotation, Velocity, EntityType> ckptCubeQuery;
+    Query<Position, Rotation, ButtonState> ckptButtonQuery;
+    Query<Position, Scale, EntityType> ckptWallQuery;
 
     // Should the environment automatically reset (generate a new episode)
     // at the end of each episode?

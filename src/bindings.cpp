@@ -54,6 +54,8 @@ NB_MODULE(madrona_escape_room, m) {
            nb::arg("sim_flags"),
            nb::arg("reward_mode"))
         .def("step", &Manager::step)
+        .def("checkpoint_reset_tensor", &Manager::checkpointResetTensor)
+        .def("checkpoint_tensor", &Manager::checkpointTensor)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)
         .def("reward_tensor", &Manager::rewardTensor)

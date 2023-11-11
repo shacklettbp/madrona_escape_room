@@ -163,6 +163,7 @@ if args.start_in_discovered_rooms:
 
 reward_mode = getattr(RewardMode, args.reward_mode)
 
+
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
@@ -207,6 +208,10 @@ policy = make_policy(num_obs_features, args.num_channels, args.separate_value)
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
+checkpoints = sim.checkpoint_tensor().to_torch()
+checkpoint_resets = sim.checkpoint_reset_tensor().to_torch()
+resets = sim.reset_tensor().to_torch()
+
 
 if args.restore:
     restore_ckpt = ckpt_dir / f"{args.restore}.pth"
@@ -221,6 +226,9 @@ train(
             actions = actions,
             dones = dones,
             rewards = rewards,
+            resets = resets,
+            checkpoints = checkpoints,
+            checkpoint_resets = checkpoint_resets
     ),
     TrainConfig(
         run_name = args.run_name,

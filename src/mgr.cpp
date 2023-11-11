@@ -494,6 +494,23 @@ void Manager::gpuRolloutStep(cudaStream_t strm, void **rollout_buffers)
     impl_->gpuRollout(strm, rollout_buffers, iface);
 }
 #endif
+Tensor Manager::checkpointResetTensor() const {
+    return impl_->exportTensor(ExportID::CheckpointReset,
+                               Tensor::ElementType::Int32,
+                               {
+                                   impl_->cfg.numWorlds,
+                                   1
+                               });
+}
+
+Tensor Manager::checkpointTensor() const {
+    return impl_->exportTensor(ExportID::Checkpoint,
+                               Tensor::ElementType::UInt8,
+                               {
+                                   impl_->cfg.numWorlds,
+                                   sizeof(Checkpoint)
+                               });
+}
 
 Tensor Manager::resetTensor() const
 {
@@ -558,8 +575,9 @@ Tensor Manager::roomEntityObservationsTensor() const
     return impl_->exportTensor(ExportID::RoomEntityObservations,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds * consts::numAgents,
-                                   consts::maxEntitiesPerRoom,
+                                   impl_->cfg.numWorlds,
+                                   consts::numAgents,
+                                   consts::maxObservationsPerAgent,
                                    3,
                                });
 }

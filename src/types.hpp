@@ -12,6 +12,7 @@ namespace madEscape {
 // Include several madrona types into the simulator namespace for convenience
 using madrona::Entity;
 using madrona::CountT;
+using madrona::Query;
 using madrona::base::Position;
 using madrona::base::Rotation;
 using madrona::base::Scale;
@@ -20,6 +21,7 @@ using madrona::phys::Velocity;
 using madrona::phys::ResponseType;
 using madrona::phys::ExternalForce;
 using madrona::phys::ExternalTorque;
+
 
 // WorldReset is a per-world singleton component that causes the current
 // episode to be terminated and the world regenerated
@@ -99,13 +101,13 @@ struct EntityObservation {
 };
 
 struct RoomEntityObservations {
-    EntityObservation obs[consts::maxEntitiesPerRoom];
+    EntityObservation obs[consts::maxObservationsPerAgent];
 };
 
 // RoomEntityObservations is exported as a
-// [N, A, maxEntitiesPerRoom, 3] tensor to pytorch
+// [N, A, maxObservationsPerAgent, 3] tensor to pytorch
 static_assert(sizeof(RoomEntityObservations) == sizeof(float) *
-    consts::maxEntitiesPerRoom * 3);
+    consts::maxObservationsPerAgent * 3);
 
 // Observation of the current room's door. It's relative position and
 // whether or not it is ope
@@ -194,6 +196,50 @@ struct Room {
 // randomly generated level
 struct LevelState {
     Room rooms[consts::numRooms];
+};
+
+// Checkpoint structs.
+struct ButtonSaveState {
+    Position p;
+    Rotation r;
+    ButtonState b;
+};
+
+struct PhysicsEntityState {
+    Position p;
+    Rotation r;
+    Velocity v;
+};
+
+struct DoorState {
+    Position p;
+    Rotation r;
+    Velocity v;
+    OpenState o;
+};
+
+struct AgentState {
+    Position p;
+    Rotation r;
+    Velocity v;
+    GrabState g;
+    // These last aren't needed for restoring, but they are needed 
+    // for determining if the state is worth restoring to.
+    Reward re;
+    Done d;
+    StepsRemaining s;
+    Progress pr;
+};
+
+struct Checkpoint {
+    ButtonSaveState buttonStates[consts::numRooms * 2];
+    PhysicsEntityState cubeStates[consts::numRooms * 3];
+    DoorState doorStates[consts::numRooms];
+    AgentState agentStates[consts::numAgents];
+};
+
+struct CheckpointReset {
+    int32_t reset;
 };
 
 /* ECS Archetypes for the game */
