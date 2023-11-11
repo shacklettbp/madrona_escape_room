@@ -575,8 +575,7 @@ Tensor Manager::roomEntityObservationsTensor() const
     return impl_->exportTensor(ExportID::RoomEntityObservations,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::maxObservationsPerAgent,
                                    3,
                                });
