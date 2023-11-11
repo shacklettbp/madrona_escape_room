@@ -462,9 +462,8 @@ def _update_loop(update_iter_fn : Callable,
 
         if useCKPT and update_idx > 0:
             # Run the minisim here to set state and initialize observations, 
-            for i in range(sim.checkpoint_resets.shape[0]):
-                sim.resets[i] = 1
-                sim.checkpoint_resets[i] = 1
+            sim.resets[:, 0] = 1
+            sim.checkpoint_resets[:, 0] = 1
 
             # After reset, step to collect observations for the next rollout.
             sim.step()
