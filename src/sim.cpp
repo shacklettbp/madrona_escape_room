@@ -409,74 +409,6 @@ inline void movementSystem(Engine &ctx,
 
 // Implements the grab action by casting a short ray in front of the agent
 // and creating a joint constraint if a grabbable entity is hit.
-inline void ckptGrabSystem(Engine &ctx,
-                           Entity e,
-                           Position pos,
-                           Rotation rot,
-                           Action a,
-                           ExternalForce f,
-                           GrabState &grab)
-{
-
-    // If we didn't load a checkpoint, or if the checkpoint
-    // did not have an agent grabbing something, no
-    // grab action is necessary.
-    if (ctx.singleton<CheckpointReset>().reset == 0 ||
-        f.x == 0.0f) {
-        return;
-    }
-
-
-
-    // Get the per-world BVH singleton component
-    auto &bvh = ctx.singleton<broadphase::BVH>();
-    float hit_t;
-    Vector3 hit_normal;
-
-    Vector3 ray_o = pos + 0.5f * math::up;
-    Vector3 ray_d = rot.rotateVec(math::fwd);
-
-
-    Entity grab_entity =
-        bvh.traceRay(ray_o, ray_d, &hit_t, &hit_normal, 2.0f);
-
-    if (grab_entity == Entity::none()) {
-        return;
-    }
-
-    auto response_type = ctx.get<ResponseType>(grab_entity);
-    if (response_type != ResponseType::Dynamic) {
-        return;
-    }
-
-    auto entity_type = ctx.get<EntityType>(grab_entity);
-    if (entity_type == EntityType::Agent) {
-        return;
-    }
-
-    Entity constraint_entity = ctx.makeEntity<ConstraintData>();
-    grab.constraintEntity = constraint_entity;
-
-    Vector3 other_pos = ctx.get<Position>(grab_entity);
-    Quat other_rot = ctx.get<Rotation>(grab_entity);
-
-    Vector3 r1 = 1.25f * math::fwd + 0.5f * math::up;
-
-    Vector3 hit_pos = ray_o + ray_d * hit_t;
-    Vector3 r2 =
-        other_rot.inv().rotateVec(hit_pos - other_pos);
-
-    Quat attach1 = { 1, 0, 0, 0 };
-    Quat attach2 = (other_rot.inv() * rot).normalize();
-
-    float separation = hit_t - 1.25f;
-
-    ctx.get<JointConstraint>(constraint_entity) = JointConstraint::setupFixed(
-        e, grab_entity, attach1, attach2, r1, r2, separation);
-}
-
-// Implements the grab action by casting a short ray in front of the agent
-// and creating a joint constraint if a grabbable entity is hit.
 inline void grabSystem(Engine &ctx,
                        Entity e,
                        Position pos,
@@ -1288,22 +1220,11 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         load_checkpoint_sys
         });
 
-    // Grab action, post BVH build to allow raycasting
-    auto post_checkpoint_grab = builder.addToGraph<ParallelForNode<Engine,
-        ckptGrabSystem,
-            Entity,
-            Position,
-            Rotation,
-            Action,
-            ExternalForce,
-            GrabState
-        >>({post_reset_broadphase});
-
     // Conditionally checkpoint the state of the system if we are on the Nth step.
     auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
         checkpointSystem,
         CheckpointReset
-        >>({post_checkpoint_grab});
+        >>({post_reset_broadphase});
 
     auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({
         checkpoint_sys

@@ -456,7 +456,7 @@ def _update_loop(update_iter_fn : Callable,
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
 
-    useCKPT = True
+    useCKPT = False
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
