@@ -37,7 +37,6 @@ struct Manager::Impl {
     EpisodeManager *episodeMgr;
     WorldReset *worldResetBuffer;
     Action *agentActionsBuffer;
-    render::BatchRenderer batchRenderer;
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
