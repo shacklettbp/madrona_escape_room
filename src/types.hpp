@@ -222,13 +222,14 @@ struct AgentState {
     Position p;
     Rotation r;
     Velocity v;
-    GrabState g;
-    // These last aren't needed for restoring, but they are needed 
-    // for determining if the state is worth restoring to.
+    // Index within the checkpoint buffers of the
+    // grabbed entity. -1 if not grabbing.
+    int32_t grabIdx;
     Reward re;
     Done d;
     StepsRemaining s;
     Progress pr;
+    madrona::phys::JointConstraint j;
 };
 
 struct Checkpoint {

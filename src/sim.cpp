@@ -71,8 +71,6 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerArchetype<DoorEntity>();
     registry.registerArchetype<ButtonEntity>();
 
-    // TODO: ZM, guessing we will eventually we want this to make checkpoint
-    // state visible to the training code.
     registry.exportSingleton<Checkpoint>(
         (uint32_t)ExportID::Checkpoint);
     registry.exportSingleton<CheckpointReset>(
@@ -155,13 +153,33 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
     // This is taken care of during checkpointing.
     //reset.reset = 0;
 
+
     Checkpoint& ckpt = ctx.singleton<Checkpoint>();
+
+    Entity tempCubeEntities[consts::numRooms * 3];
+    {
+        // Cubes
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, EntityType &eType, Entity &e)
+            {
+                if (eType == EntityType::Cube) {
+                    p = ckpt.cubeStates[idx].p;
+                    r = ckpt.cubeStates[idx].r;
+                    v = ckpt.cubeStates[idx].v;
+                    tempCubeEntities[idx] = e;
+                    idx++;
+                }
+            }
+        );
+    }
+
     {
         // Agent parameters: physics state, grabstate
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr, ExternalForce &f)
+            StepsRemaining &s, Progress &pr, Entity &e)
             {
                 p  = ckpt.agentStates[idx].p;
                 r  = ckpt.agentStates[idx].r;
@@ -170,9 +188,18 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
                 pr = ckpt.agentStates[idx].pr;
-                // For some reason, modifying grabstate directly causes a crash after
-                // about 50 update steps.
-                f.x = ckpt.agentStates[idx].g.constraintEntity.gen == 0 ? 1.0f : 0.0f;
+
+                const int32_t &grabIdx = ckpt.agentStates[idx].grabIdx;
+                if (grabIdx != -1) {
+                    // Find the new entity at the grab index;
+                    g.constraintEntity = tempCubeEntities[grabIdx];
+                    // The joint constraint has the wrong
+                    // entity ids, so correct those below.
+                    JointConstraint &j = ckpt.agentStates[idx].j;
+                    j.e1 = e;
+                    j.e2 = tempCubeEntities[grabIdx];
+                    ctx.get<JointConstraint>(e) = j;
+                }
                 idx++;
             }
         );
@@ -238,23 +265,6 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
             });
     }
 
-    
-    {
-        // Cubes
-        int idx = 0;
-        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
-            {
-                if (e == EntityType::Cube) {
-                    p = ckpt.cubeStates[idx].p;
-                    r = ckpt.cubeStates[idx].r;
-                    v = ckpt.cubeStates[idx].v;
-                    idx++;
-                }
-            }
-        );
-    }
-
     {
         // Buttons
         int idx = 0;
@@ -276,12 +286,32 @@ inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
     reset.reset = 0;
 
     Checkpoint &ckpt = ctx.singleton<Checkpoint>();
+
+    Entity tempCubeEntities[consts::numRooms * 3];
+    {
+        // Cubes, run before agents to track IDs.
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
+            [&](Position &p, Rotation &r, Velocity &v, EntityType &eType, Entity &e)
+            {
+                if (eType == EntityType::Cube) {
+                    ckpt.cubeStates[idx].p = p;
+                    ckpt.cubeStates[idx].r = r;
+                    ckpt.cubeStates[idx].v = v;
+                    tempCubeEntities[idx] = e;
+                    idx++;
+                }
+            }
+        );
+    }
+
+
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr, ExternalForce &f)
+            StepsRemaining &s, Progress &pr, Entity &e)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
@@ -290,7 +320,19 @@ inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
                 ckpt.agentStates[idx].pr = pr;
-                ckpt.agentStates[idx].g = g;
+                if (g.constraintEntity != Entity::none()) {
+                    ckpt.agentStates[idx].j = ctx.get<JointConstraint>(e);
+                    // If the agent was grabbing, find where the info
+                    // for that entity was written in the previous step.
+                    for (int32_t i = 0; i < consts::numRooms * 3; ++i) {
+                        if (g.constraintEntity == tempCubeEntities[i]) {
+                            ckpt.agentStates[idx].grabIdx = i;
+                            break;
+                        }
+                    }
+                } else {
+                    ckpt.agentStates[idx].grabIdx = -1;
+                }
                 idx++;
             }
         );
@@ -311,21 +353,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
         );
     }
 
-    {
-        // Cubes
-        int idx = 0;
-        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, EntityType &e)
-            {
-                if (e == EntityType::Cube) {
-                    ckpt.cubeStates[idx].p = p;
-                    ckpt.cubeStates[idx].r = r;
-                    ckpt.cubeStates[idx].v = v;
-                    idx++;
-                }
-            }
-        );
-    }
+
 
     {
         // Buttons
@@ -375,7 +403,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
 // Translates discrete actions from the Action component to forces
 // used by the physics simulation.
-inline void movementSystem(Engine &ctx,
+inline void movementSystem(Engine &,
                            Action &action, 
                            Rotation &rot, 
                            ExternalForce &external_force,
@@ -595,10 +623,6 @@ inline void collectObservationsSystem(Engine &ctx,
                                       Rotation rot,
                                       const Progress &progress,
                                       const GrabState &grab,
-                                      const Reward &reward,
-                                      const StepsRemaining &steps,
-                                      const ExternalForce &force,
-                                      const ExternalTorque &torque,
                                       SelfObservation &self_obs,
                                       PartnerObservations &partner_obs,
                                       RoomEntityObservations &room_ent_obs,
@@ -1202,29 +1226,51 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         WorldReset
         >>({done_sys});
 
+#ifdef MADRONA_GPU_MODE
+    // Sort entities, this could be conditional on reset like the second
+    // BVH build above.
+    auto sort_agents = queueSortByWorld<Agent>(
+        builder, {reset_sys});
+    auto sort_phys_objects = queueSortByWorld<PhysicsEntity>(
+        builder, {sort_agents});
+    auto sort_buttons = queueSortByWorld<ButtonEntity>(
+        builder, {sort_phys_objects});
+    auto sort_walls = queueSortByWorld<DoorEntity>(
+        builder, {sort_buttons});
+    (void)sort_walls;
+#endif
     // Conditionally load the checkpoint here including Done, Reward, 
     // and StepsRemaining. With Observations this should reconstruct 
     // all state that the training code needs.
     // This runs after the reset system resets the world.
     auto load_checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
-        loadCheckpointSystem,
-        CheckpointReset
-        >>({reset_sys});
+                                                                  loadCheckpointSystem,
+                                                                  CheckpointReset>>({
+#ifdef MADRONA_GPU_MODE
+        sort_walls
+#else
+        reset_sys
+#endif
+    });
 
-    
-    // This second BVH build is a limitation of the current taskgraph API.
-    // It's only necessary if the world was reset, but we don't have a way
-    // to conditionally queue taskgraph nodes yet.
-    auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
-        builder, {
-        load_checkpoint_sys
-        });
+#ifdef MADRONA_GPU_MODE
+    // Sort the constraints added by the loadCheckpointSystem.
+    auto sort_constraints = queueSortByWorld<ConstraintData>(
+        builder, {load_checkpoint_sys});
+#endif
+
+
 
     // Conditionally checkpoint the state of the system if we are on the Nth step.
     auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
-        checkpointSystem,
-        CheckpointReset
-        >>({post_reset_broadphase});
+                                                             checkpointSystem,
+                                                             CheckpointReset>>({
+#ifdef MADRONA_GPU_MODE
+        sort_constraints
+#else
+        load_checkpoint_sys
+#endif
+    });
 
     auto clear_tmp = builder.addToGraph<ResetTmpAllocNode>({
         checkpoint_sys
@@ -1240,6 +1286,13 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     (void)recycle_sys;
 #endif
 
+    // This second BVH build is a limitation of the current taskgraph API.
+    // It's only necessary if the world was reset, but we don't have a way
+    // to conditionally queue taskgraph nodes yet.
+    auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
+        builder, {
+        checkpoint_sys
+        });
 
     // The lidar system
 #ifdef MADRONA_GPU_MODE
@@ -1261,21 +1314,9 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         viz::VizRenderingSystem::setupTasks(builder, {reset_sys});
     }
 
-#ifdef MADRONA_GPU_MODE
-    // Sort entities, this could be conditional on reset like the second
-    // BVH build above.
-    auto sort_agents = queueSortByWorld<Agent>(
-        builder, {lidar});
-    auto sort_phys_objects = queueSortByWorld<PhysicsEntity>(
-        builder, {sort_agents});
-    auto sort_buttons = queueSortByWorld<ButtonEntity>(
-        builder, {sort_phys_objects});
-    auto sort_walls = queueSortByWorld<DoorEntity>(
-        builder, {sort_buttons});
-    auto sort_constraints = queueSortByWorld<ConstraintData>(
-        builder, {sort_walls});
-    (void)sort_walls;
-#else
+
+#ifndef MADRONA_GPU_MODE
+    // Already sorted above.
     (void)lidar;
 #endif
 
@@ -1286,10 +1327,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Rotation,
             Progress,
             GrabState,
-            Reward,
-            StepsRemaining,
-            ExternalForce,
-            ExternalTorque,
             SelfObservation,
             PartnerObservations,
             RoomEntityObservations,
@@ -1348,9 +1385,9 @@ Sim::Sim(Engine &ctx,
 
     // Create the queries for checkpointing.
     ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, 
-    StepsRemaining, Progress, ExternalForce>();
+    StepsRemaining, Progress, Entity>();
     ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
-    ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType>();
+    ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType, Entity>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
     ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
 
