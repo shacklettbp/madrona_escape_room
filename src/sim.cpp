@@ -180,7 +180,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr, Entity &e)
+            StepsRemaining &s, Progress &pr)
             {
                 p  = ckpt.agentStates[idx].p;
                 r  = ckpt.agentStates[idx].r;
@@ -192,14 +192,16 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
 
                 const int32_t &grabIdx = ckpt.agentStates[idx].grabIdx;
                 if (grabIdx != -1) {
+                        // You might have an old constraint, remove it.
+                        ctx.destroyEntity(g.constraintEntity);
                     // Find the new entity at the grab index;
-                    g.constraintEntity = tempCubeEntities[grabIdx];
+                        Entity constraint_entity = ctx.makeEntity<ConstraintData>();
+                        g.constraintEntity = constraint_entity;
                     // The joint constraint has the wrong
                     // entity ids, so correct those below.
-                    JointConstraint &j = ckpt.agentStates[idx].j;
-                    j.e1 = e;
+                    JointConstraint j = ckpt.agentStates[idx].j;
                     j.e2 = tempCubeEntities[grabIdx];
-                    ctx.get<JointConstraint>(e) = j;
+                    ctx.get<JointConstraint>(constraint_entity) = j;
                 }
                 idx++;
             }
@@ -315,7 +317,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr, Entity &e)
+            StepsRemaining &s, Progress &pr)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
@@ -325,13 +327,12 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
                 ckpt.agentStates[idx].s = s;
                 ckpt.agentStates[idx].pr = pr;
                 if (g.constraintEntity != Entity::none()) {
-                    ckpt.agentStates[idx].j = ctx.get<JointConstraint>(e);
+                    ckpt.agentStates[idx].j = ctx.get<JointConstraint>(g.constraintEntity);
                     // If the agent was grabbing, find where the info
                     // for that entity was written in the previous step.
                     for (int32_t i = 0; i < consts::numRooms * 3; ++i) {
-                        if (g.constraintEntity == tempCubeEntities[i]) {
+                        if (ckpt.agentStates[idx].j.e2 == tempCubeEntities[i]) {
                             ckpt.agentStates[idx].grabIdx = i;
-                            break;
                         }
                     }
                 } else {
@@ -1389,7 +1390,7 @@ Sim::Sim(Engine &ctx,
 
     // Create the queries for checkpointing.
     ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, 
-    StepsRemaining, Progress, Entity>();
+    StepsRemaining, Progress>();
     ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
     ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType, Entity>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
