@@ -65,6 +65,8 @@ public:
     // These functions are used by the viewer to control the simulation
     // with keyboard inputs in place of DNN policy actions
     MGR_EXPORT void triggerReset(int32_t world_idx);
+    MGR_EXPORT void triggerSaveCheckpoint(int32_t world_idx);
+    MGR_EXPORT void triggerLoadCheckpoint(int32_t world_idx);
     MGR_EXPORT void setAction(int32_t world_idx,
                               int32_t agent_idx,
                               int32_t move_amount,

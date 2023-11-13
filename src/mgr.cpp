@@ -31,17 +31,23 @@ struct Manager::Impl {
     PhysicsLoader physicsLoader;
     EpisodeManager *episodeMgr;
     WorldReset *worldResetBuffer;
+    CheckpointSave *worldSaveCheckpointBuffer;
+    CheckpointReset *worldLoadCheckpointBuffer;
     Action *agentActionsBuffer;
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
                 EpisodeManager *ep_mgr,
                 WorldReset *reset_buffer,
+                CheckpointSave *checkpoint_save_buffer,
+                CheckpointReset *checkpoint_load_buffer,
                 Action *action_buffer)
         : cfg(mgr_cfg),
           physicsLoader(std::move(phys_loader)),
           episodeMgr(ep_mgr),
           worldResetBuffer(reset_buffer),
+          worldSaveCheckpointBuffer(checkpoint_save_buffer),
+          worldLoadCheckpointBuffer(checkpoint_load_buffer),
           agentActionsBuffer(action_buffer)
     {}
 
@@ -72,10 +78,13 @@ struct Manager::CPUImpl final : Manager::Impl {
                    PhysicsLoader &&phys_loader,
                    EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
+                   CheckpointSave *checkpoint_save_buffer,
+                   CheckpointReset *checkpoint_load_buffer,
                    Action *action_buffer,
                    TaskGraphT &&cpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer),
+               ep_mgr, reset_buffer, checkpoint_save_buffer,
+               checkpoint_load_buffer, action_buffer),
           cpuExec(std::move(cpu_exec))
     {}
 
@@ -117,10 +126,13 @@ struct Manager::CUDAImpl final : Manager::Impl {
                    PhysicsLoader &&phys_loader,
                    EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
+                   CheckpointSave *checkpoint_save_buffer,
+                   CheckpointReset *checkpoint_load_buffer,
                    Action *action_buffer,
                    MWCudaExecutor &&gpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer),
+               ep_mgr, reset_buffer, checkpoint_save_buffer,
+               checkpoint_load_buffer, action_buffer),
           gpuExec(std::move(gpu_exec))
     {}
 
@@ -392,6 +404,12 @@ Manager::Impl * Manager::Impl::init(
         WorldReset *world_reset_buffer = 
             (WorldReset *)gpu_exec.getExported((uint32_t)ExportID::Reset);
 
+        CheckpointSave *checkpoint_save_buffer = 
+            (CheckpointSave *)gpu_exec.getExported((uint32_t)ExportID::CheckpointSave);
+
+        CheckpointReset *checkpoint_load_buffer = 
+            (CheckpointReset *)gpu_exec.getExported((uint32_t)ExportID::CheckpointReset);
+
         Action *agent_actions_buffer = 
             (Action *)gpu_exec.getExported((uint32_t)ExportID::Action);
 
@@ -401,6 +419,8 @@ Manager::Impl * Manager::Impl::init(
             std::move(phys_loader),
             episode_mgr,
             world_reset_buffer,
+            checkpoint_save_buffer,
+            checkpoint_load_buffer,
             agent_actions_buffer,
             std::move(gpu_exec),
         };
@@ -442,6 +462,12 @@ Manager::Impl * Manager::Impl::init(
         WorldReset *world_reset_buffer = 
             (WorldReset *)cpu_exec.getExported((uint32_t)ExportID::Reset);
 
+        CheckpointSave *checkpoint_save_buffer = 
+            (CheckpointSave *)cpu_exec.getExported((uint32_t)ExportID::CheckpointSave);
+
+        CheckpointReset *checkpoint_load_buffer = 
+            (CheckpointReset *)cpu_exec.getExported((uint32_t)ExportID::CheckpointReset);
+
         Action *agent_actions_buffer = 
             (Action *)cpu_exec.getExported((uint32_t)ExportID::Action);
 
@@ -450,6 +476,8 @@ Manager::Impl * Manager::Impl::init(
             std::move(phys_loader),
             episode_mgr,
             world_reset_buffer,
+            checkpoint_save_buffer,
+            checkpoint_load_buffer,
             agent_actions_buffer,
             std::move(cpu_exec),
         };
@@ -684,6 +712,42 @@ void Manager::setAction(int32_t world_idx,
 #endif
     } else {
         *action_ptr = action;
+    }
+}
+
+void Manager::triggerSaveCheckpoint(int32_t world_idx) 
+{
+    CheckpointSave save {
+        1,
+    };
+
+    auto *save_ptr = impl_->worldSaveCheckpointBuffer + world_idx;
+
+    if (impl_->cfg.execMode == ExecMode::CUDA) {
+#ifdef MADRONA_CUDA_SUPPORT
+        cudaMemcpy(save_ptr, &save, sizeof(CheckpointSave),
+                   cudaMemcpyHostToDevice);
+#endif
+    }  else {
+        *save_ptr = save;
+    }
+}
+
+void Manager::triggerLoadCheckpoint(int32_t world_idx) 
+{
+    CheckpointReset load {
+        1,
+    };
+
+    auto *load_ptr = impl_->worldLoadCheckpointBuffer + world_idx;
+
+    if (impl_->cfg.execMode == ExecMode::CUDA) {
+#ifdef MADRONA_CUDA_SUPPORT
+        cudaMemcpy(load_ptr, &load, sizeof(CheckpointReset),
+                   cudaMemcpyHostToDevice);
+#endif
+    }  else {
+        *load_ptr = load;
     }
 }
 

@@ -29,6 +29,7 @@ enum class ExportID : uint32_t {
     StepsRemaining,
     Checkpoint,
     CheckpointReset,
+    CheckpointSave,
     NumExports,
 };
 

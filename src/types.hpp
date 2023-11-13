@@ -243,6 +243,11 @@ struct CheckpointReset {
     int32_t reset;
 };
 
+// For connection to the viewer.
+struct CheckpointSave {
+    int32_t save;
+};
+
 /* ECS Archetypes for the game */
 
 // There are 2 Agents in the environment trying to get to the destination

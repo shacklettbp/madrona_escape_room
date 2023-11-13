@@ -236,6 +236,15 @@ int main(int argc, char *argv[])
             mgr.triggerReset(world_idx);
         }
 
+        // Checkpointing
+        if (input.keyPressed(Key::Z)) {
+            mgr.triggerSaveCheckpoint(world_idx);
+        }
+
+        if (input.keyPressed(Key::X)) {
+            mgr.triggerLoadCheckpoint(world_idx);
+        }
+
         bool shift_pressed = input.keyPressed(Key::Shift);
 
         if (input.keyPressed(Key::W)) {

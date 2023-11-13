@@ -65,6 +65,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     // Checkpoint state.
     registry.registerSingleton<Checkpoint>();
     registry.registerSingleton<CheckpointReset>();
+    registry.registerSingleton<CheckpointSave>();
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
@@ -75,6 +76,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
         (uint32_t)ExportID::Checkpoint);
     registry.exportSingleton<CheckpointReset>(
         (uint32_t)ExportID::CheckpointReset);
+    registry.exportSingleton<CheckpointSave>(
+        (uint32_t)ExportID::CheckpointSave);
     registry.exportSingleton<WorldReset>(
         (uint32_t)ExportID::Reset);
 
@@ -150,9 +153,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         return;
     }
 
-    // This is taken care of during checkpointing.
-    //reset.reset = 0;
-
+    reset.reset = 0;
 
     Checkpoint& ckpt = ctx.singleton<Checkpoint>();
 
@@ -280,10 +281,13 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
     }
 }
 
-inline void checkpointSystem(Engine &ctx, CheckpointReset &reset)
+inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
 {
-    // Always reset
-    reset.reset = 0;
+    if (save.save == 0) {
+        return; // Don't checkpoint.
+    }
+
+    save.save = 0;
 
     Checkpoint &ckpt = ctx.singleton<Checkpoint>();
 
@@ -1264,7 +1268,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // Conditionally checkpoint the state of the system if we are on the Nth step.
     auto checkpoint_sys = builder.addToGraph<ParallelForNode<Engine,
                                                              checkpointSystem,
-                                                             CheckpointReset>>({
+                                                             CheckpointSave>>({
 #ifdef MADRONA_GPU_MODE
         sort_constraints
 #else
@@ -1392,6 +1396,7 @@ Sim::Sim(Engine &ctx,
     ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
 
     ctx.singleton<CheckpointReset>().reset = 0;
+    ctx.singleton<CheckpointSave>().save = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the
