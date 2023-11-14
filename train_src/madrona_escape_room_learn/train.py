@@ -466,26 +466,32 @@ def _update_loop(update_iter_fn : Callable,
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
-        # Restore second-room and third-room checkpoints if there are any
-        if total_second_room_ckpts > 0:
-            # Set the first 2000 worlds to randomly-selected second room checkpoints
-            checkpoint_indices = torch.randint(0, total_second_room_ckpts, (2000,))
-            print("Checkpoint indices", checkpoint_indices.shape, checkpoint_indices[:10])
-            print(second_room_ckpts[0])
-            print("Before setting checkpoints", sim.checkpoints[:2000])
-            sim.checkpoints[:2000] = second_room_ckpts[checkpoint_indices]
-            print("After setting checkpoints", sim.checkpoints[:2000])
-            sim.resets[:2000, 0] = 1
-            sim.checkpoint_resets[:2000, 0] = 1
-        if total_third_room_ckpts > 0:
-            # Set the next 2000 worlds to randomly-selected third room checkpoints
-            checkpoint_indices = torch.randint(0, total_third_room_ckpts, (2000,))
-            sim.checkpoints[2000:4000] = third_room_ckpts[checkpoint_indices]
-            sim.resets[2000:4000, 0] = 1
-            sim.checkpoint_resets[2000:4000, 0] = 1
-        # After reset, step to collect observations for the next rollout.
-        if total_second_room_ckpts > 0:
-            sim.step()
+        # Restore second-room and third-room checkpoints if there are any, every 5 steps
+        if update_idx % 5 == 0:
+            if total_second_room_ckpts > 0:
+                # Set the first 2000 worlds to randomly-selected second room checkpoints
+                checkpoint_indices = torch.randint(0, total_second_room_ckpts, (2000,))
+                print("Checkpoint indices", checkpoint_indices.shape, checkpoint_indices[:10])
+                print(second_room_ckpts[0])
+                print("Before setting checkpoints", sim.checkpoints[:2000])
+                sim.checkpoints[:2000] = second_room_ckpts[checkpoint_indices]
+                print("After setting checkpoints", sim.checkpoints[:2000])
+                sim.resets[:2000, 0] = 1
+                sim.checkpoint_resets[:2000, 0] = 1
+            if total_third_room_ckpts > 0:
+                # Set the next 2000 worlds to randomly-selected third room checkpoints
+                checkpoint_indices = torch.randint(0, total_third_room_ckpts, (2000,))
+                sim.checkpoints[2000:4000] = third_room_ckpts[checkpoint_indices]
+                sim.resets[2000:4000, 0] = 1
+                sim.checkpoint_resets[2000:4000, 0] = 1
+            # After reset, step to collect observations for the next rollout.
+            if total_second_room_ckpts > 0:
+                sim.step()
+
+            # Print steps_remaining
+            sim.obs[5][:4000] = 200
+
+        print("Steps remaining", sim.obs[5][:4000])
 
         if useCKPT and update_idx > 0:
             # Run the minisim here to set state and initialize observations,
