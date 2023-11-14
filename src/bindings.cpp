@@ -37,14 +37,14 @@ NB_MODULE(madrona_escape_room, m) {
                             int64_t gpu_id,
                             int64_t num_worlds,
                             bool auto_reset,
-                            SimFlags sim_flags,
+                            uint32_t sim_flags,
                             RewardMode reward_mode) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
                 .numWorlds = (uint32_t)num_worlds,
                 .autoReset = auto_reset,
-                .simFlags = sim_flags,
+                .simFlags = SimFlags(sim_flags),
                 .rewardMode = reward_mode,
             });
         }, nb::arg("exec_mode"),

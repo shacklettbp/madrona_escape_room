@@ -158,7 +158,7 @@ class LearningCallback:
 sim_flags = SimFlags.Default
 print(sim_flags)
 if args.use_fixed_world:
-    sim_flags = SimFlags.UseFixedWorld
+    sim_flags |= SimFlags.UseFixedWorld
 if args.start_in_discovered_rooms:
     sim_flags |= SimFlags.StartInDiscoveredRooms
 print(sim_flags)
