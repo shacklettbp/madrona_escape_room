@@ -456,13 +456,13 @@ def _update_loop(update_iter_fn : Callable,
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
 
-    useCKPT = False
+    useCKPT = True
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
         if useCKPT and update_idx > 0:
-            # Run the minisim here to set state and initialize observations, 
-            sim.resets[:, 0] = 1
+            # Run the minisim here to set state and initialize observations,
+            #sim.resets[:, 0] = 1 # No longer necessary, happens automatically on checkpoint_reset. 
             sim.checkpoint_resets[:, 0] = 1
 
             # After reset, step to collect observations for the next rollout.

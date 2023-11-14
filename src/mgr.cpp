@@ -715,10 +715,10 @@ void Manager::setAction(int32_t world_idx,
     }
 }
 
-void Manager::triggerSaveCheckpoint(int32_t world_idx) 
+void Manager::setSaveCheckpoint(int32_t world_idx, int32_t value) 
 {
     CheckpointSave save {
-        1,
+        value,
     };
 
     auto *save_ptr = impl_->worldSaveCheckpointBuffer + world_idx;

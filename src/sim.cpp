@@ -192,13 +192,13 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
 
                 const int32_t &grabIdx = ckpt.agentStates[idx].grabIdx;
                 if (grabIdx != -1) {
-                        // You might have an old constraint, remove it.
-                        ctx.destroyEntity(g.constraintEntity);
+
                     // Find the new entity at the grab index;
-                        Entity constraint_entity = ctx.makeEntity<ConstraintData>();
-                        g.constraintEntity = constraint_entity;
+                    Entity constraint_entity = ctx.makeEntity<ConstraintData>();
+                    g.constraintEntity = constraint_entity;
+
                     // The joint constraint has the wrong
-                    // entity ids, so correct those below.
+                    // entity id, so correct it below.
                     JointConstraint j = ckpt.agentStates[idx].j;
                     j.e2 = tempCubeEntities[grabIdx];
                     ctx.get<JointConstraint>(constraint_entity) = j;
@@ -286,10 +286,10 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
 inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
 {
     if (save.save == 0) {
-        return; // Don't checkpoint.
+        // The viewer often zeros this to checkpoint a specific state.
+        // Otherwise, we always checkpoint.
+        return;
     }
-
-    save.save = 0;
 
     Checkpoint &ckpt = ctx.singleton<Checkpoint>();
 
@@ -382,7 +382,8 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
 // If a reset is needed, cleanup the existing world and generate a new one.
 inline void resetSystem(Engine &ctx, WorldReset &reset)
 {
-    int32_t should_reset = reset.reset;
+    // Also reset if we are loading a checkpoint.
+    int32_t should_reset = reset.reset + ctx.singleton<CheckpointReset>().reset;
     if (ctx.data().autoReset) {
         for (CountT i = 0; i < consts::numAgents; i++) {
             Entity agent = ctx.data().agents[i];
@@ -458,7 +459,6 @@ inline void grabSystem(Engine &ctx,
     if (grab.constraintEntity != Entity::none()) {
         ctx.destroyEntity(grab.constraintEntity);
         grab.constraintEntity = Entity::none();
-        
         return;
     } 
 
@@ -1242,7 +1242,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         builder, {sort_phys_objects});
     auto sort_walls = queueSortByWorld<DoorEntity>(
         builder, {sort_buttons});
-    (void)sort_walls;
 #endif
     // Conditionally load the checkpoint here including Done, Reward, 
     // and StepsRemaining. With Observations this should reconstruct 
@@ -1397,7 +1396,7 @@ Sim::Sim(Engine &ctx,
     ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
 
     ctx.singleton<CheckpointReset>().reset = 0;
-    ctx.singleton<CheckpointSave>().save = 0;
+    ctx.singleton<CheckpointSave>().save = 1;
 }
 
 // This declaration is needed for the GPU backend in order to generate the

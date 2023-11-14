@@ -236,12 +236,16 @@ int main(int argc, char *argv[])
             mgr.triggerReset(world_idx);
         }
 
+        // By default, checkpointing happens every frame,
+        // so disable that behavior here.
+        mgr.setSaveCheckpoint(world_idx, 0);
         // Checkpointing
         if (input.keyPressed(Key::Z)) {
-            mgr.triggerSaveCheckpoint(world_idx);
+            mgr.setSaveCheckpoint(world_idx, 1);
         }
 
         if (input.keyPressed(Key::X)) {
+            // Triggers a world reset.
             mgr.triggerLoadCheckpoint(world_idx);
         }
 
