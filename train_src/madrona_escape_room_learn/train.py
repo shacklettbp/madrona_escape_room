@@ -455,10 +455,37 @@ def _update_loop(update_iter_fn : Callable,
     assert(num_train_seqs % cfg.ppo.num_mini_batches == 0)
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
+    second_room_ckpts = torch.zeros_like(sim.checkpoints) # Once this is full, rotate as FIFO
+    total_second_room_ckpts = 0
+    third_room_ckpts = torch.zeros_like(sim.checkpoints) # Once this is full, rotate as FIFO
+    total_third_room_ckpts = 0
+    checkpoint_buffer_size = sim.checkpoints.shape[0] # Check that this is the right size
+    print("Checkpoint buffer shape", second_room_ckpts.shape)
 
     useCKPT = True
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
+
+        # Restore second-room and third-room checkpoints if there are any
+        if total_second_room_ckpts > 0:
+            # Set the first 2000 worlds to randomly-selected second room checkpoints
+            checkpoint_indices = torch.randint(0, total_second_room_ckpts, (2000,))
+            print("Checkpoint indices", checkpoint_indices.shape, checkpoint_indices[:10])
+            print(second_room_ckpts[0])
+            print("Before setting checkpoints", sim.checkpoints[:2000])
+            sim.checkpoints[:2000] = second_room_ckpts[checkpoint_indices]
+            print("After setting checkpoints", sim.checkpoints[:2000])
+            sim.resets[:2000, 0] = 1
+            sim.checkpoint_resets[:2000, 0] = 1
+        if total_third_room_ckpts > 0:
+            # Set the next 2000 worlds to randomly-selected third room checkpoints
+            checkpoint_indices = torch.randint(0, total_third_room_ckpts, (2000,))
+            sim.checkpoints[2000:4000] = third_room_ckpts[checkpoint_indices]
+            sim.resets[2000:4000, 0] = 1
+            sim.checkpoint_resets[2000:4000, 0] = 1
+        # After reset, step to collect observations for the next rollout.
+        if total_second_room_ckpts > 0:
+            sim.step()
 
         if useCKPT and update_idx > 0:
             # Run the minisim here to set state and initialize observations,
@@ -491,6 +518,27 @@ def _update_loop(update_iter_fn : Callable,
         update_end_time = time()
         update_time = update_end_time - update_start_time
         user_cb(update_idx, update_time, update_result, learning_state)
+
+        # Check if we're in the 2nd or 3rd rooms, and potentially add to the checkpoint buffers
+        print("Tensor shape", sim.obs[0].shape)
+        per_world_tensor = sim.obs[0].reshape(-1, 2, 8) # 8 features, 2 agents
+        third_room_flag = (per_world_tensor[...,3] > 0.67)
+        second_room_flag = (per_world_tensor[...,3] > 0.34) ^ third_room_flag
+        third_room_flag = third_room_flag.sum(dim=1) > 0
+        second_room_flag = second_room_flag.sum(dim=1) > 0
+        num_second_room = second_room_flag.sum()
+        num_third_room = third_room_flag.sum()
+        print(num_second_room, "agents in second room")
+        print(num_third_room, "agents in third room")
+        if num_second_room > 0:
+            print("Adding", sim.checkpoints[second_room_flag])
+            second_room_ckpts = torch.cat((sim.checkpoints[second_room_flag], second_room_ckpts[:-num_second_room]), dim=0)
+            if total_second_room_ckpts < checkpoint_buffer_size:
+                total_second_room_ckpts += min(checkpoint_buffer_size - total_second_room_ckpts, num_second_room)
+        if num_third_room > 0:
+            second_room_ckpts = torch.cat((sim.checkpoints[third_room_flag], third_room_ckpts[:-num_third_room]), dim=0)
+            if total_third_room_ckpts < checkpoint_buffer_size:
+                total_third_room_ckpts += min(checkpoint_buffer_size - total_third_room_ckpts, num_third_room)
 
 def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
     print(cfg)
