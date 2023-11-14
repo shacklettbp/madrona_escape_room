@@ -536,7 +536,7 @@ def _update_loop(update_iter_fn : Callable,
             if total_second_room_ckpts < checkpoint_buffer_size:
                 total_second_room_ckpts += min(checkpoint_buffer_size - total_second_room_ckpts, num_second_room)
         if num_third_room > 0:
-            second_room_ckpts = torch.cat((sim.checkpoints[third_room_flag], third_room_ckpts[:-num_third_room]), dim=0)
+            third_room_ckpts = torch.cat((sim.checkpoints[third_room_flag], third_room_ckpts[:-num_third_room]), dim=0)
             if total_third_room_ckpts < checkpoint_buffer_size:
                 total_third_room_ckpts += min(checkpoint_buffer_size - total_third_room_ckpts, num_third_room)
 
