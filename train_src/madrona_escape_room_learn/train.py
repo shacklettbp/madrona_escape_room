@@ -462,12 +462,12 @@ def _update_loop(update_iter_fn : Callable,
     checkpoint_buffer_size = sim.checkpoints.shape[0] # Check that this is the right size
     print("Checkpoint buffer shape", second_room_ckpts.shape)
 
-    useCKPT = True
+    useCKPT = False
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
         # Restore second-room and third-room checkpoints if there are any, every 5 steps
-        if update_idx % 5 == 0:
+        if False:
             if total_second_room_ckpts > 0:
                 # Set the first 2000 worlds to randomly-selected second room checkpoints
                 checkpoint_indices = torch.randint(0, total_second_room_ckpts, (2000,))
@@ -492,11 +492,13 @@ def _update_loop(update_iter_fn : Callable,
 
         print("Update", update_idx)
         print("Steps remaining", sim.obs[5][:8000])
+        print("Shape", sim.obs[5].shape, sim.checkpoints.shape)
 
         if useCKPT and update_idx > 0:
             # Run the minisim here to set state and initialize observations,
             #sim.resets[:, 0] = 1 # No longer necessary, happens automatically on checkpoint_reset. 
             sim.checkpoint_resets[:, 0] = 1
+            sim.checkpoints[:] = torch.cat((sim.checkpoints[1:], sim.checkpoints[0:1]), dim=0)
 
             # After reset, step to collect observations for the next rollout.
             sim.step()

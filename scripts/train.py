@@ -92,10 +92,11 @@ class LearningCallback:
                 return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
 
             # compute visits to second and third room
-            second_room_count = (update_results.obs[0][:,:,3] > 0.34).sum()
-            third_room_count = (update_results.obs[0][:,:,3] > 0.67).sum()
-            exit_count = (update_results.obs[0][:,:,3] > 1.01).sum()
-            door_count = (update_results.obs[3][:,:,2] > 0.5).sum()
+            print("Update results shape", update_results.obs[0].shape, update_results.obs[3].shape)
+            second_room_count = (update_results.obs[0][...,3] > 0.34).sum()
+            third_room_count = (update_results.obs[0][...,3] > 0.67).sum()
+            exit_count = (update_results.obs[0][...,3] > 1.01).sum()
+            door_count = (update_results.obs[3][...,2] > 0.5).sum()
 
             value_mean = update_results.values.mean().cpu().item()
             value_min = update_results.values.min().cpu().item()
