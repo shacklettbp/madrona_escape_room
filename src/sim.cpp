@@ -1070,6 +1070,7 @@ inline void stepTrackerSystem(Engine &,
                               Done &done)
 {
     int32_t num_remaining = --steps_remaining.t;
+    //printf("Steps remaining: %d\n", num_remaining);
     if (num_remaining == consts::episodeLen - 1) {
         done.v = 0;
     } else if (num_remaining == 0) {
