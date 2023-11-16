@@ -11,6 +11,7 @@
 #include <madrona/exec_mode.hpp>
 
 #include <madrona/viz/system.hpp>
+#include <madrona/viz/viewer_controller.hpp>
 
 namespace madEscape {
 
@@ -27,11 +28,12 @@ public:
         int gpuID; // Which GPU for CUDA backend?
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
+        bool renderViewer; // Do we want to render the viewer? (this will
+                           // create a window)
     };
 
     MGR_EXPORT Manager(
-        const Config &cfg,
-        const madrona::viz::VizECSBridge *viz_bridge = nullptr);
+        const Config &cfg);
     MGR_EXPORT ~Manager();
 
     MGR_EXPORT void step();
@@ -58,6 +60,10 @@ public:
                               int32_t move_angle,
                               int32_t rotate,
                               int32_t grab);
+
+    MGR_EXPORT madrona::viz::ViewerController makeViewerController(float speed,
+                                                                   madrona::math::Vector3 pos,
+                                                                   madrona::math::Quat rot);
 
 private:
     struct Impl;

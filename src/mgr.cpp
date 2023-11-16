@@ -8,7 +8,7 @@
 #include <madrona/tracing.hpp>
 #include <madrona/mw_cpu.hpp>
 
-#include <madrona/render/batch_renderer.hpp>
+#include <madrona/viz/render_context.hpp>
 
 #include <array>
 #include <charconv>
@@ -28,6 +28,7 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 using namespace madrona::py;
+using namespace madrona::render;
 
 namespace madEscape {
 
@@ -37,17 +38,20 @@ struct Manager::Impl {
     EpisodeManager *episodeMgr;
     WorldReset *worldResetBuffer;
     Action *agentActionsBuffer;
+    RenderContext renderCtx;
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
                 EpisodeManager *ep_mgr,
                 WorldReset *reset_buffer,
-                Action *action_buffer)
+                Action *action_buffer,
+                RenderContext &&render_ctx)
         : cfg(mgr_cfg),
           physicsLoader(std::move(phys_loader)),
           episodeMgr(ep_mgr),
           worldResetBuffer(reset_buffer),
-          agentActionsBuffer(action_buffer)
+          agentActionsBuffer(action_buffer),
+          renderCtx(std::move(render_ctx))
     {
     }
 
@@ -59,8 +63,7 @@ struct Manager::Impl {
         Tensor::ElementType type,
         madrona::Span<const int64_t> dimensions) const = 0;
 
-    static inline Impl * init(const Config &cfg,
-                              const viz::VizECSBridge *viz_bridge);
+    static inline Impl * init(const Config &cfg);
 };
 
 struct Manager::CPUImpl final : Manager::Impl {
@@ -74,9 +77,10 @@ struct Manager::CPUImpl final : Manager::Impl {
                    EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
                    Action *action_buffer,
+                   RenderContext &&render_ctx,
                    TaskGraphT &&cpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer),
+               ep_mgr, reset_buffer, action_buffer, std::move(render_ctx)),
           cpuExec(std::move(cpu_exec))
     {}
 
@@ -88,6 +92,10 @@ struct Manager::CPUImpl final : Manager::Impl {
     inline virtual void run()
     {
         cpuExec.run();
+
+        // Prepare and render the images for all the worlds
+        renderCtx.prepareRender();
+        renderCtx.batchedRender();
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
@@ -108,9 +116,10 @@ struct Manager::CUDAImpl final : Manager::Impl {
                    EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
                    Action *action_buffer,
+                   RenderContext &&render_ctx,
                    MWCudaExecutor &&gpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer),
+               ep_mgr, reset_buffer, action_buffer, std::move(render_ctx)),
           gpuExec(std::move(gpu_exec))
     {
 
@@ -124,6 +133,9 @@ struct Manager::CUDAImpl final : Manager::Impl {
     inline virtual void run()
     {
         gpuExec.run();
+
+        renderCtx.prepareRender();
+        renderCtx.batchedRender();
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
@@ -135,6 +147,67 @@ struct Manager::CUDAImpl final : Manager::Impl {
     }
 };
 #endif
+
+static void loadRenderObjects(RenderContext &render_ctx)
+{
+    std::array<std::string, (size_t)SimObject::NumObjects> render_asset_paths;
+    render_asset_paths[(size_t)SimObject::Cube] =
+        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
+    render_asset_paths[(size_t)SimObject::Wall] =
+        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
+    render_asset_paths[(size_t)SimObject::Door] =
+        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
+    render_asset_paths[(size_t)SimObject::Agent] =
+        (std::filesystem::path(DATA_DIR) / "agent_render.obj").string();
+    render_asset_paths[(size_t)SimObject::Button] =
+        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
+    render_asset_paths[(size_t)SimObject::Plane] =
+        (std::filesystem::path(DATA_DIR) / "plane.obj").string();
+
+    std::array<const char *, (size_t)SimObject::NumObjects> render_asset_cstrs;
+    for (size_t i = 0; i < render_asset_paths.size(); i++) {
+        render_asset_cstrs[i] = render_asset_paths[i].c_str();
+    }
+
+    std::array<char, 1024> import_err;
+    auto render_assets = imp::ImportedAssets::importFromDisk(
+        render_asset_cstrs, Span<char>(import_err.data(), import_err.size()));
+
+    if (!render_assets.has_value()) {
+        FATAL("Failed to load render assets: %s", import_err);
+    }
+
+    auto materials = std::to_array<imp::SourceMaterial>({
+        { render::rgb8ToFloat(191, 108, 10), -1, 0.8f, 0.2f },
+        { math::Vector4{0.4f, 0.4f, 0.4f, 0.0f}, -1, 0.8f, 0.2f,},
+        { math::Vector4{1.f, 1.f, 1.f, 0.0f}, 1, 0.5f, 1.0f,},
+        { render::rgb8ToFloat(230, 230, 230),   -1, 0.8f, 1.0f },
+        { math::Vector4{0.5f, 0.3f, 0.3f, 0.0f},  0, 0.8f, 0.2f,},
+        { render::rgb8ToFloat(230, 20, 20),   -1, 0.8f, 1.0f },
+        { render::rgb8ToFloat(230, 230, 20),   -1, 0.8f, 1.0f },
+    });
+
+    // Override materials
+    render_assets->objects[(CountT)SimObject::Cube].meshes[0].materialIDX = 0;
+    render_assets->objects[(CountT)SimObject::Wall].meshes[0].materialIDX = 1;
+    render_assets->objects[(CountT)SimObject::Door].meshes[0].materialIDX = 5;
+    render_assets->objects[(CountT)SimObject::Agent].meshes[0].materialIDX = 2;
+    render_assets->objects[(CountT)SimObject::Agent].meshes[1].materialIDX = 3;
+    render_assets->objects[(CountT)SimObject::Agent].meshes[2].materialIDX = 3;
+    render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
+    render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
+
+    render_ctx.loadObjects(render_assets->objects, materials, {
+        { (std::filesystem::path(DATA_DIR) /
+           "green_grid.png").string().c_str() },
+        { (std::filesystem::path(DATA_DIR) /
+           "smile.png").string().c_str() },
+    });
+
+    render_ctx.configureLighting({
+        { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
+    });
+}
 
 static void loadPhysicsObjects(PhysicsLoader &loader)
 {
@@ -261,13 +334,26 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
 }
 
 Manager::Impl * Manager::Impl::init(
-    const Manager::Config &mgr_cfg,
-    const viz::VizECSBridge *viz_bridge)
+    const Manager::Config &mgr_cfg)
 {
     Sim::Config sim_cfg {
-        viz_bridge != nullptr,
+        0,
         mgr_cfg.autoReset,
-        viz_bridge
+        nullptr
+    };
+
+    RenderContext::Config render_ctx_cfg = {
+        .gpuID = mgr_cfg.gpuID,
+        .viewWidth = 64,
+        .viewHeight = 64,
+        .numWorlds = mgr_cfg.numWorlds,
+        .maxViewsPerWorld  = 2,
+        .maxInstancesPerWorld = 1000,
+        .defaultSimTickRate = 20,
+        .execMode = mgr_cfg.execMode,
+        .renderViewer = mgr_cfg.renderViewer,
+        .viewerWidth = 2730/2,
+        .viewerHeight = 1536/2
     };
 
     switch (mgr_cfg.execMode) {
@@ -281,6 +367,12 @@ Manager::Impl * Manager::Impl::init(
 
         PhysicsLoader phys_loader(ExecMode::CUDA, 10);
         loadPhysicsObjects(phys_loader);
+
+        RenderContext render_ctx(render_ctx_cfg);
+        loadRenderObjects(render_ctx);
+
+        sim_cfg.bridge = render_ctx.getBridge();
+        sim_cfg.enableViewer = true;
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
@@ -320,6 +412,7 @@ Manager::Impl * Manager::Impl::init(
             episode_mgr,
             world_reset_buffer,
             agent_actions_buffer,
+            std::move(render_ctx),
             std::move(gpu_exec),
         };
 #else
@@ -331,6 +424,12 @@ Manager::Impl * Manager::Impl::init(
 
         PhysicsLoader phys_loader(ExecMode::CPU, 10);
         loadPhysicsObjects(phys_loader);
+
+        RenderContext render_ctx(render_ctx_cfg);
+        loadRenderObjects(render_ctx);
+
+        sim_cfg.bridge = render_ctx.getBridge();
+        sim_cfg.enableViewer = true;
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
@@ -364,6 +463,7 @@ Manager::Impl * Manager::Impl::init(
             episode_mgr,
             world_reset_buffer,
             agent_actions_buffer,
+            std::move(render_ctx),
             std::move(cpu_exec),
         };
 
@@ -373,9 +473,8 @@ Manager::Impl * Manager::Impl::init(
     }
 }
 
-Manager::Manager(const Config &cfg,
-                 const viz::VizECSBridge *viz_bridge)
-    : impl_(Impl::init(cfg, viz_bridge))
+Manager::Manager(const Config &cfg)
+    : impl_(Impl::init(cfg))
 {
     // Currently, there is no way to populate the initial set of observations
     // without stepping the simulations in order to execute the taskgraph.
@@ -389,8 +488,6 @@ Manager::Manager(const Config &cfg,
     for (int32_t i = 0; i < (int32_t)cfg.numWorlds; i++) {
         triggerReset(i);
     }
-
-    // someRandomFunctionNameLOL();
 
     step();
 }
@@ -553,6 +650,13 @@ void Manager::setAction(int32_t world_idx,
     } else {
         *action_ptr = action;
     }
+}
+
+MGR_EXPORT madrona::viz::ViewerController Manager::makeViewerController(float speed,
+                                                                        math::Vector3 pos,
+                                                                        math::Quat rot)
+{
+    return impl_->renderCtx.makeViewerController(speed, pos, rot);
 }
 
 }

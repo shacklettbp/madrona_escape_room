@@ -85,7 +85,8 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = (uint32_t)num_worlds,
         .autoReset = false,
-    }, gpu_bridge_ptr);
+        .renderViewer = false
+    });
 
     std::random_device rd;
     std::mt19937 rand_gen(rd());

@@ -18,7 +18,7 @@ target_link_libraries(mad_escape_cpu_impl
         madrona_viz_system
 )
 
-add_library(mad_escape_mgr SHARED
+add_library(mad_escape_mgr STATIC
     mgr.hpp mgr.cpp
 )
 
@@ -31,6 +31,7 @@ target_link_libraries(mad_escape_mgr
         madrona_common
         madrona_importer
         madrona_physics_loader
+        madrona_viewer
 )
 
 if (TARGET madrona_mw_gpu)
@@ -65,7 +66,7 @@ target_link_libraries(madrona_escape_room PRIVATE
 
 if (TARGET madrona_viewer)
     add_executable(viewer viewer.cpp)
-    target_link_libraries(viewer madrona_viewer
+    target_link_libraries(viewer
         madrona_mw_core mad_escape_mgr)
 
     target_compile_definitions(viewer PRIVATE

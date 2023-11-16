@@ -1,6 +1,5 @@
-#include <madrona/viz/viewer.hpp>
+#include <madrona/viz/viewer_controller.hpp>
 
-#include "madrona/viz/interop.hpp"
 #include "sim.hpp"
 #include "mgr.hpp"
 #include "types.hpp"
@@ -10,25 +9,6 @@
 
 using namespace madrona;
 using namespace madrona::viz;
-
-static inline float srgbToLinear(float srgb)
-{
-    if (srgb <= 0.04045f) {
-        return srgb / 12.92f;
-    }
-
-    return powf((srgb + 0.055f) / 1.055f, 2.4f);
-}
-
-static inline math::Vector4 rgb8ToFloat(uint8_t r, uint8_t g, uint8_t b)
-{
-    return {
-        srgbToLinear((float)r / 255.f),
-        srgbToLinear((float)g / 255.f),
-        srgbToLinear((float)b / 255.f),
-        1.f,
-    };
-}
 
 static HeapArray<int32_t> readReplayLog(const char *path)
 {
@@ -50,6 +30,7 @@ int main(int argc, char *argv[])
 
     constexpr int64_t num_views = 2;
 
+    // Read command line arguments
     uint32_t num_worlds = 1;
     if (argc >= 2) {
         num_worlds = (uint32_t)atoi(argv[1]);
@@ -64,6 +45,9 @@ int main(int argc, char *argv[])
         }
     }
 
+
+
+    // Setup replay log
     const char *replay_log_path = nullptr;
     if (argc >= 4) {
         replay_log_path = argv[3];
@@ -77,97 +61,36 @@ int main(int argc, char *argv[])
         num_replay_steps = replay_log->size() / (num_worlds * num_views * 4);
     }
 
-    std::array<std::string, (size_t)SimObject::NumObjects> render_asset_paths;
-    render_asset_paths[(size_t)SimObject::Cube] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Wall] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Door] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Agent] =
-        (std::filesystem::path(DATA_DIR) / "agent_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Button] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Plane] =
-        (std::filesystem::path(DATA_DIR) / "plane.obj").string();
 
-    std::array<const char *, (size_t)SimObject::NumObjects> render_asset_cstrs;
-    for (size_t i = 0; i < render_asset_paths.size(); i++) {
-        render_asset_cstrs[i] = render_asset_paths[i].c_str();
-    }
 
-    std::array<char, 1024> import_err;
-    auto render_assets = imp::ImportedAssets::importFromDisk(
-        render_asset_cstrs, Span<char>(import_err.data(), import_err.size()));
-
-    if (!render_assets.has_value()) {
-        FATAL("Failed to load render assets: %s", import_err);
-    }
-
-    auto materials = std::to_array<imp::SourceMaterial>({
-        { rgb8ToFloat(191, 108, 10), -1, 0.8f, 0.2f },
-        { math::Vector4{0.4f, 0.4f, 0.4f, 0.0f}, -1, 0.8f, 0.2f,},
-        { math::Vector4{1.f, 1.f, 1.f, 0.0f}, 1, 0.5f, 1.0f,},
-        { rgb8ToFloat(230, 230, 230),   -1, 0.8f, 1.0f },
-        { math::Vector4{0.5f, 0.3f, 0.3f, 0.0f},  0, 0.8f, 0.2f,},
-        { rgb8ToFloat(230, 20, 20),   -1, 0.8f, 1.0f },
-        { rgb8ToFloat(230, 230, 20),   -1, 0.8f, 1.0f },
-    });
-
-    math::Quat initial_camera_rotation =
-        (math::Quat::angleAxis(-math::pi / 2.f, math::up) *
-        math::Quat::angleAxis(-math::pi / 2.f, math::right)).normalize();
-
-    Viewer viewer({
-        .gpuID = 0,
-        .renderWidth = 2730/2,
-        .renderHeight = 1536/2,
-        .batchWidth = 64,
-        .batchHeight = 64,
-        .numWorlds = num_worlds,
-        .maxViewsPerWorld = num_views,
-        .maxInstancesPerWorld = 1000,
-        .defaultSimTickRate = 20,
-        .cameraMoveSpeed = 10.f,
-        .cameraPosition = { 0, consts::worldLength / 2.f, 30 },
-        .cameraRotation = initial_camera_rotation,
-        .execMode = exec_mode,
-    });
-
-    // Override materials
-    render_assets->objects[(CountT)SimObject::Cube].meshes[0].materialIDX = 0;
-    render_assets->objects[(CountT)SimObject::Wall].meshes[0].materialIDX = 1;
-    render_assets->objects[(CountT)SimObject::Door].meshes[0].materialIDX = 5;
-    render_assets->objects[(CountT)SimObject::Agent].meshes[0].materialIDX = 2;
-    render_assets->objects[(CountT)SimObject::Agent].meshes[1].materialIDX = 3;
-    render_assets->objects[(CountT)SimObject::Agent].meshes[2].materialIDX = 3;
-    render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
-    render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
-
-    viewer.loadObjects(render_assets->objects, materials, {
-        { (std::filesystem::path(DATA_DIR) /
-           "green_grid.png").string().c_str() },
-        { (std::filesystem::path(DATA_DIR) /
-           "smile.png").string().c_str() },
-    });
-
-    viewer.configureLighting({
-        { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
-    });
-
-    const auto *bridge = viewer.rendererBridge();
-#if 0
-    const_cast<viz::VizECSBridge *>(bridge)->numViews = nullptr;
-    const_cast<viz::VizECSBridge *>(bridge)->brBridge.maxViewsPerWorld = 1;
-#endif
-
+    // Create the simulation manager
     Manager mgr({
         .execMode = exec_mode,
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
-    }, bridge);
+        .renderViewer = true
+    });
 
+    float camera_move_speed = 10.f;
+
+    math::Vector3 initial_camera_position = { 0, consts::worldLength / 2.f, 30 };
+
+    math::Quat initial_camera_rotation =
+        (math::Quat::angleAxis(-math::pi / 2.f, math::up) *
+        math::Quat::angleAxis(-math::pi / 2.f, math::right)).normalize();
+
+
+
+    // Create the viewer controller
+    viz::ViewerController controller = mgr.makeViewerController(camera_move_speed,
+        initial_camera_position, initial_camera_rotation);
+
+    controller.setTickRate(20);
+
+
+
+    // Replay step
     auto replayStep = [&]() {
         if (cur_replay_step == num_replay_steps - 1) {
             return true;
@@ -201,6 +124,7 @@ int main(int argc, char *argv[])
         return false;
     };
 
+    // Printers
     auto self_printer = mgr.selfObservationTensor().makePrinter();
     auto partner_printer = mgr.partnerObservationsTensor().makePrinter();
     auto room_ent_printer = mgr.roomEntityObservationsTensor().makePrinter();
@@ -237,9 +161,12 @@ int main(int argc, char *argv[])
 #endif
     };
 
-    viewer.loop([&mgr](CountT world_idx, CountT agent_idx,
-                       const Viewer::UserInput &input) {
-        using Key = Viewer::KeyboardKey;
+
+
+    // Main loop for the viewer controller
+    controller.loop([&mgr](CountT world_idx, CountT agent_idx,
+                           const ViewerController::UserInput &input) {
+        using Key = ViewerController::KeyboardKey;
 
         int32_t x = 0;
         int32_t y = 0;
@@ -313,12 +240,10 @@ int main(int argc, char *argv[])
             bool replay_finished = replayStep();
 
             if (replay_finished) {
-                viewer.stopLoop();
+                controller.stopLoop();
             }
         }
 
         mgr.step();
-        
-        printObs();
     }, []() {});
 }
