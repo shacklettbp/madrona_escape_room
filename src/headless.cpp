@@ -7,7 +7,6 @@
 #include <fstream>
 #include <random>
 
-#include <madrona/viz/viewer.hpp>
 #include <madrona/viz/interop.hpp>
 
 #include <cuda.h>
