@@ -240,11 +240,11 @@ int main(int argc, char *argv[])
         // so disable that behavior here.
         mgr.setSaveCheckpoint(world_idx, 0);
         // Checkpointing
-        if (input.keyPressed(Key::Z)) {
+        if (input.keyHit(Key::Z)) {
             mgr.setSaveCheckpoint(world_idx, 1);
         }
 
-        if (input.keyPressed(Key::X)) {
+        if (input.keyHit(Key::X)) {
             // Triggers a world reset.
             mgr.triggerLoadCheckpoint(world_idx);
         }

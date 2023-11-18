@@ -179,8 +179,9 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         // Agent parameters: physics state, grabstate
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
-            StepsRemaining &s, Progress &pr)
+            [&](Entity agent_e, Position &p, Rotation &r, Velocity &v,
+                GrabState &g, Reward &re, Done &d,
+                StepsRemaining &s, Progress &pr)
             {
                 p  = ckpt.agentStates[idx].p;
                 r  = ckpt.agentStates[idx].r;
@@ -192,14 +193,15 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
 
                 const int32_t &grabIdx = ckpt.agentStates[idx].grabIdx;
                 if (grabIdx != -1) {
-
                     // Find the new entity at the grab index;
                     Entity constraint_entity = ctx.makeEntity<ConstraintData>();
                     g.constraintEntity = constraint_entity;
 
-                    // The joint constraint has the wrong
-                    // entity id, so correct it below.
+                    // Need to update agent entity ID because this checkpoint
+                    // doesn't necessarily correspond to the world where it
+                    // was created. Nee to update e2 to point to the new cube.
                     JointConstraint j = ckpt.agentStates[idx].j;
+                    j.e1 = agent_e;
                     j.e2 = tempCubeEntities[grabIdx];
                     ctx.get<JointConstraint>(constraint_entity) = j;
                 }
@@ -294,29 +296,27 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
     Checkpoint &ckpt = ctx.singleton<Checkpoint>();
 
     Entity tempCubeEntities[consts::numRooms * 3];
-    {
-        // Cubes, run before agents to track IDs.
-        int idx = 0;
-        ctx.iterateQuery(ctx.data().ckptCubeQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, EntityType &eType, Entity &e)
-            {
-                if (eType == EntityType::Cube) {
-                    ckpt.cubeStates[idx].p = p;
-                    ckpt.cubeStates[idx].r = r;
-                    ckpt.cubeStates[idx].v = v;
-                    tempCubeEntities[idx] = e;
-                    idx++;
-                }
+    CountT num_cubes = 0;
+    // Cubes, run before agents to track IDs.
+    ctx.iterateQuery(ctx.data().ckptCubeQuery,
+        [&](Position &p, Rotation &r, Velocity &v, EntityType &eType, Entity &e)
+        {
+            if (eType == EntityType::Cube) {
+                ckpt.cubeStates[num_cubes].p = p;
+                ckpt.cubeStates[num_cubes].r = r;
+                ckpt.cubeStates[num_cubes].v = v;
+                tempCubeEntities[num_cubes] = e;
+                num_cubes += 1;
             }
-        );
-    }
-
+        }
+    );
 
     {
         // Agent parameters: physics state, reward, done.
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, GrabState &g, Reward &re, Done &d, 
+            [&](Entity, Position &p, Rotation &r, Velocity &v,
+                GrabState &g, Reward &re, Done &d,
             StepsRemaining &s, Progress &pr)
             {
                 ckpt.agentStates[idx].p = p;
@@ -330,9 +330,10 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
                     ckpt.agentStates[idx].j = ctx.get<JointConstraint>(g.constraintEntity);
                     // If the agent was grabbing, find where the info
                     // for that entity was written in the previous step.
-                    for (int32_t i = 0; i < consts::numRooms * 3; ++i) {
-                        if (ckpt.agentStates[idx].j.e2 == tempCubeEntities[i]) {
-                            ckpt.agentStates[idx].grabIdx = i;
+                    for (CountT cube_idx = 0; cube_idx < num_cubes; cube_idx++) {
+                        if (ckpt.agentStates[idx].j.e2 ==
+                                tempCubeEntities[cube_idx]) {
+                            ckpt.agentStates[idx].grabIdx = cube_idx;
                         }
                     }
                 } else {
@@ -1389,8 +1390,9 @@ Sim::Sim(Engine &ctx,
     ctx.data().doorQuery       = ctx.query<Position, OpenState>();
 
     // Create the queries for checkpointing.
-    ctx.data().ckptAgentQuery = ctx.query<Position, Rotation, Velocity, GrabState, Reward, Done, 
-    StepsRemaining, Progress>();
+    ctx.data().ckptAgentQuery = ctx.query<
+        Entity, Position, Rotation, Velocity, GrabState, Reward, Done,
+        StepsRemaining, Progress>();
     ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
     ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType, Entity>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
