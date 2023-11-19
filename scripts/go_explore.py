@@ -14,7 +14,7 @@ import math
 from pathlib import Path
 import warnings
 warnings.filterwarnings("error")
-#from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import time
 
@@ -113,7 +113,7 @@ class GoExplore:
         self.num_worlds = num_worlds
         self.num_agents = 2
         self.curr_returns = torch.zeros(num_worlds, device = device) # For tracking cumulative return of each state/bin
-        print("Curr returns shape", self.curr_returns.shape)
+        #print("Curr returns shape", self.curr_returns.shape)
         self.num_exploration_steps = exploration_steps
         self.binning = args.binning
         self.num_bins = args.num_bins # We can change this later
@@ -156,7 +156,7 @@ class GoExplore:
     # Uses: self.archive
     # Output: states
     def select_state(self):
-        print("About to select state")
+        #print("About to select state")
         # First select from visited bins with go-explore weighting function
         valid_bins = torch.nonzero(self.bin_count > 0).flatten()
         weights = 1./(torch.sqrt(self.bin_count[valid_bins]) + 1)
@@ -175,6 +175,7 @@ class GoExplore:
         self.checkpoint_resets[:, 0] = 1
         self.checkpoints[:] = states
         self.worlds.step()
+        self.obs[5][:] = 200
         return None
 
     # Step 3: Explore from state
@@ -208,19 +209,50 @@ class GoExplore:
             y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
             y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
             y_out = (y_0 + 110*y_1).int()
-            print("Max y progress", self_obs[:, 0, 3].max())
+            #print("Max agent 0 progress", self_obs[:, 0, 3].max())
+            #print("Max agent 1 progress", self_obs[:, 1, 3].max())
             return y_out
         elif self.binning == "y_pos_door":
             # Bin according to the y position of each agent
             self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
             y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
             y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
-            print("Max y progress", self_obs[:, 0, 3].max())
+            #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
             door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
             door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
             #print(door_status)
             return ((1 + door_status)*(y_0 + 110*y_1)).int()
+        elif self.binning == "x_y_pos_door":
+            # Bin according to the y position of each agent
+            self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
+            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            x_0 = (torch.clamp(self_obs[:, 0, 2], -0.2, 0.2) + 0.2) // 0.1 #
+            x_1 = (torch.clamp(self_obs[:, 1, 2], -0.2, 0.2) + 0.2) // 0.1 #
+            #print("Max y progress", self_obs[:, 0, 3].max())
+            # Now check if the door is open
+            door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
+            door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
+            #print(door_status)
+            return (y_0 + 110*y_1 + 110*110*x_0 + 110*110*4*x_1 + 110*110*4*4*door_status).int()
+        elif self.binning == "y_pos_door_block":
+            # Bin according to the y position of each agent
+            self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
+            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            #print("Max y progress", self_obs[:, 0, 3].max())
+            # Now check if the door is open
+            door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
+            door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
+            # Also bin block_pos since we want the blocks on the doors
+            #print(states[2].shape)
+            # Maybe for now average distance of the blocks from each agent
+            block_obs = states[2].view(self.num_worlds, self.num_agents, -1, 3)
+            block_val = block_obs[:, :, :, 2].mean(dim=1).sum(dim=1)*10
+            #print("Block val", block_val.mean())
+            #print(door_status)
+            return (block_val*(110*110*4) + door_status*(110*110) + (y_0 + 110*y_1)).int()
         else:
             raise NotImplementedError
 
@@ -254,7 +286,7 @@ def train(args):
     run_name = f"go_explore_{int(time.time())}"
     if args.use_logging:
         wandb.init(
-            project="go_explore_tabularworld",
+            project="escape_room_go_explore",
             entity=None,
             sync_tensorboard=True,
             config=vars(args),
@@ -270,7 +302,7 @@ def train(args):
     best_score = 0
     start_time = time.time()
     # Before starting, initialize the first state as an option
-    print("About to initialize archive")
+    #print("About to initialize archive")
     start_bin = goExplore.map_states_to_bins(goExplore.obs)
     goExplore.update_archive(start_bin, torch.zeros(args.num_worlds, device=dev))
     for i in range(args.num_steps):
@@ -282,21 +314,28 @@ def train(args):
         goExplore.explore_from_state()
         # Compute best score from archive
         # best_score = max(best_score, goExplore.compute_best_score())
-        print(goExplore.max_return)
+        #print(goExplore.max_return)
         # Log the step
         global_step = (i + 1)*args.num_worlds
         if args.use_logging and i % 10 == 0:
             writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
             writer.add_scalar("charts/best_score", goExplore.max_return, global_step)
             # Compute number of unvisited and underexplored states from archive
-            unvisited_states = torch.sum(goExplore.state_count == 0) # Need to fix this when num_states != num_bins
-            underexplored_states = torch.sum(goExplore.state_count < 10) # Need to fix this 
-            # Compute the same for bins
-            visited_bins = torch.unique(goExplore.state_bins).shape[0]
+            unvisited_bins = torch.sum(goExplore.bin_count == 0) # Need to fix this when num_states != num_bins
             # Log it all
-            writer.add_scalar("charts/unvisited_states", unvisited_states, global_step)
-            writer.add_scalar("charts/underexplored_states", underexplored_states, global_step)
-            writer.add_scalar("charts/unvisited_bins", goExplore.num_bins - visited_bins + 1, global_step)
+            writer.add_scalar("charts/unvisited_bins", unvisited_bins, global_step)
+            # Specific to escape room
+            second_room_count = (goExplore.obs[0][...,3] > 0.34).sum()
+            third_room_count = (goExplore.obs[0][...,3] > 0.67).sum()
+            exit_count = (goExplore.obs[0][...,3] > 1.01).sum()
+            door_count = (goExplore.obs[3][...,2] > 0.5).sum()
+            writer.add_scalar("charts/second_room_count", second_room_count, global_step)
+            writer.add_scalar("charts/third_room_count", third_room_count, global_step)
+            writer.add_scalar("charts/exit_count", exit_count, global_step)
+            writer.add_scalar("charts/door_count", door_count, global_step)
+            self_obs = goExplore.obs[0].view(goExplore.num_worlds, goExplore.num_agents, -1)
+            writer.add_scalar("charts/max_agent_0_progress", self_obs[:, 0, 3].max(), global_step)
+            writer.add_scalar("charts/max_agent_1_progress", self_obs[:, 1, 3].max(), global_step)
     # Return best score
     return best_score
 
