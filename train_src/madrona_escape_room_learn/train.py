@@ -528,6 +528,9 @@ def _update_loop(update_iter_fn : Callable,
         user_cb(update_idx, update_time, update_result, learning_state)
 
         # Check if we're in the 2nd or 3rd rooms, and potentially add to the checkpoint buffers
+        # Does this kill the diversity if it's not coming from the "uncontrolled" worlds? 
+        # We may just need to add a lot more checkpoints to the buffer
+        # We can also start introducing the binning function here
         print("Tensor shape", sim.obs[0].shape)
         per_world_tensor = sim.obs[0].reshape(-1, 2, 8) # 8 features, 2 agents
         third_room_flag = (per_world_tensor[...,3] > 0.67)

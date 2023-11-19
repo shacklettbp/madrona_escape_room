@@ -18,39 +18,38 @@ warnings.filterwarnings("error")
 torch.manual_seed(0)
 
 arg_parser = argparse.ArgumentParser()
+# General args
 arg_parser.add_argument('--gpu-id', type=int, default=0)
 arg_parser.add_argument('--ckpt-dir', type=str, required=True)
 arg_parser.add_argument('--run-name', type=str, required=True)
-arg_parser.add_argument('--restore', type=int)
+arg_parser.add_argument('--profile-report', action='store_true')
+arg_parser.add_argument('--fp16', action='store_true')
 
+# World gen args
 arg_parser.add_argument('--use-fixed-world', action='store_true')
 arg_parser.add_argument('--start-in-discovered-rooms', action='store_true')
 arg_parser.add_argument('--reward-mode', type=str, required=True)
-
 arg_parser.add_argument('--num-worlds', type=int, required=True)
+arg_parser.add_argument('--gpu-sim', action='store_true')
+
+# Learning args
 arg_parser.add_argument('--num-updates', type=int, required=True)
 arg_parser.add_argument('--steps-per-update', type=int, default=40)
 arg_parser.add_argument('--num-bptt-chunks', type=int, default=8)
-
 arg_parser.add_argument('--lr', type=float, default=1e-4)
 arg_parser.add_argument('--gamma', type=float, default=0.998)
 arg_parser.add_argument('--entropy-loss-coef', type=float, default=0.01)
 arg_parser.add_argument('--value-loss-coef', type=float, default=0.5)
 arg_parser.add_argument('--clip-value-loss', action='store_true')
-
-arg_parser.add_argument('--num-channels', type=int, default=256)
-arg_parser.add_argument('--separate-value', action='store_true')
-arg_parser.add_argument('--fp16', action='store_true')
-
-arg_parser.add_argument('--gpu-sim', action='store_true')
-arg_parser.add_argument('--profile-report', action='store_true')
-
 arg_parser.add_argument('--no-value-norm', action='store_true')
 arg_parser.add_argument('--no-advantage-norm', action='store_true')
-
 arg_parser.add_argument('--no-advantages', action='store_true')
 arg_parser.add_argument('--value-normalizer-decay', type=float, default=0.999)
+arg_parser.add_argument('--restore', type=int)
 
+# Architecture args
+arg_parser.add_argument('--num-channels', type=int, default=256)
+arg_parser.add_argument('--separate-value', action='store_true')
 args = arg_parser.parse_args()
 
 normalize_values = not args.no_value_norm
