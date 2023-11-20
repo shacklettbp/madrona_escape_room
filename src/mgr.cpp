@@ -344,6 +344,7 @@ Manager::Impl * Manager::Impl::init(
 
     RenderContext::Config render_ctx_cfg = {
         .gpuID = mgr_cfg.gpuID,
+        .enableBatchRenderer = true,
         .viewWidth = 64,
         .viewHeight = 64,
         .numWorlds = mgr_cfg.numWorlds,
@@ -351,7 +352,7 @@ Manager::Impl * Manager::Impl::init(
         .maxInstancesPerWorld = 1000,
         .defaultSimTickRate = 20,
         .execMode = mgr_cfg.execMode,
-        .renderViewer = mgr_cfg.renderViewer,
+        .enableViewer = mgr_cfg.renderViewer,
         .viewerWidth = 2730/2,
         .viewerHeight = 1536/2
     };
