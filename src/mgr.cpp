@@ -32,9 +32,11 @@ using namespace madrona::render;
 
 namespace madEscape {
 
-namespace InternalConfig {
+#if defined (MADRONA_MACOS)
+inline constexpr bool enableBatchRenderer = false;
+#else
 inline constexpr bool enableBatchRenderer = true;
-}
+#endif
 
 struct Manager::Impl {
     Config cfg;
@@ -100,7 +102,7 @@ struct Manager::CPUImpl final : Manager::Impl {
         // Prepare and render the images for all the worlds
         renderCtx.prepareRender();
 
-        if (InternalConfig::enableBatchRenderer) {
+        if (enableBatchRenderer) {
             renderCtx.batchedRender();
         }
     }
@@ -143,7 +145,7 @@ struct Manager::CUDAImpl final : Manager::Impl {
 
         renderCtx.prepareRender();
 
-        if (InternalConfig::enableBatchRenderer) {
+        if (enableBatchRenderer) {
             renderCtx.batchedRender();
         }
     }
@@ -354,7 +356,7 @@ Manager::Impl * Manager::Impl::init(
 
     RenderContext::Config render_ctx_cfg = {
         .gpuID = mgr_cfg.gpuID,
-        .enableBatchRenderer = InternalConfig::enableBatchRenderer,
+        .enableBatchRenderer = enableBatchRenderer,
         .viewWidth = 64,
         .viewHeight = 64,
         .numWorlds = mgr_cfg.numWorlds,
