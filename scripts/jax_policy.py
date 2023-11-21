@@ -151,8 +151,8 @@ class PolicyLSTM(nn.Module):
 def make_policy(dtype, use_simple_policy):
 
     if use_simple_policy:
-        #prefix = PrefixCommonSimpleAdapter(dtype)
-        prefix = ProcessObsMLP(dtype)
+        prefix = PrefixCommonSimpleAdapter(dtype)
+        #prefix = ProcessObsMLP(dtype)
         encoder = madrona_learn.BackboneEncoder(
             net = MLP(
                 num_channels = 256,
@@ -195,12 +195,12 @@ def make_policy(dtype, use_simple_policy):
         critic = DenseLayerCritic(dtype=dtype),
     )
 
-    #obs_preprocess = ObservationsNormalizer(
-    #    decay = 0.99999,
-    #    dtype = dtype,
-    #)
+    obs_preprocess = ObservationsNormalizer(
+        decay = 0.99999,
+        dtype = dtype,
+    )
 
     #obs_preprocess = ObservationsCaster(dtype=dtype)
-    obs_preprocess = None
+    #obs_preprocess = None
 
     return policy, obs_preprocess
