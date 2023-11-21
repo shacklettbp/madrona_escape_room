@@ -7,7 +7,7 @@ from flax import linen as nn
 import argparse
 from functools import partial
 from time import time
-from fractions import Fraction
+import os
 
 import madrona_escape_room
 from madrona_escape_room import SimFlags, RewardMode
@@ -92,8 +92,8 @@ def host_cb(update_id, metrics, train_state_mgr):
     last_update = update_id
 
     metrics.pretty_print()
-    vnorm_mu = train_state_mgr.train_states.value_normalize_stats['mu'][0][0]
-    vnorm_sigma = train_state_mgr.train_states.value_normalize_stats['sigma'][0][0]
+    vnorm_mu = train_state_mgr.train_states.value_normalizer_state['mu'][0][0]
+    vnorm_sigma = train_state_mgr.train_states.value_normalizer_state['sigma'][0][0]
     print(f"    Value Normalizer => Mean: {vnorm_mu: .3e}, σ: {vnorm_sigma: .3e}")
 
     print()
@@ -156,10 +156,15 @@ cfg = TrainConfig(
     seed = 5,
 )
 
-policy = make_policy(jnp.float16 if args.fp16 else jnp.float32, True)
+policy, obs_preprocess = make_policy(jnp.float16 if args.fp16 else jnp.float32, True)
 
-madrona_learn.train(dev, cfg, sim_step, init_sim_data, policy,
+if args.restore:
+    restore_ckpt = os.path.join(args.ckpt_dir, str(args.restore))
+else:
+    restore_ckpt = None
+
+madrona_learn.train(dev, cfg, sim_step, init_sim_data, policy, obs_preprocess,
     iter_cb, CustomMetricConfig(register_metrics = lambda metrics: metrics),
-    profile_port = args.profile_port)
+    restore_ckpt = restore_ckpt, profile_port = args.profile_port)
 
 del sim

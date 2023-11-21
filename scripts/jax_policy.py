@@ -12,10 +12,10 @@ import madrona_learn
 from madrona_learn import (
     ActorCritic, BackboneShared, BackboneSeparate,
     BackboneEncoder, RecurrentBackboneEncoder,
+    ObservationsNormalizer, ObservationsCaster,
 )
 
 from madrona_learn.models import (
-    EMANormalizeTree,
     LayerNorm,
     MLP,
     EntitySelfAttentionNet,
@@ -33,7 +33,7 @@ def pytorch_initializer():
     return jax.nn.initializers.variance_scaling(
         scale, mode='fan_in', distribution='normal')
 
-class ProcessObsCommon(nn.Module):
+class PrefixCommon(nn.Module):
     dtype: jnp.dtype
 
     @nn.compact
@@ -42,12 +42,6 @@ class ProcessObsCommon(nn.Module):
         obs,
         train,
     ):
-        obs = jax.tree_map(lambda x: jnp.asarray(x, dtype=self.dtype), obs)
-
-        jax.tree_map(lambda x: assert_valid_input(x), obs)
-
-        obs = EMANormalizeTree(0.99999)(obs, train)
-
         obs, self_ob = obs.pop('self')
         obs, steps_remaining = obs.pop('stepsRemaining')
         obs, lidar = obs.pop('lidar')
@@ -73,7 +67,7 @@ class ProcessObsCommon(nn.Module):
         })
         
 
-class ProcessObsCommonSimpleAdapter(nn.Module):
+class PrefixCommonSimpleAdapter(nn.Module):
     dtype: jnp.dtype
 
     @nn.compact
@@ -82,17 +76,18 @@ class ProcessObsCommonSimpleAdapter(nn.Module):
         obs,
         train,
     ):
-        processed = ProcessObsCommon(dtype = self.dtype)(obs, train)
+        xs = PrefixCommon(dtype = self.dtype)(obs, train)
 
-        processed, self = processed.pop('self')
-        processed = jax.tree_map(
-            lambda x: x.reshape(*x.shape[:-2], -1), processed)
+        xs, self = xs.pop('self')
+        xs = jax.tree_map(
+            lambda x: x.reshape(*x.shape[:-2], -1), xs)
 
-        processed = processed.copy({'self': self})
+        xs = xs.copy({'self': self})
 
-        flattened, _ = jax.tree_util.tree_flatten(processed)
+        flattened, _ = jax.tree_util.tree_flatten(xs)
 
         return jnp.concatenate(flattened, axis=-1)
+
 
 class ProcessObsMLP(nn.Module):
     dtype: jnp.dtype
@@ -119,6 +114,7 @@ class ProcessObsMLP(nn.Module):
         flattened, _ = jax.tree_util.tree_flatten(processed_obs)
 
         return jnp.concatenate(flattened, axis=-1)
+
 
 class PolicyLSTM(nn.Module):
     num_hidden_channels: int
@@ -155,6 +151,7 @@ class PolicyLSTM(nn.Module):
 def make_policy(dtype, use_simple_policy):
 
     if use_simple_policy:
+        #prefix = PrefixCommonSimpleAdapter(dtype)
         prefix = ProcessObsMLP(dtype)
         encoder = madrona_learn.BackboneEncoder(
             net = MLP(
@@ -170,7 +167,7 @@ def make_policy(dtype, use_simple_policy):
             #),
         )
     else:
-        prefix = ProcessObsCommon(dtype)
+        prefix = PrefixCommon(dtype)
         encoder = madrona_learn.BackboneEncoder(
             net = EntitySelfAttentionNet(
                 num_embed_channels = 128,
@@ -198,4 +195,12 @@ def make_policy(dtype, use_simple_policy):
         critic = DenseLayerCritic(dtype=dtype),
     )
 
-    return policy
+    #obs_preprocess = ObservationsNormalizer(
+    #    decay = 0.99999,
+    #    dtype = dtype,
+    #)
+
+    #obs_preprocess = ObservationsCaster(dtype=dtype)
+    obs_preprocess = None
+
+    return policy, obs_preprocess

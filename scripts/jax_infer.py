@@ -88,9 +88,9 @@ dev = jax.devices()[0]
 
 dtype = jnp.float16 if args.fp16 else jnp.float32
 
-policy = make_policy(dtype, True)
+policy, obs_preprocess = make_policy(dtype, True)
 
 madrona_learn.eval_ckpt(dev, args.ckpt_path, args.num_steps, sim_step,
-    init_sim_data, policy, iter_cb, dtype)
+    init_sim_data, policy, obs_preprocess, iter_cb, dtype)
 
 del sim
