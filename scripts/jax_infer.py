@@ -23,6 +23,7 @@ arg_parser.add_argument('--num-steps', type=int, default=200)
 arg_parser.add_argument('--ckpt-path', type=str, required=True)
 arg_parser.add_argument('--action-dump-path', type=str)
 arg_parser.add_argument('--fp16', action='store_true')
+arg_parser.add_argument('--bf16', action='store_true')
 arg_parser.add_argument('--gpu-sim', action='store_true')
 arg_parser.add_argument('--gpu-id', type=int, default=0)
 
@@ -86,9 +87,14 @@ def iter_cb(step_data):
 
 dev = jax.devices()[0]
 
-dtype = jnp.float16 if args.fp16 else jnp.float32
+if args.fp16:
+    dtype = jnp.float16
+elif args.bf16:
+    dtype = jnp.bfloat16
+else:
+    dtype = jnp.float32
 
-policy, obs_preprocess = make_policy(dtype, True)
+policy, obs_preprocess = make_policy(dtype, False)
 
 madrona_learn.eval_ckpt(dev, args.ckpt_path, args.num_steps, sim_step,
     init_sim_data, policy, obs_preprocess, iter_cb, dtype)

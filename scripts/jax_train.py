@@ -44,6 +44,7 @@ arg_parser.add_argument('--clip-value-loss', action='store_true')
 arg_parser.add_argument('--num-channels', type=int, default=256)
 arg_parser.add_argument('--separate-value', action='store_true')
 arg_parser.add_argument('--fp16', action='store_true')
+arg_parser.add_argument('--bf16', action='store_true')
 
 arg_parser.add_argument('--pbt-ensemble-size', type=int, default=1)
 arg_parser.add_argument('--pbt-past-policies', type=int, default=0)
@@ -131,6 +132,13 @@ if args.pbt_ensemble_size != 1 or args.pbt_past_policies != 0:
 else:
     pbt_cfg = None
 
+if args.fp16:
+    dtype = jnp.float16
+elif args.bf16:
+    dtype = jnp.bfloat16
+else:
+    dtype = jnp.float32
+
 cfg = TrainConfig(
     num_worlds = args.num_worlds,
     num_agents_per_world = 2,
@@ -141,7 +149,7 @@ cfg = TrainConfig(
     gamma = args.gamma,
     gae_lambda = 0.95,
     algo = PPOConfig(
-        num_mini_batches = 1,
+        num_mini_batches = 2,
         clip_coef = 0.2,
         value_loss_coef = args.value_loss_coef,
         entropy_coef = args.entropy_loss_coef,
@@ -152,11 +160,11 @@ cfg = TrainConfig(
     ),
     pbt = pbt_cfg,
     value_normalizer_decay = 0.999,
-    mixed_precision = args.fp16,
+    compute_dtype = dtype,
     seed = 5,
 )
 
-policy, obs_preprocess = make_policy(jnp.float16 if args.fp16 else jnp.float32, True)
+policy, obs_preprocess = make_policy(dtype, False)
 
 if args.restore:
     restore_ckpt = os.path.join(args.ckpt_dir, str(args.restore))
