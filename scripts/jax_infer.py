@@ -94,7 +94,7 @@ elif args.bf16:
 else:
     dtype = jnp.float32
 
-policy, obs_preprocess = make_policy(dtype, False)
+policy, obs_preprocess = make_policy(dtype, True)
 
 madrona_learn.eval_ckpt(dev, args.ckpt_path, args.num_steps, sim_step,
     init_sim_data, policy, obs_preprocess, iter_cb, dtype)

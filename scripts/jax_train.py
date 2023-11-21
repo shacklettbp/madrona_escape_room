@@ -104,14 +104,18 @@ def host_cb(update_id, metrics, train_state_mgr):
 
     return ()
 
-def iter_cb(update_idx, update_time, metrics, train_state_mgr):
+def iter_cb(update_idx, metrics, train_state_mgr):
     cb = partial(jax.experimental.io_callback, host_cb, ())
     noop = lambda *args: ()
 
     update_id = update_idx + 1
-    lax.cond(jnp.logical_or(update_id == 1, update_id % 10 == 0), cb, noop,
+
+    should_callback = jnp.logical_or(update_id == 1, update_id % 10 == 0)
+
+    lax.cond(should_callback, cb, noop,
              update_id, metrics, train_state_mgr)
-    #cb(update_id, metrics, train_state_mgr)
+
+    return should_callback
 
 dev = jax.devices()[0]
 
@@ -164,7 +168,7 @@ cfg = TrainConfig(
     seed = 5,
 )
 
-policy, obs_preprocess = make_policy(dtype, False)
+policy, obs_preprocess = make_policy(dtype, True)
 
 if args.restore:
     restore_ckpt = os.path.join(args.ckpt_dir, str(args.restore))
@@ -172,7 +176,7 @@ else:
     restore_ckpt = None
 
 madrona_learn.train(dev, cfg, sim_step, init_sim_data, policy, obs_preprocess,
-    iter_cb, CustomMetricConfig(register_metrics = lambda metrics: metrics),
+    iter_cb, CustomMetricConfig(add_metrics = lambda metrics: metrics),
     restore_ckpt = restore_ckpt, profile_port = args.profile_port)
 
 del sim
