@@ -32,6 +32,10 @@ using namespace madrona::render;
 
 namespace madEscape {
 
+namespace InternalConfig {
+inline constexpr bool enableBatchRenderer = true;
+}
+
 struct Manager::Impl {
     Config cfg;
     PhysicsLoader physicsLoader;
@@ -95,7 +99,10 @@ struct Manager::CPUImpl final : Manager::Impl {
 
         // Prepare and render the images for all the worlds
         renderCtx.prepareRender();
-        renderCtx.batchedRender();
+
+        if (InternalConfig::enableBatchRenderer) {
+            renderCtx.batchedRender();
+        }
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
@@ -135,7 +142,10 @@ struct Manager::CUDAImpl final : Manager::Impl {
         gpuExec.run();
 
         renderCtx.prepareRender();
-        renderCtx.batchedRender();
+
+        if (InternalConfig::enableBatchRenderer) {
+            renderCtx.batchedRender();
+        }
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
@@ -344,7 +354,7 @@ Manager::Impl * Manager::Impl::init(
 
     RenderContext::Config render_ctx_cfg = {
         .gpuID = mgr_cfg.gpuID,
-        .enableBatchRenderer = true,
+        .enableBatchRenderer = InternalConfig::enableBatchRenderer,
         .viewWidth = 64,
         .viewHeight = 64,
         .numWorlds = mgr_cfg.numWorlds,
