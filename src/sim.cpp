@@ -1350,7 +1350,6 @@ Sim::Sim(Engine &ctx,
     : WorldBase(ctx),
       episodeMgr(init.episodeMgr)
 {
-    printf("About to access illegally the first time\n");
     // Currently the physics system needs an upper bound on the number of
     // entities that will be stored in the BVH. We plan to fix this in
     // a future release.
@@ -1377,7 +1376,6 @@ Sim::Sim(Engine &ctx,
     createPersistentEntities(ctx);
 
     // Create the singleton component here?
-    printf("About to access illegally the first time\n");
     GlobalProgress &globalProgress = ctx.singleton<GlobalProgress>();
     globalProgress.progressPtr = init.progressPtr;
 
