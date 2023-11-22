@@ -7,12 +7,6 @@
 #include <fstream>
 #include <random>
 
-#include <madrona/viz/interop.hpp>
-
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <driver_types.h>
-
 using namespace madrona;
 using namespace madrona::viz;
 
@@ -60,24 +54,6 @@ int main(int argc, char *argv[])
             rand_actions = true;
         }
     }
-
-    viz::VizECSBridge dummy_bridge = {};
-    cudaMalloc(&dummy_bridge.views, 
-                  sizeof(viz::PerspectiveCameraData) * num_worlds * 10);
-    cudaMalloc(&dummy_bridge.instances, 
-                  sizeof(viz::InstanceData) * num_worlds * 30);
-    cudaMalloc(&dummy_bridge.instanceOffsets, 
-                  sizeof(int32_t) * num_worlds);
-    cudaMalloc(&dummy_bridge.totalNumViews, 
-                  sizeof(int32_t));
-    cudaMalloc(&dummy_bridge.totalNumInstances, 
-                  sizeof(int32_t));
-    dummy_bridge.renderWidth = 64;
-    dummy_bridge.renderHeight = 64;
-
-    viz::VizECSBridge *gpu_bridge_ptr;
-    cudaMalloc(&gpu_bridge_ptr, sizeof(viz::VizECSBridge));
-    cudaMemcpy(gpu_bridge_ptr, &dummy_bridge, sizeof(dummy_bridge), cudaMemcpyHostToDevice);
 
     Manager mgr({
         .execMode = exec_mode,
