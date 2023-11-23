@@ -1,5 +1,6 @@
 #include <madrona/viz/viewer_controller.hpp>
 
+#include "madrona/viz/render_config.hpp"
 #include "sim.hpp"
 #include "mgr.hpp"
 #include "types.hpp"
@@ -69,7 +70,7 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
-        .renderViewer = true
+        .renderFlags = (render::RenderContextFlags::RenderBatch | render::RenderContextFlags::RenderViewer)
     });
 
     float camera_move_speed = 10.f;

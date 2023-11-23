@@ -7,6 +7,8 @@
 #include <fstream>
 #include <random>
 
+#include <madrona/heap_array.hpp>
+
 using namespace madrona;
 using namespace madrona::viz;
 
@@ -60,7 +62,7 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = (uint32_t)num_worlds,
         .autoReset = false,
-        .renderViewer = false
+        .renderFlags = madrona::render::RenderContextFlags::None
     });
 
     std::random_device rd;

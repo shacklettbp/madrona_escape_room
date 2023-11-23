@@ -10,7 +10,7 @@
 #include <madrona/py/utils.hpp>
 #include <madrona/exec_mode.hpp>
 
-#include <madrona/viz/system.hpp>
+#include <madrona/viz/render_config.hpp>
 #include <madrona/viz/viewer_controller.hpp>
 
 namespace madEscape {
@@ -28,8 +28,7 @@ public:
         int gpuID; // Which GPU for CUDA backend?
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
-        bool renderViewer; // Do we want to render the viewer? (this will
-                           // create a window)
+        madrona::render::RenderContextFlags renderFlags;
     };
 
     MGR_EXPORT Manager(

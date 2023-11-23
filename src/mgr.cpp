@@ -1,5 +1,6 @@
 #include "mgr.hpp"
 #include "madrona/render/batch_renderer_system.hpp"
+#include "madrona/viz/render_config.hpp"
 #include "sim.hpp"
 
 #include <madrona/utils.hpp>
@@ -45,6 +46,7 @@ struct Manager::Impl {
     WorldReset *worldResetBuffer;
     Action *agentActionsBuffer;
     RenderContext renderCtx;
+    RenderContextFlags renderCtxFlags;
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
@@ -57,7 +59,8 @@ struct Manager::Impl {
           episodeMgr(ep_mgr),
           worldResetBuffer(reset_buffer),
           agentActionsBuffer(action_buffer),
-          renderCtx(std::move(render_ctx))
+          renderCtx(std::move(render_ctx)),
+          renderCtxFlags(mgr_cfg.renderFlags)
     {
     }
 
@@ -100,9 +103,12 @@ struct Manager::CPUImpl final : Manager::Impl {
         cpuExec.run();
 
         // Prepare and render the images for all the worlds
-        renderCtx.prepareRender();
+        if (renderCtxFlags != RenderContextFlags::None) {
+            renderCtx.prepareRender();
+        }
 
-        if (enableBatchRenderer) {
+        if ((renderCtxFlags & RenderContextFlags::RenderBatch) != 
+                RenderContextFlags::None) {
             renderCtx.batchedRender();
         }
     }
@@ -143,9 +149,13 @@ struct Manager::CUDAImpl final : Manager::Impl {
     {
         gpuExec.run();
 
-        renderCtx.prepareRender();
+        // Prepare and render the images for all the worlds
+        if (renderCtxFlags != RenderContextFlags::None) {
+            renderCtx.prepareRender();
+        }
 
-        if (enableBatchRenderer) {
+        if ((renderCtxFlags & RenderContextFlags::RenderBatch) != 
+                RenderContextFlags::None) {
             renderCtx.batchedRender();
         }
     }
@@ -356,7 +366,8 @@ Manager::Impl * Manager::Impl::init(
 
     RenderContext::Config render_ctx_cfg = {
         .gpuID = mgr_cfg.gpuID,
-        .enableBatchRenderer = enableBatchRenderer,
+        .enableBatchRenderer = (mgr_cfg.renderFlags & RenderContextFlags::RenderBatch) !=
+            RenderContextFlags::None,
         .viewWidth = 64,
         .viewHeight = 64,
         .numWorlds = mgr_cfg.numWorlds,
@@ -364,7 +375,8 @@ Manager::Impl * Manager::Impl::init(
         .maxInstancesPerWorld = 1000,
         .defaultSimTickRate = 20,
         .execMode = mgr_cfg.execMode,
-        .enableViewer = mgr_cfg.renderViewer,
+        .enableViewer = (mgr_cfg.renderFlags & RenderContextFlags::RenderViewer) != 
+            RenderContextFlags::None,
         .viewerWidth = 2730/2,
         .viewerHeight = 1536/2
     };
@@ -385,7 +397,8 @@ Manager::Impl * Manager::Impl::init(
         loadRenderObjects(render_ctx);
 
         sim_cfg.bridge = render_ctx.getBridge();
-        sim_cfg.enableViewer = true;
+        sim_cfg.enableViewer = (mgr_cfg.renderFlags & RenderContextFlags::RenderViewer) !=
+            RenderContextFlags::None;
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
@@ -442,7 +455,8 @@ Manager::Impl * Manager::Impl::init(
         loadRenderObjects(render_ctx);
 
         sim_cfg.bridge = render_ctx.getBridge();
-        sim_cfg.enableViewer = true;
+        sim_cfg.enableViewer = (mgr_cfg.renderFlags & RenderContextFlags::RenderViewer) !=
+            RenderContextFlags::None;
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
