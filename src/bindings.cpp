@@ -25,6 +25,7 @@ NB_MODULE(madrona_escape_room, m) {
                 .gpuID = (int)gpu_id,
                 .numWorlds = (uint32_t)num_worlds,
                 .autoReset = auto_reset,
+                .renderFlags = (madrona::render::RenderContextFlags::None)
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
