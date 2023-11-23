@@ -555,7 +555,7 @@ Tensor Manager::actionTensor() const
     return impl_->exportTensor(ExportID::Action, Tensor::ElementType::Int32,
         {
             impl_->cfg.numWorlds * consts::numAgents,
-            4,
+            5,
         });
 }
 
@@ -693,13 +693,15 @@ void Manager::setAction(int32_t world_idx,
                         int32_t move_amount,
                         int32_t move_angle,
                         int32_t rotate,
-                        int32_t grab)
+                        int32_t grab,
+                        int32_t jump)
 {
     Action action { 
         .moveAmount = move_amount,
         .moveAngle = move_angle,
         .rotate = rotate,
         .grab = grab,
+        .jump = jump
     };
 
     auto *action_ptr = impl_->agentActionsBuffer +

@@ -411,7 +411,8 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 // Translates discrete actions from the Action component to forces
 // used by the physics simulation.
 inline void movementSystem(Engine &,
-                           Action &action, 
+                           Action &action,
+                           Position &pos, 
                            Rotation &rot, 
                            ExternalForce &external_force,
                            ExternalTorque &external_torque)
@@ -433,13 +434,21 @@ inline void movementSystem(Engine &,
     float f_x = move_amount * sinf(move_angle);
     float f_y = move_amount * cosf(move_angle);
 
+    float f_z = 0.0f;
+
+    if (action.jump == 1) {
+        // Only jump if sufficiently close to ground.
+        f_z = 300.0f; // max move amount.
+    }
+
     constexpr float turn_delta_per_bucket = 
         turn_max / (consts::numTurnBuckets / 2);
     float t_z =
         turn_delta_per_bucket * (action.rotate - consts::numTurnBuckets / 2);
 
-    external_force = cur_rot.rotateVec({ f_x, f_y, 0 });
+    external_force = cur_rot.rotateVec({ f_x, f_y, f_z });
     external_torque = Vector3 { 0, 0, t_z };
+
 }
 
 // Implements the grab action by casting a short ray in front of the agent
@@ -1107,6 +1116,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     auto move_sys = builder.addToGraph<ParallelForNode<Engine,
         movementSystem,
             Action,
+            Position,
             Rotation,
             ExternalForce,
             ExternalTorque
