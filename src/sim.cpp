@@ -415,7 +415,8 @@ inline void movementSystem(Engine &,
                            Position &pos, 
                            Rotation &rot, 
                            ExternalForce &external_force,
-                           ExternalTorque &external_torque)
+                           ExternalTorque &external_torque,
+                           madrona::phys::solver::SubstepPrevState &prev_state)
 {
 
     constexpr float move_max = 1000;
@@ -436,9 +437,9 @@ inline void movementSystem(Engine &,
 
     float f_z = 0.0f;
 
-    if (action.jump == 1) {
-        // Only jump if sufficiently close to ground.
-        f_z = 300.0f; // max move amount.
+    if (action.jump == 1 && abs(pos.z - prev_state.prevPosition.z) < 1e-3) {
+        // Only jump if sufficiently close to a surface.
+        f_z = 4000.0f; // max move amount.
     }
 
     constexpr float turn_delta_per_bucket = 
@@ -1119,7 +1120,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Position,
             Rotation,
             ExternalForce,
-            ExternalTorque
+            ExternalTorque,
+            madrona::phys::solver::SubstepPrevState
         >>({});
 
     // Scripted door behavior
