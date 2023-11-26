@@ -78,7 +78,9 @@ void createPersistentEntities(Engine &ctx)
 {
     // Create the floor entity, just a simple static plane.
     ctx.data().floorPlane = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().floorPlane);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().floorPlane);
+    }
     setupRigidBodyEntity(
         ctx,
         ctx.data().floorPlane,
@@ -91,7 +93,9 @@ void createPersistentEntities(Engine &ctx)
     // Create the outer wall entities
     // Behind
     ctx.data().borders[0] = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[0]);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[0]);
+    }
     setupRigidBodyEntity(
         ctx,
         ctx.data().borders[0],
@@ -112,7 +116,9 @@ void createPersistentEntities(Engine &ctx)
 
     // Right
     ctx.data().borders[1] = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[1]);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[1]);
+    }
     setupRigidBodyEntity(
         ctx,
         ctx.data().borders[1],
@@ -133,7 +139,9 @@ void createPersistentEntities(Engine &ctx)
 
     // Left
     ctx.data().borders[2] = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[2]);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[2]);
+    }
     setupRigidBodyEntity(
         ctx,
         ctx.data().borders[2],
@@ -159,11 +167,13 @@ void createPersistentEntities(Engine &ctx)
         Entity agent = ctx.data().agents[i] = ctx.makeEntity<Agent>();
 
         // Make the agent renderable but also create a view for it.
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, agent);
-        viz::VizRenderingSystem::attachEntityToView(ctx,
-                                                    agent,
-                                                    100.f, 0.001f,
-                                                    1.5f * math::up);
+        if (ctx.data().enableRender) {
+            viz::VizRenderingSystem::makeEntityRenderable(ctx, agent);
+            viz::VizRenderingSystem::attachEntityToView(ctx,
+                    agent,
+                    100.f, 0.001f,
+                    1.5f * math::up);
+        }
 
         ctx.get<Scale>(agent) = Diag3x3 { 1, 1, 1 };
         ctx.get<ObjectID>(agent) = ObjectID { (int32_t)SimObject::Agent };
@@ -205,12 +215,6 @@ static void resetPersistentEntities(Engine &ctx)
      for (CountT i = 0; i < consts::numAgents; i++) {
          Entity agent_entity = ctx.data().agents[i];
          registerRigidBodyEntity(ctx, agent_entity, SimObject::Agent);
-
-#if 0
-         ctx.get<viz::VizCamera>(agent_entity) =
-             viz::VizRenderingSystem::setupView(ctx, 90.f, 0.001f,
-                 1.5f * math::up, (int32_t)i);
-#endif
 
          // Place the agents near the starting wall
          Vector3 pos {
@@ -270,7 +274,9 @@ static void makeEndWall(Engine &ctx,
         consts::worldWidth - 0.75f * consts::doorWidth);
     float left_len = door_center - 0.5f * consts::doorWidth;
     Entity left_wall = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, left_wall);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, left_wall);
+    }
     setupRigidBodyEntity(
         ctx,
         left_wall,
@@ -293,7 +299,9 @@ static void makeEndWall(Engine &ctx,
     float right_len =
         consts::worldWidth - door_center - 0.5f * consts::doorWidth;
     Entity right_wall = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, right_wall);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, right_wall);
+    }
     setupRigidBodyEntity(
         ctx,
         right_wall,
@@ -314,7 +322,9 @@ static void makeEndWall(Engine &ctx,
     registerRigidBodyEntity(ctx, right_wall, SimObject::Wall);
 
     Entity door = ctx.makeEntity<DoorEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, door);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, door);
+    }
     setupRigidBodyEntity(
         ctx,
         door,
@@ -345,7 +355,9 @@ static Entity makeButton(Engine &ctx,
                          float button_y)
 {
     Entity button = ctx.makeEntity<ButtonEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, button);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, button);
+    }
     ctx.get<Position>(button) = Vector3 {
         button_x,
         button_y,
@@ -370,7 +382,9 @@ static Entity makeCube(Engine &ctx,
                        float scale = 1.f)
 {
     Entity cube = ctx.makeEntity<PhysicsEntity>();
-    viz::VizRenderingSystem::makeEntityRenderable(ctx, cube);
+    if (ctx.data().enableRender) {
+        viz::VizRenderingSystem::makeEntityRenderable(ctx, cube);
+    }
     setupRigidBodyEntity(
         ctx,
         cube,

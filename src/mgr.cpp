@@ -360,7 +360,6 @@ Manager::Impl * Manager::Impl::init(
     const Manager::Config &mgr_cfg)
 {
     Sim::Config sim_cfg {
-        0,
         mgr_cfg.autoReset,
         nullptr
     };
@@ -397,9 +396,8 @@ Manager::Impl * Manager::Impl::init(
         RenderContext render_ctx(render_ctx_cfg);
         loadRenderObjects(render_ctx);
 
-        sim_cfg.bridge = render_ctx.getBridge();
-        sim_cfg.enableViewer = (mgr_cfg.renderFlags & RenderContextFlags::RenderViewer) !=
-            RenderContextFlags::None;
+        sim_cfg.bridge = (mgr_cfg.renderFlags == RenderContextFlags::None) ? 
+                         nullptr : render_ctx.getBridge();
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
@@ -455,9 +453,8 @@ Manager::Impl * Manager::Impl::init(
         RenderContext render_ctx(render_ctx_cfg);
         loadRenderObjects(render_ctx);
 
-        sim_cfg.bridge = render_ctx.getBridge();
-        sim_cfg.enableViewer = (mgr_cfg.renderFlags & RenderContextFlags::RenderViewer) !=
-            RenderContextFlags::None;
+        sim_cfg.bridge = (mgr_cfg.renderFlags == RenderContextFlags::None) ? 
+                         nullptr : render_ctx.getBridge();
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 

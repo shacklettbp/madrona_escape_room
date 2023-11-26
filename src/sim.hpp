@@ -55,7 +55,6 @@ enum class SimObject : uint32_t {
 // in this class in order to ensure efficient access patterns.
 struct Sim : public madrona::WorldBase {
     struct Config {
-        bool enableViewer;
         bool autoReset;
         const madrona::viz::VizECSBridge *bridge;
     };
@@ -103,8 +102,8 @@ struct Sim : public madrona::WorldBase {
     // at the end of each episode?
     bool autoReset;
 
-    // Are we visualizing the simulation in the viewer?
-    bool enableVizRender;
+    // Are we enabling rendering? (whether with the viewer or not)
+    bool enableRender;
 };
 
 class Engine : public ::madrona::CustomContext<Engine, Sim> {

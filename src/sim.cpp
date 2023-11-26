@@ -16,8 +16,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
 {
     base::registerTypes(registry);
     phys::RigidBodyPhysicsSystem::registerTypes(registry);
+
     viz::VizRenderingSystem::registerTypes(registry, cfg.bridge);
-    // render::BatchRenderingSystem::registerTypes(registry, cfg.bridge);
 
     registry.registerComponent<Action>();
     registry.registerComponent<SelfObservation>();
@@ -74,23 +74,28 @@ static inline void cleanupWorld(Engine &ctx)
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
-                viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.entities[j]);
+                if (ctx.data().enableRender) {
+                    viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.entities[j]);
+                }
                 ctx.destroyEntity(room.entities[j]);
             }
         }
 
-        viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[0]);
+        if (ctx.data().enableRender) {
+            viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[0]);
+            viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[1]);
+            viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.door);
+        }
+
         ctx.destroyEntity(room.walls[0]);
-        viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[1]);
         ctx.destroyEntity(room.walls[1]);
-        viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.door);
         ctx.destroyEntity(room.door);
     }
 }
 
 static inline void initWorld(Engine &ctx)
 {
-    if (ctx.data().enableVizRender) {
+    if (ctx.data().enableRender) {
         viz::VizRenderingSystem::reset(ctx);
     }
 
@@ -130,7 +135,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
         cleanupWorld(ctx);
         initWorld(ctx);
 
-        if (ctx.data().enableVizRender) {
+        if (ctx.data().enableRender) {
             viz::VizRenderingSystem::markEpisode(ctx);
         }
     }
@@ -721,7 +726,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Lidar
         >>({post_reset_broadphase});
 
-    if (cfg.enableViewer) {
+    if (cfg.bridge) {
         viz::VizRenderingSystem::setupTasks(builder, {reset_sys});
     }
 
@@ -765,9 +770,9 @@ Sim::Sim(Engine &ctx,
         max_total_entities, max_total_entities * max_total_entities / 2,
         consts::numAgents);
 
-    enableVizRender = cfg.enableViewer;
+    enableRender = cfg.bridge != nullptr;
 
-    if (enableVizRender) {
+    if (enableRender) {
         viz::VizRenderingSystem::init(ctx, cfg.bridge);
     }
 
