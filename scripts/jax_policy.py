@@ -12,7 +12,7 @@ import madrona_learn
 from madrona_learn import (
     ActorCritic, BackboneShared, BackboneSeparate,
     BackboneEncoder, RecurrentBackboneEncoder,
-    ObservationsNormalizer, ObservationsCaster,
+    ObservationsEMANormalizer, ObservationsCaster,
 )
 
 from madrona_learn.models import (
@@ -195,7 +195,7 @@ def make_policy(dtype, use_simple_policy):
         critic = DenseLayerCritic(dtype=dtype),
     )
 
-    obs_preprocess = ObservationsNormalizer(
+    obs_preprocess = ObservationsEMANormalizer.create(
         decay = 0.99999,
         dtype = dtype,
     )
