@@ -463,7 +463,7 @@ Manager::Impl * Manager::Impl::init(
         for (int64_t i = 0; i < (int64_t)mgr_cfg.numWorlds; i++) {
             world_inits[i] = WorldInit {
                 episode_mgr,
-                phys_obj_mgr
+                phys_obj_mgr,
             };
         }
 
@@ -677,9 +677,10 @@ void Manager::setAction(int32_t world_idx,
     }
 }
 
-MGR_EXPORT madrona::viz::ViewerController Manager::makeViewerController(float speed,
-                                                                        math::Vector3 pos,
-                                                                        math::Quat rot)
+madrona::viz::ViewerController Manager::makeViewerController(
+    float speed,
+    math::Vector3 pos,
+    math::Quat rot)
 {
     return impl_->renderCtx.makeViewerController(speed, pos, rot);
 }

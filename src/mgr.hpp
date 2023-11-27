@@ -1,10 +1,3 @@
-#pragma once
-#ifdef madrona_3d_example_mgr_EXPORTS
-#define MGR_EXPORT MADRONA_EXPORT
-#else
-#define MGR_EXPORT MADRONA_IMPORT
-#endif
-
 #include <memory>
 
 #include <madrona/py/utils.hpp>
@@ -31,38 +24,36 @@ public:
         madrona::render::RenderContextFlags renderFlags;
     };
 
-    MGR_EXPORT Manager(
-        const Config &cfg);
-    MGR_EXPORT ~Manager();
+    Manager(const Config &cfg);
+    ~Manager();
 
-    MGR_EXPORT void step();
+    void step();
 
     // These functions export Tensor objects that link the ECS
     // simulation state to the python bindings / PyTorch tensors (src/bindings.cpp)
-    MGR_EXPORT madrona::py::Tensor resetTensor() const;
-    MGR_EXPORT madrona::py::Tensor actionTensor() const;
-    MGR_EXPORT madrona::py::Tensor rewardTensor() const;
-    MGR_EXPORT madrona::py::Tensor doneTensor() const;
-    MGR_EXPORT madrona::py::Tensor selfObservationTensor() const;
-    MGR_EXPORT madrona::py::Tensor partnerObservationsTensor() const;
-    MGR_EXPORT madrona::py::Tensor roomEntityObservationsTensor() const;
-    MGR_EXPORT madrona::py::Tensor doorObservationTensor() const;
-    MGR_EXPORT madrona::py::Tensor lidarTensor() const;
-    MGR_EXPORT madrona::py::Tensor stepsRemainingTensor() const;
+    madrona::py::Tensor resetTensor() const;
+    madrona::py::Tensor actionTensor() const;
+    madrona::py::Tensor rewardTensor() const;
+    madrona::py::Tensor doneTensor() const;
+    madrona::py::Tensor selfObservationTensor() const;
+    madrona::py::Tensor partnerObservationsTensor() const;
+    madrona::py::Tensor roomEntityObservationsTensor() const;
+    madrona::py::Tensor doorObservationTensor() const;
+    madrona::py::Tensor lidarTensor() const;
+    madrona::py::Tensor stepsRemainingTensor() const;
 
     // These functions are used by the viewer to control the simulation
     // with keyboard inputs in place of DNN policy actions
-    MGR_EXPORT void triggerReset(int32_t world_idx);
-    MGR_EXPORT void setAction(int32_t world_idx,
-                              int32_t agent_idx,
-                              int32_t move_amount,
-                              int32_t move_angle,
-                              int32_t rotate,
-                              int32_t grab);
+    void triggerReset(int32_t world_idx);
+    void setAction(int32_t world_idx,
+                   int32_t agent_idx,
+                   int32_t move_amount,
+                   int32_t move_angle,
+                   int32_t rotate,
+                   int32_t grab);
 
-    MGR_EXPORT madrona::viz::ViewerController makeViewerController(float speed,
-                                                                   madrona::math::Vector3 pos,
-                                                                   madrona::math::Quat rot);
+    madrona::viz::ViewerController makeViewerController(
+        float speed, madrona::math::Vector3 pos, madrona::math::Quat rot);
 
 private:
     struct Impl;
