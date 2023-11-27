@@ -75,16 +75,20 @@ static inline void cleanupWorld(Engine &ctx)
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
                 if (ctx.data().enableRender) {
-                    viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.entities[j]);
+                    viz::VizRenderingSystem::cleanupRenderableEntity(
+                        ctx, room.entities[j]);
                 }
                 ctx.destroyEntity(room.entities[j]);
             }
         }
 
         if (ctx.data().enableRender) {
-            viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[0]);
-            viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.walls[1]);
-            viz::VizRenderingSystem::cleanupRenderableEntity(ctx, room.door);
+            viz::VizRenderingSystem::cleanupRenderableEntity(
+                ctx, room.walls[0]);
+            viz::VizRenderingSystem::cleanupRenderableEntity(
+                ctx, room.walls[1]);
+            viz::VizRenderingSystem::cleanupRenderableEntity(
+                ctx, room.door);
         }
 
         ctx.destroyEntity(room.walls[0]);

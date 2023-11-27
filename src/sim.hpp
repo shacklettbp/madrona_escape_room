@@ -8,12 +8,6 @@
 #include "init.hpp"
 #include "rng.hpp"
 
-namespace madrona::render {
-
-struct BatchRendererECSBridge;
-
-}
-
 namespace madEscape {
 
 class Engine;
