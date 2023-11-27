@@ -70,7 +70,12 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
-        .renderFlags = (render::RenderContextFlags::RenderBatch | render::RenderContextFlags::RenderViewer)
+        .renderFlags = (
+#if !defined (MADRONA_MACOS)
+            render::RenderContextFlags::RenderBatch | 
+#endif
+             render::RenderContextFlags::RenderViewer
+        )
     });
 
     float camera_move_speed = 10.f;

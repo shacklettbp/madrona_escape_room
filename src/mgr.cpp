@@ -33,13 +33,6 @@ using namespace madrona::render;
 
 namespace madEscape {
 
-// For now, off by default on all platforms
-#if defined (MADRONA_MACOS)
-inline constexpr bool enableBatchRenderer = false;
-#else
-inline constexpr bool enableBatchRenderer = false;
-#endif
-
 struct Manager::Impl {
     Config cfg;
     PhysicsLoader physicsLoader;
