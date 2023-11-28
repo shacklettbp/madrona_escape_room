@@ -45,6 +45,7 @@ arg_parser.add_argument('--num-checkpoints', type=int, default=1)
 
 # Diagnostic args
 arg_parser.add_argument('--bin-diagnostic', action='store_true')
+arg_parser.add_argument('--seeds-per-checkpoint', type=int, default=16)
 
 
 args = arg_parser.parse_args()
@@ -348,8 +349,37 @@ def train(args):
             writer.add_scalar("charts/max_agent_0_progress", self_obs[:, 0, 3].max(), global_step)
             writer.add_scalar("charts/max_agent_1_progress", self_obs[:, 1, 3].max(), global_step)
         if args.bin_diagnostic:
-            # Need to get multiple states inside the same super-bin, and can evaluate quality of super-bin this way
             print("Hello there")
+            # Step 1: Select random states from archive that have all checkpoints filled. We want to run k parallel trials from each checkpoint
+            filled_bins = torch.nonzero(goExplore.bin_count >= args.num_checkpoints).flatten()
+            required_bins = goExplore.num_worlds // (args.num_checkpoints * args.seeds_per_checkpoint)
+            print("Required bins", required_bins, "Filled bins", len(filled_bins))
+            if required_bins > len(filled_bins):
+                print("Not enough bins to run all trials, skipping diagnostic")
+                continue
+            selected_bins = filled_bins[torch.multinomial(torch.ones(len(filled_bins)), num_samples=required_bins, replacement=False).type(torch.int)]
+            goExplore.go_to_state(torch.repeat_interleave(goExplore.bin_checkpoints[selected_bins].view(-1, goExplore.bin_checkpoints.shape[-1]), args.seeds_per_checkpoint, dim=0)) # Should get all checkpoints from each selected bin
+            for i in range(10):
+                # Step 2: Take a step forward with random action on each world
+                goExplore.actions[:] = goExplore.generate_random_actions()
+                goExplore.worlds.step()
+                # Step 3: Compute bin distribution for each checkpoint
+                current_bins = goExplore.map_states_to_bins(goExplore.obs)
+                print("Current bins", current_bins)
+                print("Current bin count", torch.bincount(current_bins, minlength=goExplore.num_bins))
+                print("Nonzero bins", torch.nonzero(torch.bincount(current_bins, minlength=goExplore.num_bins)).flatten().shape)
+                spc = args.seeds_per_checkpoint
+                nc = args.num_checkpoints
+                bin_distribution = [torch.bincount(current_bins[spc*i:spc*(i+1)], minlength=goExplore.num_bins)/spc for i in range(nc * required_bins)]
+                # Step 4: Compare to other bin distributions from same starting bin
+                bin_distribution_vars = []
+                for j in range(required_bins):
+                    # Compute variance in bincount for the same starting bin
+                    print("Stack shape", torch.stack(bin_distribution[nc*j:nc*(j+1)]).shape)
+                    print("Var shape", torch.var(torch.stack(bin_distribution[nc*j:nc*(j+1)]), dim=0).shape)
+                    bin_distribution_vars.append(spc * torch.var(torch.stack(bin_distribution[nc*j:nc*(j+1)]), dim=0).sum()) # Multiply by spc to reverse CLT effect on Var
+                # Step 5: Log info
+                print("Bin distribution vars", torch.mean(torch.tensor(bin_distribution_vars, device=dev)))
 
     # Return best score
     return best_score
