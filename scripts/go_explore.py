@@ -41,6 +41,10 @@ arg_parser.add_argument('--exploration-steps', type=int, required=True)
 arg_parser.add_argument('--binning', type=str, required=True)
 arg_parser.add_argument('--num-steps', type=int, required=True)
 arg_parser.add_argument('--num-bins', type=int, required=True)
+arg_parser.add_argument('--num-checkpoints', type=int, default=1)
+
+# Diagnostic args
+arg_parser.add_argument('--bin-diagnostic', action='store_true')
 
 
 args = arg_parser.parse_args()
@@ -117,9 +121,10 @@ class GoExplore:
         self.num_exploration_steps = exploration_steps
         self.binning = args.binning
         self.num_bins = args.num_bins # We can change this later
+        self.num_checkpoints = args.num_checkpoints
         self.device = device
-        self.checkpoint_score = torch.zeros(self.num_bins, device=device)
-        self.bin_count = torch.zeros(self.num_bins, device=device)
+        self.checkpoint_score = torch.zeros(self.num_bins, self.num_checkpoints, device=device)
+        self.bin_count = torch.zeros(self.num_bins, device=device).int()
         self.max_return = 0
 
         self.obs, num_obs_features = setup_obs(self.worlds)
@@ -129,7 +134,7 @@ class GoExplore:
         self.checkpoints = self.worlds.checkpoint_tensor().to_torch()
         self.checkpoint_resets = self.worlds.checkpoint_reset_tensor().to_torch()
         self.resets = self.worlds.reset_tensor().to_torch()
-        self.bin_checkpoints = torch.zeros((self.num_bins, self.checkpoints.shape[-1]), device=device, dtype=torch.uint8)
+        self.bin_checkpoints = torch.zeros((self.num_bins, self.num_checkpoints, self.checkpoints.shape[-1]), device=device, dtype=torch.uint8)
 
         self.actions_num_buckets = [4, 8, 5, 2]
         self.action_space = Box(-float('inf'),float('inf'),(sum(self.actions_num_buckets),))
@@ -163,8 +168,10 @@ class GoExplore:
         # Sample bins
         sampled_bins = valid_bins[torch.multinomial(weights, num_samples=self.num_worlds, replacement=True).type(torch.int)]
         # Sample states from bins: either sample first occurrence in each bin (what's in the paper), or something better...
-        self.curr_returns[:] = self.checkpoint_score[sampled_bins]
-        return self.bin_checkpoints[sampled_bins]
+        # Need the last checkpoint for each bin
+        chosen_checkpoint = self.bin_count[sampled_bins] % self.num_checkpoints
+        self.curr_returns[:] = self.checkpoint_score[[sampled_bins, chosen_checkpoint]]
+        return self.bin_checkpoints[[sampled_bins, chosen_checkpoint]]
 
     # Step 2: Go to state
     # Input: states, worlds
@@ -266,11 +273,15 @@ class GoExplore:
     # Step 5: Update archive
     def update_archive(self, bins, scores):
         # For each unique bin, update count in archive and update best score
-        new_bin_counts = torch.bincount(bins, minlength=self.num_bins)
+        # At most can increase bin count by 1 in a single step...
+        new_bin_counts = (torch.bincount(bins, minlength=self.num_bins) > 0).int()
         self.bin_count += new_bin_counts
         # Set the checkpoint for each bin to the latest
         #print(self.checkpoints)
-        self.bin_checkpoints[bins] = self.checkpoints # Will this have double-writes? Yes, shouldn't matter
+        chosen_checkpoints = self.bin_count[bins] % self.num_checkpoints
+        #print(chosen_checkpoints)
+        #print(bins)
+        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints # Will this have double-writes? Yes, shouldn't matter
         #self.bin_score[bins] = torch.maximum(self.bin_score[bins], scores)
         return None
 
@@ -336,6 +347,10 @@ def train(args):
             self_obs = goExplore.obs[0].view(goExplore.num_worlds, goExplore.num_agents, -1)
             writer.add_scalar("charts/max_agent_0_progress", self_obs[:, 0, 3].max(), global_step)
             writer.add_scalar("charts/max_agent_1_progress", self_obs[:, 1, 3].max(), global_step)
+        if args.bin_diagnostic:
+            # Need to get multiple states inside the same super-bin, and can evaluate quality of super-bin this way
+            print("Hello there")
+
     # Return best score
     return best_score
 
