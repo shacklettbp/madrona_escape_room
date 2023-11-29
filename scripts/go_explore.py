@@ -213,29 +213,36 @@ class GoExplore:
             return torch.randint(0, self.num_bins, size=(self.num_worlds,), device=self.device)
         elif self.binning == "y_pos":
             # Bin according to the y position of each agent
+            # Determine granularity from num_bins
+            granularity = torch.sqrt(torch.tensor(self.num_bins)).int().item()
+            incrememnt = 1.1/granularity
             self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
-            y_out = (y_0 + 110*y_1).int()
+            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
+            y_out = (y_0 + granularity*y_1).int()
             #print("Max agent 0 progress", self_obs[:, 0, 3].max())
             #print("Max agent 1 progress", self_obs[:, 1, 3].max())
             return y_out
         elif self.binning == "y_pos_door":
             # Bin according to the y position of each agent
+            granularity = torch.sqrt(torch.tensor(self.num_bins) / 4).int().item()
+            incrememnt = 1.1/granularity
             self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
             door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
             door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
             #print(door_status)
-            return ((1 + door_status)*(y_0 + 110*y_1)).int()
+            return (y_0 + granularity*y_1 + granularity*granularity*door_status).int()
         elif self.binning == "x_y_pos_door":
             # Bin according to the y position of each agent
+            granularity = torch.sqrt(torch.tensor(self.num_bins) / 64).int().item()
+            incrememnt = 1.1/granularity
             self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
             x_0 = (torch.clamp(self_obs[:, 0, 2], -0.2, 0.2) + 0.2) // 0.1 #
             x_1 = (torch.clamp(self_obs[:, 1, 2], -0.2, 0.2) + 0.2) // 0.1 #
             #print("Max y progress", self_obs[:, 0, 3].max())
@@ -243,12 +250,14 @@ class GoExplore:
             door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
             door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
             #print(door_status)
-            return (y_0 + 110*y_1 + 110*110*x_0 + 110*110*4*x_1 + 110*110*4*4*door_status).int()
+            return (y_0 + granularity*y_1 + granularity*granularity*x_0 + granularity*granularity*4*x_1 + granularity*granularity*4*4*door_status).int()
         elif self.binning == "y_pos_door_block":
             # Bin according to the y position of each agent
+            granularity = torch.sqrt(torch.tensor(self.num_bins) / 40).int().item()
+            incrememnt = 1.1/granularity
             self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // 0.01 # Granularity of 0.01 on the y
+            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // incrememnt # Granularity of 0.01 on the y
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
             door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
@@ -257,10 +266,10 @@ class GoExplore:
             #print(states[2].shape)
             # Maybe for now average distance of the blocks from each agent
             block_obs = states[2].view(self.num_worlds, self.num_agents, -1, 3)
-            block_val = block_obs[:, :, :, 2].mean(dim=1).sum(dim=1)*10
+            block_val = (block_obs[:, :, :, 2].mean(dim=1).sum(dim=1)*8).int() % 10
             #print("Block val", block_val.mean())
             #print(door_status)
-            return (block_val*(110*110*4) + door_status*(110*110) + (y_0 + 110*y_1)).int()
+            return (block_val*(granularity*granularity*4) + door_status*(granularity*granularity) + (y_0 + granularity*y_1)).int()
         else:
             raise NotImplementedError
 
@@ -357,29 +366,46 @@ def train(args):
             if required_bins > len(filled_bins):
                 print("Not enough bins to run all trials, skipping diagnostic")
                 continue
-            selected_bins = filled_bins[torch.multinomial(torch.ones(len(filled_bins)), num_samples=required_bins, replacement=False).type(torch.int)]
-            goExplore.go_to_state(torch.repeat_interleave(goExplore.bin_checkpoints[selected_bins].view(-1, goExplore.bin_checkpoints.shape[-1]), args.seeds_per_checkpoint, dim=0)) # Should get all checkpoints from each selected bin
-            for i in range(10):
-                # Step 2: Take a step forward with random action on each world
-                goExplore.actions[:] = goExplore.generate_random_actions()
-                goExplore.worlds.step()
-                # Step 3: Compute bin distribution for each checkpoint
-                current_bins = goExplore.map_states_to_bins(goExplore.obs)
-                print("Current bins", current_bins)
-                print("Current bin count", torch.bincount(current_bins, minlength=goExplore.num_bins))
-                print("Nonzero bins", torch.nonzero(torch.bincount(current_bins, minlength=goExplore.num_bins)).flatten().shape)
-                spc = args.seeds_per_checkpoint
-                nc = args.num_checkpoints
-                bin_distribution = [torch.bincount(current_bins[spc*i:spc*(i+1)], minlength=goExplore.num_bins)/spc for i in range(nc * required_bins)]
-                # Step 4: Compare to other bin distributions from same starting bin
-                bin_distribution_vars = []
-                for j in range(required_bins):
-                    # Compute variance in bincount for the same starting bin
-                    print("Stack shape", torch.stack(bin_distribution[nc*j:nc*(j+1)]).shape)
-                    print("Var shape", torch.var(torch.stack(bin_distribution[nc*j:nc*(j+1)]), dim=0).shape)
-                    bin_distribution_vars.append(spc * torch.var(torch.stack(bin_distribution[nc*j:nc*(j+1)]), dim=0).sum()) # Multiply by spc to reverse CLT effect on Var
-                # Step 5: Log info
-                print("Bin distribution vars", torch.mean(torch.tensor(bin_distribution_vars, device=dev)))
+            if (goExplore.obs[0][...,3] > 1.01).sum() == 0:
+                print("No agents have reached the exit, skipping diagnostic")
+                continue
+            all_results = []
+            for k in range(50): # Take 50 samples
+                print(k)
+                selected_bins = filled_bins[torch.multinomial(torch.ones(len(filled_bins)), num_samples=required_bins, replacement=False).type(torch.int)]
+                goExplore.go_to_state(torch.repeat_interleave(goExplore.bin_checkpoints[selected_bins].view(-1, goExplore.bin_checkpoints.shape[-1]), args.seeds_per_checkpoint, dim=0)) # Should get all checkpoints from each selected bin
+                results = []
+                for i in range(10):
+                    # Step 2: Take a step forward with random action on each world
+                    goExplore.actions[:] = goExplore.generate_random_actions()
+                    goExplore.worlds.step()
+                    # Step 3: Compute bin distribution for each checkpoint
+                    current_bins = goExplore.map_states_to_bins(goExplore.obs)
+                    #print("Current bins", current_bins)
+                    #print("Current bin count", torch.bincount(current_bins, minlength=goExplore.num_bins))
+                    #print()
+                    #print("After ", i, "steps")
+                    num_bins = torch.nonzero(torch.bincount(current_bins, minlength=goExplore.num_bins)).flatten().shape[0]
+                    #print("Nonzero bins", num_bins)
+                    results.append(num_bins)
+                    '''
+                    spc = args.seeds_per_checkpoint
+                    nc = args.num_checkpoints
+                    bin_distribution = [torch.bincount(current_bins[spc*i:spc*(i+1)], minlength=goExplore.num_bins)/spc for i in range(nc * required_bins)]
+                    # Step 4: Compare to other bin distributions from same starting bin
+                    bin_distribution_vars = []
+                    for j in range(required_bins):
+                        # Compute variance in bincount for the same starting bin
+                        print("Stack shape", torch.stack(bin_distribution[nc*j:nc*(j+1)]).shape)
+                        print("Var shape", torch.var(torch.stack(bin_distribution[nc*j:nc*(j+1)]), dim=0).shape)
+                        bin_distribution_vars.append(spc * torch.var(torch.stack(bin_distribution[nc*j:nc*(j+1)]), dim=0).sum()) # Multiply by spc to reverse CLT effect on Var
+                    # Step 5: Log info
+                    print("Bin distribution vars", torch.mean(torch.tensor(bin_distribution_vars, device=dev)))
+                    '''
+                all_results.append(torch.tensor(results, device=dev))
+            all_results = torch.stack(all_results, dim=0).float().mean(dim=0)
+            print("Average number of bins at each step", all_results)
+            return
 
     # Return best score
     return best_score
