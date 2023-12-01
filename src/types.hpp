@@ -37,8 +37,7 @@ struct Action {
     int32_t moveAmount; // [0, 3]
     int32_t moveAngle; // [0, 7]
     int32_t rotate; // [-2, 2]
-    int32_t grab; // 0 = do nothing, 1 = grab / release
-    int32_t jump; // 0 = do nothing, 1 = if on a surface, jump
+    int32_t interact; // 0 = do nothing, 1 = grab / release, 2 = jump
 };
 
 // Per-agent reward

@@ -258,7 +258,7 @@ static void resetPersistentEntities(Engine &ctx)
              .moveAmount = 0,
              .moveAngle = 0,
              .rotate = consts::numTurnBuckets / 2,
-             .grab = 0,
+             .interact = 0,
          };
 
          ctx.get<StepsRemaining>(agent_entity).t = consts::episodeLen;

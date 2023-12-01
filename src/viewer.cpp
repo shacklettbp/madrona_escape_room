@@ -177,12 +177,11 @@ int main(int argc, char *argv[])
                 int32_t move_amount = (*replay_log)[base_idx];
                 int32_t move_angle = (*replay_log)[base_idx + 1];
                 int32_t turn = (*replay_log)[base_idx + 2];
-                int32_t g = (*replay_log)[base_idx + 3];
-                int32_t jump = (*replay_log)[base_idx + 4];
+                int32_t interact = (*replay_log)[base_idx + 3];
 
                 printf("%d, %d: %d %d %d %d\n",
-                       i, j, move_amount, move_angle, turn, g);
-                mgr.setAction(i, j, move_amount, move_angle, turn, g, jump);
+                       i, j, move_amount, move_angle, turn, interact);
+                mgr.setAction(i, j, move_amount, move_angle, turn, interact);
             }
         }
 
@@ -231,8 +230,7 @@ int main(int argc, char *argv[])
         int32_t x = 0;
         int32_t y = 0;
         int32_t r = 2;
-        int32_t g = 0;
-        int32_t j = 0;
+        int32_t interact = 0;
 
         if (input.keyPressed(Key::R)) {
             mgr.triggerReset(world_idx);
@@ -275,11 +273,11 @@ int main(int argc, char *argv[])
         }
 
         if (input.keyPressed(Key::G)) {
-            g = 1;
+            interact = 1;
         }
 
         if (input.keyPressed(Key::Space)) {
-            j = 1;
+            interact = 2;
         }
 
         int32_t move_amount;
@@ -312,7 +310,7 @@ int main(int argc, char *argv[])
             move_angle = 0;
         }
 
-        mgr.setAction(world_idx, agent_idx, move_amount, move_angle, r, g, j);
+        mgr.setAction(world_idx, agent_idx, move_amount, move_angle, r, interact);
     }, [&]() {
         if (replay_log.has_value()) {
             bool replay_finished = replayStep();

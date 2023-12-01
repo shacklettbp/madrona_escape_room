@@ -437,9 +437,11 @@ inline void movementSystem(Engine &,
 
     float f_z = 0.0f;
 
-    if (action.jump == 1 && abs(pos.z - prev_state.prevPosition.z) < 1e-3) {
+    if (action.interact == 2 && abs(pos.z - prev_state.prevPosition.z) < 1e-4) {
         // Only jump if sufficiently close to a surface.
-        f_z = 4000.0f; // max move amount.
+        // Moving against walls traps agents in the air
+        // due to friction, allowing "wall-jumping".
+        f_z = 3000.0f; // max move amount.
     }
 
     constexpr float turn_delta_per_bucket = 
@@ -461,7 +463,7 @@ inline void grabSystem(Engine &ctx,
                        Action action,
                        GrabState &grab)
 {
-    if (action.grab == 0) {
+    if (action.interact != 1) {
         return;
     }
 

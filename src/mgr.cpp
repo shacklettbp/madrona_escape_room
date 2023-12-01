@@ -287,18 +287,18 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
     });
 
     setupHull(SimObject::Wall, 0.f, {
-        .muS = 0.5f,
-        .muD = 0.5f,
+        .muS = 0.0f,//0.5f,
+        .muD = 0.0f,//0.5f,
     });
 
     setupHull(SimObject::Door, 0.f, {
-        .muS = 0.5f,
-        .muD = 0.5f,
+        .muS = 0.0f,//0.5f,
+        .muD = 0.0f,//0.5f,
     });
 
     setupHull(SimObject::Agent, 1.f, {
-        .muS = 0.5f,
-        .muD = 0.5f,
+        .muS = 0.0f,//0.5f,
+        .muD = 0.0f,//0.5f,
     });
 
     setupHull(SimObject::Button, 1.f, {
@@ -555,7 +555,7 @@ Tensor Manager::actionTensor() const
     return impl_->exportTensor(ExportID::Action, Tensor::ElementType::Int32,
         {
             impl_->cfg.numWorlds * consts::numAgents,
-            5,
+            4,
         });
 }
 
@@ -693,15 +693,13 @@ void Manager::setAction(int32_t world_idx,
                         int32_t move_amount,
                         int32_t move_angle,
                         int32_t rotate,
-                        int32_t grab,
-                        int32_t jump)
+                        int32_t interact)
 {
     Action action { 
         .moveAmount = move_amount,
         .moveAngle = move_angle,
         .rotate = rotate,
-        .grab = grab,
-        .jump = jump
+        .interact = interact
     };
 
     auto *action_ptr = impl_->agentActionsBuffer +
