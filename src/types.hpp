@@ -3,7 +3,7 @@
 #include <madrona/components.hpp>
 #include <madrona/math.hpp>
 #include <madrona/physics.hpp>
-#include <madrona/viz/system.hpp>
+#include <madrona/render/ecs.hpp>
 
 #include "consts.hpp"
 
@@ -235,8 +235,8 @@ struct Agent : public madrona::Archetype<
 
     // Visualization: In addition to the fly camera, src/viewer.cpp can
     // view the scene from the perspective of entities with this component
-    madrona::viz::VizCamera,
-    madrona::viz::Renderable
+    madrona::render::RenderCamera,
+    madrona::render::Renderable
 > {};
 
 // Archetype for the doors blocking the end of each challenge room
@@ -256,7 +256,7 @@ struct DoorEntity : public madrona::Archetype<
     OpenState,
     DoorProperties,
     EntityType,
-    madrona::viz::Renderable
+    madrona::render::Renderable
 > {};
 
 // Archetype for the button objects that open the doors
@@ -268,7 +268,7 @@ struct ButtonEntity : public madrona::Archetype<
     ObjectID,
     ButtonState,
     EntityType,
-    madrona::viz::Renderable
+    madrona::render::Renderable
 > {};
 
 // Generic archetype for entities that need physics but don't have custom
@@ -287,7 +287,7 @@ struct PhysicsEntity : public madrona::Archetype<
     ExternalTorque,
     madrona::phys::broadphase::LeafID,
     EntityType,
-    madrona::viz::Renderable
+    madrona::render::Renderable
 > {};
 
 }

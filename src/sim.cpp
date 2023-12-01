@@ -1,5 +1,4 @@
 #include <madrona/mw_gpu_entry.hpp>
-#include <madrona/render/batch_renderer_system.hpp>
 
 #include "sim.hpp"
 #include "level_gen.hpp"
@@ -7,6 +6,8 @@
 using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
+
+using render::RenderingSystem;
 
 namespace madEscape {
 
@@ -17,7 +18,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
     base::registerTypes(registry);
     phys::RigidBodyPhysicsSystem::registerTypes(registry);
 
-    viz::VizRenderingSystem::registerTypes(registry, cfg.bridge);
+    RenderingSystem::registerTypes(registry, cfg.renderBridge);
 
     registry.registerComponent<Action>();
     registry.registerComponent<SelfObservation>();
@@ -75,7 +76,7 @@ static inline void cleanupWorld(Engine &ctx)
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
                 if (ctx.data().enableRender) {
-                    viz::VizRenderingSystem::cleanupRenderableEntity(
+                    render::RenderingSystem::cleanupRenderableEntity(
                         ctx, room.entities[j]);
                 }
                 ctx.destroyEntity(room.entities[j]);
@@ -83,11 +84,11 @@ static inline void cleanupWorld(Engine &ctx)
         }
 
         if (ctx.data().enableRender) {
-            viz::VizRenderingSystem::cleanupRenderableEntity(
+            render::RenderingSystem::cleanupRenderableEntity(
                 ctx, room.walls[0]);
-            viz::VizRenderingSystem::cleanupRenderableEntity(
+            render::RenderingSystem::cleanupRenderableEntity(
                 ctx, room.walls[1]);
-            viz::VizRenderingSystem::cleanupRenderableEntity(
+            render::RenderingSystem::cleanupRenderableEntity(
                 ctx, room.door);
         }
 
@@ -100,7 +101,7 @@ static inline void cleanupWorld(Engine &ctx)
 static inline void initWorld(Engine &ctx)
 {
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::reset(ctx);
+        render::RenderingSystem::reset(ctx);
     }
 
     phys::RigidBodyPhysicsSystem::reset(ctx);
@@ -140,7 +141,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
         initWorld(ctx);
 
         if (ctx.data().enableRender) {
-            viz::VizRenderingSystem::markEpisode(ctx);
+            render::RenderingSystem::markEpisode(ctx);
         }
     }
 }
@@ -730,8 +731,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Lidar
         >>({post_reset_broadphase});
 
-    if (cfg.bridge) {
-        viz::VizRenderingSystem::setupTasks(builder, {reset_sys});
+    if (cfg.renderBridge) {
+        RenderingSystem::setupTasks(builder, {reset_sys});
     }
 
 #ifdef MADRONA_GPU_MODE
@@ -772,10 +773,10 @@ Sim::Sim(Engine &ctx,
         max_total_entities, max_total_entities * max_total_entities / 2,
         consts::numAgents);
 
-    enableRender = cfg.bridge != nullptr;
+    enableRender = cfg.renderBridge != nullptr;
 
     if (enableRender) {
-        viz::VizRenderingSystem::init(ctx, cfg.bridge);
+        RenderingSystem::init(ctx, cfg.renderBridge);
     }
 
     autoReset = cfg.autoReset;

@@ -3,7 +3,7 @@
 #include <madrona/py/utils.hpp>
 #include <madrona/exec_mode.hpp>
 
-#include <madrona/viz/render_mgr.hpp>
+#include <madrona/render/render_mgr.hpp>
 
 namespace madEscape {
 

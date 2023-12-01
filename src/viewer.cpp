@@ -1,5 +1,5 @@
 #include <madrona/viz/viewer.hpp>
-#include <madrona/viz/render_mgr.hpp>
+#include <madrona/render/render_mgr.hpp>
 #include <madrona/window.hpp>
 
 #include "sim.hpp"

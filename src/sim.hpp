@@ -50,7 +50,7 @@ enum class SimObject : uint32_t {
 struct Sim : public madrona::WorldBase {
     struct Config {
         bool autoReset;
-        const madrona::viz::VizECSBridge *bridge;
+        const madrona::render::RenderECSBridge *renderBridge;
     };
 
     // Sim::registerTypes is called during initialization

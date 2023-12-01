@@ -6,9 +6,7 @@
 #include <madrona/physics_loader.hpp>
 #include <madrona/tracing.hpp>
 #include <madrona/mw_cpu.hpp>
-
 #include <madrona/render/api.hpp>
-#include <madrona/viz/render_mgr.hpp>
 
 #include <array>
 #include <charconv>
@@ -21,8 +19,6 @@
 #include <madrona/mw_gpu.hpp>
 #include <madrona/cuda_utils.hpp>
 #endif
-
-#include <madrona/viz/interop.hpp>
 
 using namespace madrona;
 using namespace madrona::math;
@@ -413,9 +409,9 @@ Manager::Impl * Manager::Impl::init(
 
         if (render_mgr.has_value()) {
             loadRenderObjects(*render_mgr);
-            sim_cfg.bridge = render_mgr->bridge();
+            sim_cfg.renderBridge = render_mgr->bridge();
         } else {
-            sim_cfg.bridge = nullptr;
+            sim_cfg.renderBridge = nullptr;
         }
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
@@ -478,9 +474,9 @@ Manager::Impl * Manager::Impl::init(
 
         if (render_mgr.has_value()) {
             loadRenderObjects(*render_mgr);
-            sim_cfg.bridge = render_mgr->bridge();
+            sim_cfg.renderBridge = render_mgr->bridge();
         } else {
-            sim_cfg.bridge = nullptr;
+            sim_cfg.renderBridge = nullptr;
         }
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();

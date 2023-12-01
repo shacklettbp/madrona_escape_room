@@ -1,11 +1,13 @@
 #include "level_gen.hpp"
-#include "madrona/viz/system.hpp"
+#include "madrona/render/ecs.hpp"
 
 namespace madEscape {
 
 using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
+
+using render::RenderingSystem;
 
 namespace consts {
 
@@ -79,7 +81,7 @@ void createPersistentEntities(Engine &ctx)
     // Create the floor entity, just a simple static plane.
     ctx.data().floorPlane = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().floorPlane);
+        RenderingSystem::makeEntityRenderable(ctx, ctx.data().floorPlane);
     }
     setupRigidBodyEntity(
         ctx,
@@ -94,7 +96,7 @@ void createPersistentEntities(Engine &ctx)
     // Behind
     ctx.data().borders[0] = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[0]);
+        RenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[0]);
     }
     setupRigidBodyEntity(
         ctx,
@@ -117,7 +119,7 @@ void createPersistentEntities(Engine &ctx)
     // Right
     ctx.data().borders[1] = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[1]);
+        RenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[1]);
     }
     setupRigidBodyEntity(
         ctx,
@@ -140,7 +142,7 @@ void createPersistentEntities(Engine &ctx)
     // Left
     ctx.data().borders[2] = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[2]);
+        RenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[2]);
     }
     setupRigidBodyEntity(
         ctx,
@@ -168,8 +170,8 @@ void createPersistentEntities(Engine &ctx)
 
         // Make the agent renderable but also create a view for it.
         if (ctx.data().enableRender) {
-            viz::VizRenderingSystem::makeEntityRenderable(ctx, agent);
-            viz::VizRenderingSystem::attachEntityToView(ctx,
+            RenderingSystem::makeEntityRenderable(ctx, agent);
+            RenderingSystem::attachEntityToView(ctx,
                     agent,
                     100.f, 0.001f,
                     1.5f * math::up);
@@ -275,7 +277,7 @@ static void makeEndWall(Engine &ctx,
     float left_len = door_center - 0.5f * consts::doorWidth;
     Entity left_wall = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, left_wall);
+        RenderingSystem::makeEntityRenderable(ctx, left_wall);
     }
     setupRigidBodyEntity(
         ctx,
@@ -300,7 +302,7 @@ static void makeEndWall(Engine &ctx,
         consts::worldWidth - door_center - 0.5f * consts::doorWidth;
     Entity right_wall = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, right_wall);
+        RenderingSystem::makeEntityRenderable(ctx, right_wall);
     }
     setupRigidBodyEntity(
         ctx,
@@ -323,7 +325,7 @@ static void makeEndWall(Engine &ctx,
 
     Entity door = ctx.makeEntity<DoorEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, door);
+        RenderingSystem::makeEntityRenderable(ctx, door);
     }
     setupRigidBodyEntity(
         ctx,
@@ -356,7 +358,7 @@ static Entity makeButton(Engine &ctx,
 {
     Entity button = ctx.makeEntity<ButtonEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, button);
+        RenderingSystem::makeEntityRenderable(ctx, button);
     }
     ctx.get<Position>(button) = Vector3 {
         button_x,
@@ -383,7 +385,7 @@ static Entity makeCube(Engine &ctx,
 {
     Entity cube = ctx.makeEntity<PhysicsEntity>();
     if (ctx.data().enableRender) {
-        viz::VizRenderingSystem::makeEntityRenderable(ctx, cube);
+        RenderingSystem::makeEntityRenderable(ctx, cube);
     }
     setupRigidBodyEntity(
         ctx,

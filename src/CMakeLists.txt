@@ -15,7 +15,7 @@ target_link_libraries(mad_escape_cpu_impl
     PRIVATE
         madrona_common
         madrona_mw_physics
-        madrona_viz_system
+        madrona_rendering_system
 )
 
 add_library(mad_escape_mgr STATIC
@@ -64,10 +64,10 @@ target_link_libraries(madrona_escape_room PRIVATE
     mad_escape_mgr
 )
 
-if (TARGET madrona_render)
+if (TARGET madrona_viz)
     add_executable(viewer viewer.cpp)
-    target_link_libraries(viewer
-        madrona_mw_core mad_escape_mgr madrona_window)
+    target_link_libraries(viewer PRIVATE
+        madrona_mw_core mad_escape_mgr madrona_viz)
 
     target_compile_definitions(viewer PRIVATE
         -DDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/"
