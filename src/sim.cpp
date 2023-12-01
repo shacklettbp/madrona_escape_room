@@ -734,8 +734,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         viz::VizRenderingSystem::setupTasks(builder, {reset_sys});
     }
 
-    // render::BatchRenderingSystem::setupTasks(builder, {reset_sys});
-
 #ifdef MADRONA_GPU_MODE
     // Sort entities, this could be conditional on reset like the second
     // BVH build above.

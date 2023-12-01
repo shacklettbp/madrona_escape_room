@@ -3,8 +3,7 @@
 #include <madrona/py/utils.hpp>
 #include <madrona/exec_mode.hpp>
 
-#include <madrona/viz/render_config.hpp>
-#include <madrona/viz/viewer_controller.hpp>
+#include <madrona/viz/render_mgr.hpp>
 
 namespace madEscape {
 
@@ -21,7 +20,9 @@ public:
         int gpuID; // Which GPU for CUDA backend?
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
-        madrona::render::RenderContextFlags renderFlags;
+        bool enableBatchRenderer = false;
+        madrona::render::APIBackend *extRenderAPI = nullptr;
+        madrona::render::GPUDevice *extRenderDev = nullptr;
     };
 
     Manager(const Config &cfg);
@@ -52,8 +53,7 @@ public:
                    int32_t rotate,
                    int32_t grab);
 
-    madrona::viz::ViewerController makeViewerController(
-        float speed, madrona::math::Vector3 pos, madrona::math::Quat rot);
+    madrona::render::RenderManager & getRenderManager();
 
 private:
     struct Impl;

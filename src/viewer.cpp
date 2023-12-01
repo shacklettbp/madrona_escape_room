@@ -1,6 +1,7 @@
-#include <madrona/viz/viewer_controller.hpp>
+#include <madrona/viz/viewer.hpp>
+#include <madrona/viz/render_mgr.hpp>
+#include <madrona/window.hpp>
 
-#include "madrona/viz/render_config.hpp"
 #include "sim.hpp"
 #include "mgr.hpp"
 #include "types.hpp"
@@ -62,7 +63,16 @@ int main(int argc, char *argv[])
         num_replay_steps = replay_log->size() / (num_worlds * num_views * 4);
     }
 
+    bool enable_batch_renderer =
+#ifdef MADRONA_MACOS
+        false;
+#else
+        true;
+#endif
 
+    WindowManager wm {};
+    Window *window = wm.makeWindow("Escape Room", 2730, 1536);
+    render::GPUHandle render_gpu = wm.initGPU(0, {window});
 
     // Create the simulation manager
     Manager mgr({
@@ -70,12 +80,9 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
-        .renderFlags = (
-#if !defined (MADRONA_MACOS)
-            render::RenderContextFlags::RenderBatch | 
-#endif
-             render::RenderContextFlags::RenderViewer
-        )
+        .enableBatchRenderer = enable_batch_renderer,
+        .extRenderAPI = wm.gpuAPIManager().backend(),
+        .extRenderDev = render_gpu.device(),
     });
 
     float camera_move_speed = 10.f;
@@ -87,14 +94,14 @@ int main(int argc, char *argv[])
         math::Quat::angleAxis(-math::pi / 2.f, math::right)).normalize();
 
 
-
-    // Create the viewer controller
-    viz::ViewerController controller = mgr.makeViewerController(camera_move_speed,
-        initial_camera_position, initial_camera_rotation);
-
-    controller.setTickRate(20);
-
-
+    // Create the viewer viewer
+    viz::Viewer viewer(mgr.getRenderManager(), window, {
+        .numWorlds = num_worlds,
+        .simTickRate = 20,
+        .cameraMoveSpeed = camera_move_speed,
+        .cameraPosition = initial_camera_position,
+        .cameraRotation = initial_camera_rotation,
+    });
 
     // Replay step
     auto replayStep = [&]() {
@@ -162,10 +169,10 @@ int main(int argc, char *argv[])
 
 
 
-    // Main loop for the viewer controller
-    controller.loop([&mgr](CountT world_idx, CountT agent_idx,
-                           const ViewerController::UserInput &input) {
-        using Key = ViewerController::KeyboardKey;
+    // Main loop for the viewer viewer
+    viewer.loop([&mgr](CountT world_idx, CountT agent_idx,
+                           const Viewer::UserInput &input) {
+        using Key = Viewer::KeyboardKey;
 
         int32_t x = 0;
         int32_t y = 0;
@@ -239,7 +246,7 @@ int main(int argc, char *argv[])
             bool replay_finished = replayStep();
 
             if (replay_finished) {
-                controller.stopLoop();
+                viewer.stopLoop();
             }
         }
 

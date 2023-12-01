@@ -1,6 +1,4 @@
 #include "mgr.hpp"
-#include "madrona/render/batch_renderer_system.hpp"
-#include "madrona/viz/render_config.hpp"
 #include "sim.hpp"
 
 #include <madrona/utils.hpp>
@@ -9,7 +7,8 @@
 #include <madrona/tracing.hpp>
 #include <madrona/mw_cpu.hpp>
 
-#include <madrona/viz/render_context.hpp>
+#include <madrona/render/api.hpp>
+#include <madrona/viz/render_mgr.hpp>
 
 #include <array>
 #include <charconv>
@@ -29,9 +28,64 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 using namespace madrona::py;
-using namespace madrona::render;
 
 namespace madEscape {
+
+struct RenderGPUState {
+    render::APILibHandle apiLib;
+    render::APIManager apiMgr;
+    render::GPUHandle gpu;
+};
+
+
+static inline Optional<RenderGPUState> initRenderGPUState(
+    const Manager::Config &mgr_cfg)
+{
+    if (mgr_cfg.extRenderDev || !mgr_cfg.enableBatchRenderer) {
+        return Optional<RenderGPUState>::none();
+    }
+
+    auto render_api_lib = render::APIManager::loadDefaultLib();
+    render::APIManager render_api_mgr(render_api_lib.lib());
+    render::GPUHandle gpu = render_api_mgr.initGPU(mgr_cfg.gpuID);
+
+    return RenderGPUState {
+        .apiLib = std::move(render_api_lib),
+        .apiMgr = std::move(render_api_mgr),
+        .gpu = std::move(gpu),
+    };
+}
+
+static inline Optional<render::RenderManager> initRenderManager(
+    const Manager::Config &mgr_cfg,
+    const Optional<RenderGPUState> &render_gpu_state)
+{
+    if (!mgr_cfg.extRenderDev && !mgr_cfg.enableBatchRenderer) {
+        return Optional<render::RenderManager>::none();
+    }
+
+    render::APIBackend *render_api;
+    render::GPUDevice *render_dev;
+
+    if (render_gpu_state.has_value()) {
+        render_api = render_gpu_state->apiMgr.backend();
+        render_dev = render_gpu_state->gpu.device();
+    } else {
+        render_api = mgr_cfg.extRenderAPI;
+        render_dev = mgr_cfg.extRenderDev;
+    }
+
+    return render::RenderManager(render_api, render_dev, {
+        .enableBatchRenderer = mgr_cfg.enableBatchRenderer,
+        .agentViewWidth = 64,
+        .agentViewHeight = 64,
+        .numWorlds = mgr_cfg.numWorlds,
+        .maxViewsPerWorld = consts::numAgents,
+        .maxInstancesPerWorld = 1000,
+        .execMode = mgr_cfg.execMode,
+        .voxelCfg = {},
+    });
+}
 
 struct Manager::Impl {
     Config cfg;
@@ -39,24 +93,24 @@ struct Manager::Impl {
     EpisodeManager *episodeMgr;
     WorldReset *worldResetBuffer;
     Action *agentActionsBuffer;
-    RenderContext renderCtx;
-    RenderContextFlags renderCtxFlags;
+    Optional<RenderGPUState> renderGPUState;
+    Optional<render::RenderManager> renderMgr;
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
                 EpisodeManager *ep_mgr,
                 WorldReset *reset_buffer,
                 Action *action_buffer,
-                RenderContext &&render_ctx)
+                Optional<RenderGPUState> &&render_gpu_state,
+                Optional<render::RenderManager> &&render_mgr)
         : cfg(mgr_cfg),
           physicsLoader(std::move(phys_loader)),
           episodeMgr(ep_mgr),
           worldResetBuffer(reset_buffer),
           agentActionsBuffer(action_buffer),
-          renderCtx(std::move(render_ctx)),
-          renderCtxFlags(mgr_cfg.renderFlags)
-    {
-    }
+          renderGPUState(std::move(render_gpu_state)),
+          renderMgr(std::move(render_mgr))
+    {}
 
     inline virtual ~Impl() {}
 
@@ -80,10 +134,12 @@ struct Manager::CPUImpl final : Manager::Impl {
                    EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
                    Action *action_buffer,
-                   RenderContext &&render_ctx,
+                   Optional<RenderGPUState> &&render_gpu_state,
+                   Optional<render::RenderManager> &&render_mgr,
                    TaskGraphT &&cpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer, std::move(render_ctx)),
+               ep_mgr, reset_buffer, action_buffer,
+               std::move(render_gpu_state), std::move(render_mgr)),
           cpuExec(std::move(cpu_exec))
     {}
 
@@ -95,16 +151,6 @@ struct Manager::CPUImpl final : Manager::Impl {
     inline virtual void run()
     {
         cpuExec.run();
-
-        // Prepare and render the images for all the worlds
-        if (renderCtxFlags != RenderContextFlags::None) {
-            renderCtx.prepareRender();
-        }
-
-        if ((renderCtxFlags & RenderContextFlags::RenderBatch) != 
-                RenderContextFlags::None) {
-            renderCtx.batchedRender();
-        }
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
@@ -125,14 +171,14 @@ struct Manager::CUDAImpl final : Manager::Impl {
                    EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
                    Action *action_buffer,
-                   RenderContext &&render_ctx,
+                   Optional<RenderGPUState> &&render_gpu_state,
+                   Optional<render::RenderManager> &&render_mgr,
                    MWCudaExecutor &&gpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer, std::move(render_ctx)),
+               ep_mgr, reset_buffer, action_buffer,
+               std::move(render_gpu_state), std::move(render_mgr)),
           gpuExec(std::move(gpu_exec))
-    {
-
-    }
+    {}
 
     inline virtual ~CUDAImpl() final
     {
@@ -142,16 +188,6 @@ struct Manager::CUDAImpl final : Manager::Impl {
     inline virtual void run()
     {
         gpuExec.run();
-
-        // Prepare and render the images for all the worlds
-        if (renderCtxFlags != RenderContextFlags::None) {
-            renderCtx.prepareRender();
-        }
-
-        if ((renderCtxFlags & RenderContextFlags::RenderBatch) != 
-                RenderContextFlags::None) {
-            renderCtx.batchedRender();
-        }
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
@@ -164,7 +200,7 @@ struct Manager::CUDAImpl final : Manager::Impl {
 };
 #endif
 
-static void loadRenderObjects(RenderContext &render_ctx)
+static void loadRenderObjects(render::RenderManager &render_mgr)
 {
     std::array<std::string, (size_t)SimObject::NumObjects> render_asset_paths;
     render_asset_paths[(size_t)SimObject::Cube] =
@@ -213,14 +249,14 @@ static void loadRenderObjects(RenderContext &render_ctx)
     render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
     render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
 
-    render_ctx.loadObjects(render_assets->objects, materials, {
+    render_mgr.loadObjects(render_assets->objects, materials, {
         { (std::filesystem::path(DATA_DIR) /
            "green_grid.png").string().c_str() },
         { (std::filesystem::path(DATA_DIR) /
            "smile.png").string().c_str() },
     });
 
-    render_ctx.configureLighting({
+    render_mgr.configureLighting({
         { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
     });
 }
@@ -354,24 +390,7 @@ Manager::Impl * Manager::Impl::init(
 {
     Sim::Config sim_cfg {
         mgr_cfg.autoReset,
-        nullptr
-    };
-
-    RenderContext::Config render_ctx_cfg = {
-        .gpuID = mgr_cfg.gpuID,
-        .enableBatchRenderer = (mgr_cfg.renderFlags & RenderContextFlags::RenderBatch) !=
-            RenderContextFlags::None,
-        .viewWidth = 64,
-        .viewHeight = 64,
-        .numWorlds = mgr_cfg.numWorlds,
-        .maxViewsPerWorld  = 2,
-        .maxInstancesPerWorld = 1000,
-        .defaultSimTickRate = 20,
-        .execMode = mgr_cfg.execMode,
-        .enableViewer = (mgr_cfg.renderFlags & RenderContextFlags::RenderViewer) != 
-            RenderContextFlags::None,
-        .viewerWidth = 2730/2,
-        .viewerHeight = 1536/2
+        nullptr,
     };
 
     switch (mgr_cfg.execMode) {
@@ -386,11 +405,18 @@ Manager::Impl * Manager::Impl::init(
         PhysicsLoader phys_loader(ExecMode::CUDA, 10);
         loadPhysicsObjects(phys_loader);
 
-        RenderContext render_ctx(render_ctx_cfg);
-        loadRenderObjects(render_ctx);
+        Optional<RenderGPUState> render_gpu_state =
+            initRenderGPUState(mgr_cfg);
 
-        sim_cfg.bridge = (mgr_cfg.renderFlags == RenderContextFlags::None) ? 
-                         nullptr : render_ctx.getBridge();
+        Optional<render::RenderManager> render_mgr =
+            initRenderManager(mgr_cfg, render_gpu_state);
+
+        if (render_mgr.has_value()) {
+            loadRenderObjects(*render_mgr);
+            sim_cfg.bridge = render_mgr->bridge();
+        } else {
+            sim_cfg.bridge = nullptr;
+        }
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
@@ -430,7 +456,8 @@ Manager::Impl * Manager::Impl::init(
             episode_mgr,
             world_reset_buffer,
             agent_actions_buffer,
-            std::move(render_ctx),
+            std::move(render_gpu_state),
+            std::move(render_mgr),
             std::move(gpu_exec),
         };
 #else
@@ -443,11 +470,18 @@ Manager::Impl * Manager::Impl::init(
         PhysicsLoader phys_loader(ExecMode::CPU, 10);
         loadPhysicsObjects(phys_loader);
 
-        RenderContext render_ctx(render_ctx_cfg);
-        loadRenderObjects(render_ctx);
+        Optional<RenderGPUState> render_gpu_state =
+            initRenderGPUState(mgr_cfg);
 
-        sim_cfg.bridge = (mgr_cfg.renderFlags == RenderContextFlags::None) ? 
-                         nullptr : render_ctx.getBridge();
+        Optional<render::RenderManager> render_mgr =
+            initRenderManager(mgr_cfg, render_gpu_state);
+
+        if (render_mgr.has_value()) {
+            loadRenderObjects(*render_mgr);
+            sim_cfg.bridge = render_mgr->bridge();
+        } else {
+            sim_cfg.bridge = nullptr;
+        }
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
 
@@ -481,7 +515,8 @@ Manager::Impl * Manager::Impl::init(
             episode_mgr,
             world_reset_buffer,
             agent_actions_buffer,
-            std::move(render_ctx),
+            std::move(render_gpu_state),
+            std::move(render_mgr),
             std::move(cpu_exec),
         };
 
@@ -515,6 +550,14 @@ Manager::~Manager() {}
 void Manager::step()
 {
     impl_->run();
+
+    if (impl_->renderMgr.has_value()) {
+        impl_->renderMgr->readECS();
+    }
+
+    if (impl_->cfg.enableBatchRenderer) {
+        impl_->renderMgr->batchRender();
+    }
 }
 
 Tensor Manager::resetTensor() const
@@ -670,12 +713,9 @@ void Manager::setAction(int32_t world_idx,
     }
 }
 
-madrona::viz::ViewerController Manager::makeViewerController(
-    float speed,
-    math::Vector3 pos,
-    math::Quat rot)
+render::RenderManager & Manager::getRenderManager()
 {
-    return impl_->renderCtx.makeViewerController(speed, pos, rot);
+    return *impl_->renderMgr;
 }
 
 }

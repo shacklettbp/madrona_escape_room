@@ -31,7 +31,7 @@ target_link_libraries(mad_escape_mgr
         madrona_common
         madrona_importer
         madrona_physics_loader
-        madrona_viewer
+        madrona_render
 )
 
 if (TARGET madrona_mw_gpu)
@@ -64,10 +64,10 @@ target_link_libraries(madrona_escape_room PRIVATE
     mad_escape_mgr
 )
 
-if (TARGET madrona_viewer)
+if (TARGET madrona_render)
     add_executable(viewer viewer.cpp)
     target_link_libraries(viewer
-        madrona_mw_core mad_escape_mgr)
+        madrona_mw_core mad_escape_mgr madrona_window)
 
     target_compile_definitions(viewer PRIVATE
         -DDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/"
