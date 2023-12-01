@@ -408,15 +408,51 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
     }
 }
 
+// Implements a jump action by casting a short ray below the agent
+// to check for a surface, then applying a strong upward force
+// over a single timestep.
+inline void jumpSystem(Engine &ctx,
+                           Action &action,
+                           Position &pos, 
+                           Rotation &rot,
+                           Scale &s,
+                           ExternalForce &external_force)
+{
+
+    if (action.interact != 2) {
+        return;
+    };
+
+    float hit_t;
+    Vector3 hit_normal;
+
+    // Get the per-world BVH singleton component
+    auto &bvh = ctx.singleton<broadphase::BVH>();
+    // Scale the relative to the agent's height.
+    // Assume math.up is normalized and positive.
+    float halfHeight = 0.5f * Vector3(s.d0, s.d1, s.d2).dot(math::up);
+    Vector3 ray_o = pos + halfHeight * rot.rotateVec(math::up);
+    Vector3 ray_d = rot.rotateVec(-math::up);
+
+    const float max_t = halfHeight;
+
+    Entity grab_entity = bvh.traceRay(ray_o, ray_d, &hit_t, &hit_normal, max_t);
+
+    if (grab_entity == Entity::none()) {
+        return;
+    }
+
+    // Jump!
+    external_force.z += rot.rotateVec({ 0.0f, 0.0f, 3000.0f }).z;
+}
+
 // Translates discrete actions from the Action component to forces
 // used by the physics simulation.
 inline void movementSystem(Engine &,
                            Action &action,
-                           Position &pos, 
                            Rotation &rot, 
                            ExternalForce &external_force,
-                           ExternalTorque &external_torque,
-                           madrona::phys::solver::SubstepPrevState &prev_state)
+                           ExternalTorque &external_torque)
 {
 
     constexpr float move_max = 1000;
@@ -435,23 +471,13 @@ inline void movementSystem(Engine &,
     float f_x = move_amount * sinf(move_angle);
     float f_y = move_amount * cosf(move_angle);
 
-    float f_z = 0.0f;
-
-    if (action.interact == 2 && abs(pos.z - prev_state.prevPosition.z) < 1e-4) {
-        // Only jump if sufficiently close to a surface.
-        // Moving against walls traps agents in the air
-        // due to friction, allowing "wall-jumping".
-        f_z = 3000.0f; // max move amount.
-    }
-
     constexpr float turn_delta_per_bucket = 
         turn_max / (consts::numTurnBuckets / 2);
     float t_z =
         turn_delta_per_bucket * (action.rotate - consts::numTurnBuckets / 2);
 
-    external_force = cur_rot.rotateVec({ f_x, f_y, f_z });
+    external_force = cur_rot.rotateVec({ f_x, f_y, 0 });
     external_torque = Vector3 { 0, 0, t_z };
-
 }
 
 // Implements the grab action by casting a short ray in front of the agent
@@ -1119,11 +1145,9 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     auto move_sys = builder.addToGraph<ParallelForNode<Engine,
         movementSystem,
             Action,
-            Position,
             Rotation,
             ExternalForce,
-            ExternalTorque,
-            madrona::phys::solver::SubstepPrevState
+            ExternalTorque
         >>({});
 
     // Scripted door behavior
@@ -1148,9 +1172,19 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             GrabState
         >>({broadphase_setup_sys});
 
+    // Jump action, post BVH build to allow raycasting
+    auto jump_sys = builder.addToGraph<ParallelForNode<Engine,
+        jumpSystem,
+            Action,
+            Position,
+            Rotation,
+            Scale,
+            ExternalForce
+        >>({grab_sys});
+
     // Physics collision detection and solver
     auto substep_sys = phys::RigidBodyPhysicsSystem::setupSubstepTasks(builder,
-        {grab_sys}, consts::numPhysicsSubsteps);
+        {jump_sys}, consts::numPhysicsSubsteps);
 
     // Improve controllability of agents by setting their velocity to 0
     // after physics is done.

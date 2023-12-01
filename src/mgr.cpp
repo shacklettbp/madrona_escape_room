@@ -287,18 +287,18 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
     });
 
     setupHull(SimObject::Wall, 0.f, {
-        .muS = 0.0f,//0.5f,
-        .muD = 0.0f,//0.5f,
+        .muS = 0.5f,
+        .muD = 0.5f,
     });
 
     setupHull(SimObject::Door, 0.f, {
-        .muS = 0.0f,//0.5f,
-        .muD = 0.0f,//0.5f,
+        .muS = 0.5f,
+        .muD = 0.5f,
     });
 
     setupHull(SimObject::Agent, 1.f, {
-        .muS = 0.0f,//0.5f,
-        .muD = 0.0f,//0.5f,
+        .muS = 0.5f,
+        .muD = 0.5f,
     });
 
     setupHull(SimObject::Button, 1.f, {
