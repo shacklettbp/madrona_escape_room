@@ -30,6 +30,10 @@ public:
 
     void step();
 
+#ifdef MADRONA_CUDA_SUPPORT
+    void gpuRolloutStep(cudaStream_t strm, void **rollout_buffers);
+#endif
+
     // These functions export Tensor objects that link the ECS
     // simulation state to the python bindings / PyTorch tensors (src/bindings.cpp)
     madrona::py::Tensor resetTensor() const;
@@ -42,6 +46,8 @@ public:
     madrona::py::Tensor doorObservationTensor() const;
     madrona::py::Tensor lidarTensor() const;
     madrona::py::Tensor stepsRemainingTensor() const;
+    madrona::py::Tensor agentIDTensor() const;
+    madrona::py::TrainInterface trainInterface() const;
 
     // These functions are used by the viewer to control the simulation
     // with keyboard inputs in place of DNN policy actions

@@ -65,6 +65,10 @@ struct SelfObservation {
     float isGrabbing;
 };
 
+struct AgentID {
+    int32_t id;
+};
+
 // The state of the world is passed to each agent in terms of egocentric
 // polar coordinates. theta is degrees off agent forward.
 struct PolarObservation {
@@ -223,6 +227,7 @@ struct Agent : public madrona::Archetype<
 
     // Observations
     SelfObservation,
+    AgentID,
     PartnerObservations,
     RoomEntityObservations,
     DoorObservation,

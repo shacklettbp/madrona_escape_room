@@ -43,14 +43,11 @@ policy = make_policy(num_obs_features, args.num_channels, args.separate_value)
 weights = LearningState.load_policy_weights(args.ckpt_path)
 policy.load_state_dict(weights)
 
+policy = policy.to(torch.device(f"cuda:{args.gpu_id}"))
+
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
-
-# Flatten N, A, ... tensors to N * A, ...
-actions = actions.view(-1, *actions.shape[2:])
-dones  = dones.view(-1, *dones.shape[2:])
-rewards = rewards.view(-1, *rewards.shape[2:])
 
 cur_rnn_states = []
 
@@ -71,7 +68,7 @@ for i in range(args.num_steps):
         probs = action_dists.probs()
 
     if action_log:
-        actions.numpy().tofile(action_log)
+        actions.cpu().numpy().tofile(action_log)
 
     print()
     print("Self:", obs[0])

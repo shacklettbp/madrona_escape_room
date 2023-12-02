@@ -121,11 +121,6 @@ actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
 
-# Flatten N, A, ... tensors to N * A, ...
-actions = actions.view(-1, *actions.shape[2:])
-dones  = dones.view(-1, *dones.shape[2:])
-rewards = rewards.view(-1, *rewards.shape[2:])
-
 if args.restore:
     restore_ckpt = ckpt_dir / f"{args.restore}.pth"
 else:
@@ -153,7 +148,7 @@ train(
             value_loss_coef=args.value_loss_coef,
             entropy_coef=args.entropy_loss_coef,
             max_grad_norm=0.5,
-            num_epochs=2,
+            num_epochs=1,
             clip_value_loss=args.clip_value_loss,
         ),
         value_normalizer_decay = 0.999,
