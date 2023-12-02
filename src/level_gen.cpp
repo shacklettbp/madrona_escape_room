@@ -734,8 +734,8 @@ static void generateComplexLevel(Engine &ctx)
 void generateWorld(Engine &ctx)
 {
     resetPersistentEntities(ctx);
-    //generateLevel(ctx);
-    generateComplexLevel(ctx);
+    generateLevel(ctx);
+    //generateComplexLevel(ctx);
 }
 
 }
