@@ -47,8 +47,6 @@ int main(int argc, char *argv[])
         }
     }
 
-
-
     // Setup replay log
     const char *replay_log_path = nullptr;
     if (argc >= 4) {
@@ -71,8 +69,8 @@ int main(int argc, char *argv[])
 #endif
 
     WindowManager wm {};
-    Window *window = wm.makeWindow("Escape Room", 2730, 1536);
-    render::GPUHandle render_gpu = wm.initGPU(0, {window});
+    WindowHandle window = wm.makeWindow("Escape Room", 2730, 1536);
+    render::GPUHandle render_gpu = wm.initGPU(0, { window.get() });
 
     // Create the simulation manager
     Manager mgr({
@@ -95,7 +93,7 @@ int main(int argc, char *argv[])
 
 
     // Create the viewer viewer
-    viz::Viewer viewer(mgr.getRenderManager(), window, {
+    viz::Viewer viewer(mgr.getRenderManager(), window.get(), {
         .numWorlds = num_worlds,
         .simTickRate = 20,
         .cameraMoveSpeed = camera_move_speed,
