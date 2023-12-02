@@ -101,7 +101,16 @@ struct Sim : public madrona::WorldBase {
 };
 
 class Engine : public ::madrona::CustomContext<Engine, Sim> {
+public:
     using CustomContext::CustomContext;
+
+    // These are convenience helpers for creating renderable
+    // entities when rendering isn't necessarily enabled
+    template <typename ArchetypeT>
+    inline madrona::Entity makeRenderableEntity();
+    inline void destroyRenderableEntity(Entity e);
 };
 
 }
+
+#include "sim.inl"

@@ -7,7 +7,7 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 
-using render::RenderingSystem;
+namespace RenderingSystem = madrona::render::RenderingSystem;
 
 namespace madEscape {
 
@@ -75,35 +75,18 @@ static inline void cleanupWorld(Engine &ctx)
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
-                if (ctx.data().enableRender) {
-                    render::RenderingSystem::cleanupRenderableEntity(
-                        ctx, room.entities[j]);
-                }
-                ctx.destroyEntity(room.entities[j]);
+                ctx.destroyRenderableEntity(room.entities[j]);
             }
         }
 
-        if (ctx.data().enableRender) {
-            render::RenderingSystem::cleanupRenderableEntity(
-                ctx, room.walls[0]);
-            render::RenderingSystem::cleanupRenderableEntity(
-                ctx, room.walls[1]);
-            render::RenderingSystem::cleanupRenderableEntity(
-                ctx, room.door);
-        }
-
-        ctx.destroyEntity(room.walls[0]);
-        ctx.destroyEntity(room.walls[1]);
-        ctx.destroyEntity(room.door);
+        ctx.destroyRenderableEntity(room.walls[0]);
+        ctx.destroyRenderableEntity(room.walls[1]);
+        ctx.destroyRenderableEntity(room.door);
     }
 }
 
 static inline void initWorld(Engine &ctx)
 {
-    if (ctx.data().enableRender) {
-        render::RenderingSystem::reset(ctx);
-    }
-
     phys::RigidBodyPhysicsSystem::reset(ctx);
 
     // Assign a new episode ID
@@ -139,10 +122,6 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
 
         cleanupWorld(ctx);
         initWorld(ctx);
-
-        if (ctx.data().enableRender) {
-            render::RenderingSystem::markEpisode(ctx);
-        }
     }
 }
 

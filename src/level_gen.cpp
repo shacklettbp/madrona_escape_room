@@ -1,13 +1,10 @@
 #include "level_gen.hpp"
-#include "madrona/render/ecs.hpp"
 
 namespace madEscape {
 
 using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
-
-using render::RenderingSystem;
 
 namespace consts {
 
@@ -79,10 +76,7 @@ static void registerRigidBodyEntity(
 void createPersistentEntities(Engine &ctx)
 {
     // Create the floor entity, just a simple static plane.
-    ctx.data().floorPlane = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, ctx.data().floorPlane);
-    }
+    ctx.data().floorPlane = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         ctx.data().floorPlane,
@@ -94,10 +88,7 @@ void createPersistentEntities(Engine &ctx)
 
     // Create the outer wall entities
     // Behind
-    ctx.data().borders[0] = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[0]);
-    }
+    ctx.data().borders[0] = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         ctx.data().borders[0],
@@ -117,10 +108,7 @@ void createPersistentEntities(Engine &ctx)
         });
 
     // Right
-    ctx.data().borders[1] = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[1]);
-    }
+    ctx.data().borders[1] = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         ctx.data().borders[1],
@@ -140,10 +128,7 @@ void createPersistentEntities(Engine &ctx)
         });
 
     // Left
-    ctx.data().borders[2] = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, ctx.data().borders[2]);
-    }
+    ctx.data().borders[2] = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         ctx.data().borders[2],
@@ -166,12 +151,12 @@ void createPersistentEntities(Engine &ctx)
     // uninitialized, these will be set during world generation, which is
     // called for every episode.
     for (CountT i = 0; i < consts::numAgents; ++i) {
-        Entity agent = ctx.data().agents[i] = ctx.makeEntity<Agent>();
+        Entity agent = ctx.data().agents[i] =
+            ctx.makeRenderableEntity<Agent>();
 
-        // Make the agent renderable but also create a view for it.
+        // Create a render view for the agent
         if (ctx.data().enableRender) {
-            RenderingSystem::makeEntityRenderable(ctx, agent);
-            RenderingSystem::attachEntityToView(ctx,
+            render::RenderingSystem::attachEntityToView(ctx,
                     agent,
                     100.f, 0.001f,
                     1.5f * math::up);
@@ -275,10 +260,7 @@ static void makeEndWall(Engine &ctx,
     float door_center = randBetween(ctx, 0.75f * consts::doorWidth, 
         consts::worldWidth - 0.75f * consts::doorWidth);
     float left_len = door_center - 0.5f * consts::doorWidth;
-    Entity left_wall = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, left_wall);
-    }
+    Entity left_wall = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         left_wall,
@@ -300,10 +282,7 @@ static void makeEndWall(Engine &ctx,
 
     float right_len =
         consts::worldWidth - door_center - 0.5f * consts::doorWidth;
-    Entity right_wall = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, right_wall);
-    }
+    Entity right_wall = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         right_wall,
@@ -323,10 +302,7 @@ static void makeEndWall(Engine &ctx,
         });
     registerRigidBodyEntity(ctx, right_wall, SimObject::Wall);
 
-    Entity door = ctx.makeEntity<DoorEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, door);
-    }
+    Entity door = ctx.makeRenderableEntity<DoorEntity>();
     setupRigidBodyEntity(
         ctx,
         door,
@@ -356,10 +332,7 @@ static Entity makeButton(Engine &ctx,
                          float button_x,
                          float button_y)
 {
-    Entity button = ctx.makeEntity<ButtonEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, button);
-    }
+    Entity button = ctx.makeRenderableEntity<ButtonEntity>();
     ctx.get<Position>(button) = Vector3 {
         button_x,
         button_y,
@@ -383,10 +356,7 @@ static Entity makeCube(Engine &ctx,
                        float cube_y,
                        float scale = 1.f)
 {
-    Entity cube = ctx.makeEntity<PhysicsEntity>();
-    if (ctx.data().enableRender) {
-        RenderingSystem::makeEntityRenderable(ctx, cube);
-    }
+    Entity cube = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         cube,
