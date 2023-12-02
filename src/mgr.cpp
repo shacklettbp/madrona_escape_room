@@ -109,6 +109,11 @@ struct Manager::Impl {
 
     virtual void run() = 0;
 
+#ifdef MADRONA_CUDA_SUPPORT
+    virtual void gpuRollout(cudaStream_t strm, void **buffers,
+                            const TrainInterface &train_iface) = 0;
+#endif
+
     virtual Tensor exportTensor(ExportID slot,
         Tensor::ElementType type,
         madrona::Span<const int64_t> dimensions) const = 0;
@@ -142,6 +147,17 @@ struct Manager::CPUImpl final : Manager::Impl {
         cpuExec.run();
     }
 
+#ifdef MADRONA_CUDA_SUPPORT
+    virtual void gpuRollout(cudaStream_t strm, void **buffers,
+                            const TrainInterface &train_iface)
+    {
+        (void)strm;
+        (void)buffers;
+        (void)train_iface;
+        assert(false);
+    }
+#endif
+
     virtual inline Tensor exportTensor(ExportID slot,
         Tensor::ElementType type,
         madrona::Span<const int64_t> dims) const final
@@ -174,6 +190,72 @@ struct Manager::CUDAImpl final : Manager::Impl {
     {
         gpuExec.run();
     }
+
+#ifdef MADRONA_CUDA_SUPPORT
+    virtual void gpuRollout(cudaStream_t strm, void **buffers,
+                            const TrainInterface &train_iface)
+    {
+        auto numTensorBytes = [](const Tensor &t) {
+            uint64_t num_items = 1;
+            uint64_t num_dims = t.numDims();
+            for (uint64_t i = 0; i < num_dims; i++) {
+                num_items *= t.dims()[i];
+            }
+
+            return num_items * (uint64_t)t.numBytesPerItem();
+        };
+
+        auto copyToSim = [&strm, &numTensorBytes](const Tensor &dst, void *src) {
+            uint64_t num_bytes = numTensorBytes(dst);
+
+            REQ_CUDA(cudaMemcpyAsync(dst.devicePtr(), src, num_bytes,
+                cudaMemcpyDeviceToDevice, strm));
+        };
+
+        auto copyFromSim = [&strm, &numTensorBytes](void *dst, const Tensor &src) {
+            uint64_t num_bytes = numTensorBytes(src);
+
+            REQ_CUDA(cudaMemcpyAsync(dst, src.devicePtr(), num_bytes,
+                cudaMemcpyDeviceToDevice, strm));
+        };
+
+        Span<const TrainInterface::NamedTensor> src_obs =
+            train_iface.observations();
+        Span<const TrainInterface::NamedTensor> src_stats =
+            train_iface.stats();
+        auto policy_assignments = train_iface.policyAssignments();
+
+        void **input_buffers = buffers;
+        void **output_buffers = buffers +
+            src_obs.size() + src_stats.size() + 4;
+
+        if (policy_assignments.has_value()) {
+            output_buffers += 1;
+        }
+
+        CountT cur_idx = 0;
+
+        copyToSim(train_iface.actions(), input_buffers[cur_idx++]);
+        copyToSim(train_iface.resets(), input_buffers[cur_idx++]);
+
+        gpuExec.runAsync(strm);
+
+        copyFromSim(output_buffers[cur_idx++], train_iface.rewards());
+        copyFromSim(output_buffers[cur_idx++], train_iface.dones());
+
+        if (policy_assignments.has_value()) {
+            copyFromSim(output_buffers[cur_idx++], *policy_assignments);
+        }
+
+        for (const TrainInterface::NamedTensor &t : src_obs) {
+            copyFromSim(output_buffers[cur_idx++], t.hdl);
+        }
+
+        for (const TrainInterface::NamedTensor &t : src_stats) {
+            copyFromSim(output_buffers[cur_idx++], t.hdl);
+        }
+    }
+#endif
 
     virtual inline Tensor exportTensor(ExportID slot,
         Tensor::ElementType type,
@@ -524,6 +606,22 @@ void Manager::step()
     }
 }
 
+#ifdef MADRONA_CUDA_SUPPORT
+void Manager::gpuRolloutStep(cudaStream_t strm, void **rollout_buffers)
+{
+    TrainInterface iface = trainInterface();
+    impl_->gpuRollout(strm, rollout_buffers, iface);
+
+    if (impl_->renderMgr.has_value()) {
+        impl_->renderMgr->readECS();
+    }
+
+    if (impl_->cfg.enableBatchRenderer) {
+        impl_->renderMgr->batchRender();
+    }
+}
+#endif
+
 Tensor Manager::resetTensor() const
 {
     return impl_->exportTensor(ExportID::Reset,
@@ -538,8 +636,7 @@ Tensor Manager::actionTensor() const
 {
     return impl_->exportTensor(ExportID::Action, Tensor::ElementType::Int32,
         {
-            impl_->cfg.numWorlds,
-            consts::numAgents,
+            impl_->cfg.numWorlds * consts::numAgents,
             4,
         });
 }
@@ -548,8 +645,7 @@ Tensor Manager::rewardTensor() const
 {
     return impl_->exportTensor(ExportID::Reward, Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    1,
                                });
 }
@@ -558,8 +654,7 @@ Tensor Manager::doneTensor() const
 {
     return impl_->exportTensor(ExportID::Done, Tensor::ElementType::Int32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    1,
                                });
 }
@@ -569,8 +664,7 @@ Tensor Manager::selfObservationTensor() const
     return impl_->exportTensor(ExportID::SelfObservation,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    8,
                                });
 }
@@ -580,8 +674,7 @@ Tensor Manager::partnerObservationsTensor() const
     return impl_->exportTensor(ExportID::PartnerObservations,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::numAgents - 1,
                                    3,
                                });
@@ -592,8 +685,7 @@ Tensor Manager::roomEntityObservationsTensor() const
     return impl_->exportTensor(ExportID::RoomEntityObservations,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::maxEntitiesPerRoom,
                                    3,
                                });
@@ -604,8 +696,8 @@ Tensor Manager::doorObservationTensor() const
     return impl_->exportTensor(ExportID::DoorObservation,
                                Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
+                                   1,
                                    3,
                                });
 }
@@ -614,8 +706,7 @@ Tensor Manager::lidarTensor() const
 {
     return impl_->exportTensor(ExportID::Lidar, Tensor::ElementType::Float32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    consts::numLidarSamples,
                                    2,
                                });
@@ -626,8 +717,7 @@ Tensor Manager::stepsRemainingTensor() const
     return impl_->exportTensor(ExportID::StepsRemaining,
                                Tensor::ElementType::Int32,
                                {
-                                   impl_->cfg.numWorlds,
-                                   consts::numAgents,
+                                   impl_->cfg.numWorlds * consts::numAgents,
                                    1,
                                });
 }
@@ -656,6 +746,35 @@ Tensor Manager::depthTensor() const
         impl_->cfg.batchRenderViewWidth,
         1,
     }, impl_->cfg.gpuID);
+
+Tensor Manager::agentIDTensor() const
+{
+    return impl_->exportTensor(ExportID::AgentID,
+                               Tensor::ElementType::Int32,
+                               {
+                                   impl_->cfg.numWorlds * consts::numAgents,
+                                   1,
+                               });
+}
+
+TrainInterface Manager::trainInterface() const
+{
+    return TrainInterface {
+        {
+            { "self", selfObservationTensor() },
+            { "partners", partnerObservationsTensor() },
+            { "roomEntities", roomEntityObservationsTensor() },
+            { "door", doorObservationTensor() },
+            { "lidar", lidarTensor() },
+            { "stepsRemaining", stepsRemainingTensor() },
+            { "agentID", agentIDTensor() },
+        },
+        actionTensor(),
+        rewardTensor(),
+        doneTensor(),
+        resetTensor(),
+        Optional<Tensor>::none(),
+    };
 }
 
 void Manager::triggerReset(int32_t world_idx)

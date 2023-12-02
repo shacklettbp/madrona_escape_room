@@ -100,7 +100,6 @@ def _gather_minibatch(rollouts : Rollouts,
 
 def _compute_advantages(cfg : TrainConfig,
                         amp : AMPState,
-                        value_normalizer : EMANormalizer,
                         advantages_out : torch.Tensor,
                         rollouts : Rollouts):
     # This function is going to be operating in fp16 mode completely
@@ -199,12 +198,31 @@ def _ppo_update(cfg : TrainConfig,
     with profile('Optimize'):
         if amp.scaler is None:
             loss.backward()
+            #print("MAX")
+            #for k, v in actor_critic.named_parameters():
+            #    print("  ", k, torch.max(v.grad))
+            #print("MIN")
+            #for k, v in actor_critic.named_parameters():
+            #    print("  ", k, torch.min(v.grad))
+            #print("MEAN")
+            #for k, v in actor_critic.named_parameters():
+            #    print("  ", k, torch.mean(v.grad))
+
             nn.utils.clip_grad_norm_(
                 actor_critic.parameters(), cfg.ppo.max_grad_norm)
             optimizer.step()
         else:
             amp.scaler.scale(loss).backward()
             amp.scaler.unscale_(optimizer)
+            #print("MAX")
+            #for k, v in actor_critic.named_parameters():
+            #    print("  ", k, torch.max(v.grad))
+            #print("MIN")
+            #for k, v in actor_critic.named_parameters():
+            #    print("  ", k, torch.min(v.grad))
+            #print("MEAN")
+            #for k, v in actor_critic.named_parameters():
+            #    print("  ", k, torch.mean(v.grad))
             nn.utils.clip_grad_norm_(
                 actor_critic.parameters(), cfg.ppo.max_grad_norm)
             amp.scaler.step(optimizer)
@@ -219,8 +237,8 @@ def _ppo_update(cfg : TrainConfig,
         stats = PPOStats(
             loss = loss.cpu().float().item(),
             action_loss = -(action_obj.cpu().float().item()),
-            value_loss = value_loss.cpu().float().item(),
-            entropy_loss = -(entropies.cpu().float().item()),
+            value_loss = (cfg.ppo.value_loss_coef * value_loss.cpu().float().item()),
+            entropy_loss = -(cfg.ppo.entropy_coef * entropies.cpu().float().item()),
             returns_mean = returns_mean.cpu().float().item(),
             returns_stddev = returns_stddev.cpu().float().item(),
         )
@@ -251,7 +269,6 @@ def _update_iter(cfg : TrainConfig,
         with profile('Compute Advantages'):
             _compute_advantages(cfg,
                                 amp,
-                                value_normalizer,
                                 advantages,
                                 rollouts)
     
@@ -391,4 +408,4 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         start_update_idx=start_update_idx,
     )
 
-    return actor_critic.cpu()
+    return actor_critic

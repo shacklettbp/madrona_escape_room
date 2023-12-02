@@ -145,7 +145,6 @@ class RolloutManager:
                     # Invert normalized values
                     self.values[bptt_chunk, slot] = value_normalizer.invert(amp, self.values[bptt_chunk, slot])
 
-
                     rnn_states_cur_in, rnn_states_cur_out = \
                         rnn_states_cur_out, rnn_states_cur_in
 
