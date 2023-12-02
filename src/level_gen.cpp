@@ -7,17 +7,12 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 
-namespace consts {
-
-inline constexpr float doorWidth = consts::worldWidth / 3.f;
-
-}
-
 enum class RoomType : uint32_t {
     SingleButton,
     DoubleButton,
     CubeBlocking,
     CubeButtons,
+    Key,
     NumTypes,
 };
 
@@ -262,6 +257,7 @@ static void resetPersistentEntities(Engine &ctx)
          };
 
          ctx.get<StepsRemaining>(agent_entity).t = consts::episodeLen;
+         ctx.get<KeyCode>(agent_entity).code = -1;
      }
 }
 
@@ -340,10 +336,36 @@ static void makeEndWall(Engine &ctx,
         });
     registerRigidBodyEntity(ctx, door, SimObject::Door);
     ctx.get<OpenState>(door).isOpen = false;
+    ctx.get<KeyCode>(door).code = -1; // Default requires no keys.
 
     room.walls[0] = left_wall;
     room.walls[1] = right_wall;
     room.door = door;
+}
+
+static Entity makeKey(Engine &ctx,
+                         float key_x,
+                         float key_y,
+                         int32_t code)
+{
+    Entity key = ctx.makeEntity<KeyEntity>();
+    ctx.get<Position>(key) = Vector3 {
+        key_x,
+        key_y,
+        std::sqrt(3.0f) * consts::keyWidth,
+    };
+    ctx.get<Rotation>(key) = Quat::angleAxis(math::pi / 4.0f, Vector3(0,1,0)) * Quat::angleAxis(math::pi / 4.0f, Vector3(1,0,0));
+    ctx.get<Scale>(key) = Diag3x3 {
+        consts::keyWidth,
+        consts::keyWidth,
+        consts::keyWidth,
+    };
+    ctx.get<ObjectID>(key) = ObjectID { (int32_t)SimObject::Key };
+    ctx.get<KeyState>(key).claimed = false;
+    ctx.get<KeyState>(key).code.code = code;
+    ctx.get<EntityType>(key) = EntityType::Key;
+
+    return key;
 }
 
 static Entity makeButton(Engine &ctx,
@@ -400,6 +422,7 @@ static Entity makeCube(Engine &ctx,
 static void setupDoor(Engine &ctx,
                       Entity door,
                       Span<const Entity> buttons,
+                      KeyCode key_code,
                       bool is_persistent)
 {
     DoorProperties &props = ctx.get<DoorProperties>(door);
@@ -409,6 +432,39 @@ static void setupDoor(Engine &ctx,
     }
     props.numButtons = (int32_t)buttons.size();
     props.isPersistent = is_persistent;
+
+    ctx.get<KeyCode>(door).code = key_code.code;
+}
+
+// A room with a door unlocked by a key.
+// Door opens to an agent with the key.
+static CountT makeKeyRoom(Engine &ctx,
+                          Room &room,
+                          Room &placementRoom,
+                          float y_min,
+                          float y_max)
+{
+    float key_x = randInRangeCentered(ctx,
+        consts::worldWidth / 2.f - consts::keyWidth);
+    float key_y = randBetween(ctx, y_min + consts::roomLength / 4.f,
+        y_max - consts::wallWidth - consts::keyWidth / 2.f);
+
+    Entity key = makeKey(ctx, key_x, key_y, 7); // key code
+
+    setupDoor(ctx, room.door, {}, ctx.get<KeyState>(key).code, true);
+
+    CountT openEntityIdx = 0;
+    while (openEntityIdx < consts::maxEntitiesPerRoom) {
+        if (placementRoom.entities[openEntityIdx] == Entity::none()) {
+            placementRoom.entities[openEntityIdx] = key;
+            break;
+        }
+        ++openEntityIdx;
+    }
+
+    // All other rooms have entities, so if the key was placed
+    // in slot zero it must have been placed in the current room.
+    return (openEntityIdx == 0);
 }
 
 // A room with a single button that needs to be pressed, the door stays open.
@@ -424,7 +480,7 @@ static CountT makeSingleButtonRoom(Engine &ctx,
 
     Entity button = makeButton(ctx, button_x, button_y);
 
-    setupDoor(ctx, room.door, { button }, true);
+    setupDoor(ctx, room.door, { button }, KeyCode{ -1 }, true);
 
     room.entities[0] = button;
 
@@ -458,7 +514,7 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     Entity b = makeButton(ctx, b_x, b_y);
 
-    setupDoor(ctx, room.door, { a, b }, true);
+    setupDoor(ctx, room.door, { a, b }, KeyCode{ -1 }, true);
 
     room.entities[0] = a;
     room.entities[1] = b;
@@ -495,7 +551,7 @@ static CountT makeCubeBlockingRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door, { button_a, button_b }, true);
+    setupDoor(ctx, room.door, { button_a, button_b }, KeyCode{ -1 }, true);
 
     Vector3 door_pos = ctx.get<Position>(room.door);
 
@@ -551,7 +607,7 @@ static CountT makeCubeButtonsRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door, { button_a, button_b }, false);
+    setupDoor(ctx, room.door, { button_a, button_b }, KeyCode{ -1 }, false);
 
     float cube_a_x = randBetween(ctx,
         -consts::worldWidth / 4.f,
@@ -612,6 +668,14 @@ static void makeRoom(Engine &ctx,
         num_room_entities =
             makeCubeButtonsRoom(ctx, room, room_y_min, room_y_max);
     } break;
+    case RoomType::Key: {
+        CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(consts::numRooms));
+        // Put the key in a random room.
+        room_y_min = randomRoomIdx * consts::roomLength;
+        room_y_max = (randomRoomIdx + 1) * consts::roomLength;
+        num_room_entities =
+            makeKeyRoom(ctx, room, level.rooms[randomRoomIdx], room_y_min, room_y_max);
+    } break;
     default: MADRONA_UNREACHABLE();
     }
 
@@ -643,11 +707,35 @@ static void generateLevel(Engine &ctx)
 #endif
 }
 
+static void generateComplexLevel(Engine &ctx)
+{
+    LevelState &level = ctx.singleton<LevelState>();
+
+
+    makeRoom(ctx, level, 0, RoomType::DoubleButton);
+    makeRoom(ctx, level, 1, RoomType::CubeBlocking);
+    makeRoom(ctx, level, 2, RoomType::CubeButtons);
+
+    // Must be made last, as it references the other rooms.
+    makeRoom(ctx, level, 3, RoomType::Key);
+
+    // // An alternative implementation could randomly select the type for each
+    // // room rather than a fixed progression of challenge difficulty
+    // for (CountT i = 0; i < consts::numRooms; i++) {
+    //     RoomType room_type = (RoomType)(
+    //         ctx.data().rng.rand() * (uint32_t)RoomType::NumTypes);
+
+    //     makeRoom(ctx, level, i, room_type);
+    // }
+}
+
+
 // Randomly generate a new world for a training episode
 void generateWorld(Engine &ctx)
 {
     resetPersistentEntities(ctx);
-    generateLevel(ctx);
+    //generateLevel(ctx);
+    generateComplexLevel(ctx);
 }
 
 }

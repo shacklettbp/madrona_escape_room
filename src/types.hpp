@@ -158,6 +158,7 @@ enum class EntityType : uint32_t {
     Wall,
     Agent,
     Door,
+    Key,
     NumTypes,
 };
 
@@ -169,14 +170,24 @@ struct OpenState {
 // Linked buttons that control the door opening and whether or not the door
 // should remain open after the buttons are pressed once.
 struct DoorProperties {
-    Entity buttons[consts::maxEntitiesPerRoom];
+    Entity  buttons[consts::maxEntitiesPerRoom];
     int32_t numButtons;
-    bool isPersistent;
+    bool    isPersistent;
 };
 
 // Similar to OpenState, true during frames where a button is pressed
 struct ButtonState {
     bool isPressed;
+};
+
+struct KeyCode {
+    int32_t code;
+};
+
+// False before an agent claims the key, true after.
+struct KeyState {
+    int32_t claimed;
+    KeyCode code; // Which door the key opens.
 };
 
 // Room itself is not a component but is used by the singleton
@@ -205,6 +216,12 @@ struct ButtonSaveState {
     ButtonState b;
 };
 
+struct KeySaveState {
+    Position p;
+    Rotation r;
+    KeyState k;
+};
+
 struct PhysicsEntityState {
     Position p;
     Rotation r;
@@ -216,6 +233,7 @@ struct DoorState {
     Rotation r;
     Velocity v;
     OpenState o;
+    KeyCode k;
 };
 
 struct AgentState {
@@ -230,13 +248,16 @@ struct AgentState {
     StepsRemaining s;
     Progress pr;
     madrona::phys::JointConstraint j;
+    KeyCode k;
 };
 
 struct Checkpoint {
+    int32_t seed;
     ButtonSaveState buttonStates[consts::numRooms * 2];
     PhysicsEntityState cubeStates[consts::numRooms * 3];
     DoorState doorStates[consts::numRooms];
     AgentState agentStates[consts::numAgents];
+    KeySaveState keyStates[consts::numRooms];
 };
 
 struct CheckpointReset {
@@ -273,6 +294,7 @@ struct Agent : public madrona::Archetype<
     Progress,
     OtherAgents,
     EntityType,
+    KeyCode,
 
     // Input
     Action,
@@ -310,7 +332,19 @@ struct DoorEntity : public madrona::Archetype<
     ExternalTorque,
     madrona::phys::broadphase::LeafID,
     OpenState,
+    KeyCode,
     DoorProperties,
+    EntityType
+> {};
+
+// Archetype for the key objects that allow doors to be opened
+// Keys don't have collision but are rendered
+struct KeyEntity : public madrona::Archetype<
+    Position,
+    Rotation,
+    Scale,
+    ObjectID,
+    KeyState,
     EntityType
 > {};
 

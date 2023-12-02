@@ -89,6 +89,8 @@ int main(int argc, char *argv[])
         (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
     render_asset_paths[(size_t)SimObject::Plane] =
         (std::filesystem::path(DATA_DIR) / "plane.obj").string();
+    render_asset_paths[(size_t)SimObject::Key] =
+        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
 
     std::array<const char *, (size_t)SimObject::NumObjects> render_asset_cstrs;
     for (size_t i = 0; i < render_asset_paths.size(); i++) {
@@ -139,6 +141,8 @@ int main(int argc, char *argv[])
     render_assets->objects[(CountT)SimObject::Agent].meshes[1].materialIDX = 3;
     render_assets->objects[(CountT)SimObject::Agent].meshes[2].materialIDX = 3;
     render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
+    // TODO: Restore, make keys red like doors.
+    render_assets->objects[(CountT)SimObject::Key].meshes[0].materialIDX = 5;
     render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
 
     viewer.loadObjects(render_assets->objects, materials, {

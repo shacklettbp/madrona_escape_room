@@ -57,6 +57,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<Lidar>();
     registry.registerComponent<StepsRemaining>();
     registry.registerComponent<EntityType>();
+    registry.registerComponent<KeyState>();
+    registry.registerComponent<KeyCode>();
 
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
@@ -71,6 +73,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerArchetype<PhysicsEntity>();
     registry.registerArchetype<DoorEntity>();
     registry.registerArchetype<ButtonEntity>();
+    registry.registerArchetype<KeyEntity>();
 
     registry.exportSingleton<Checkpoint>(
         (uint32_t)ExportID::Checkpoint);
@@ -114,7 +117,7 @@ static inline void cleanupWorld(Engine &ctx)
                 ctx.destroyEntity(room.entities[j]);
             }
         }
-
+        
         ctx.destroyEntity(room.walls[0]);
         ctx.destroyEntity(room.walls[1]);
         ctx.destroyEntity(room.door);
@@ -132,13 +135,22 @@ static inline void initWorld(Engine &ctx)
     // Assign a new episode ID
     EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
     int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
-    int32_t seed;
+
+    int32_t &seed = ctx.data().seed;
+
     if ((ctx.data().simFlags & SimFlags::UseFixedWorld) ==
             SimFlags::UseFixedWorld) {
         seed = 0;
     } else {
-        seed = episode_idx;
+        if (ctx.singleton<CheckpointReset>().reset == 1) {
+            // If loading a checkpoint, use the random
+            // seed that generated that world.
+            seed = ctx.singleton<Checkpoint>().seed;
+        } else {
+            seed = episode_idx;
+        }
     }
+
     ctx.data().rng = RNG::make(seed);
     ctx.data().curEpisodeIdx = episode_idx;
     
@@ -156,6 +168,21 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
     reset.reset = 0;
 
     Checkpoint& ckpt = ctx.singleton<Checkpoint>();
+
+    {
+        // Keys
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptKeyQuery, 
+            [&](Position &p, Rotation &r, KeyState &k)
+            {
+                p = ckpt.keyStates[idx].p;
+                r = ckpt.keyStates[idx].r;
+                k = ckpt.keyStates[idx].k;
+                idx++;
+            }
+        );
+    }
+
 
     Entity tempCubeEntities[consts::numRooms * 3];
     {
@@ -181,7 +208,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Entity agent_e, Position &p, Rotation &r, Velocity &v,
                 GrabState &g, Reward &re, Done &d,
-                StepsRemaining &s, Progress &pr)
+                StepsRemaining &s, Progress &pr, KeyCode &k)
             {
                 p  = ckpt.agentStates[idx].p;
                 r  = ckpt.agentStates[idx].r;
@@ -190,6 +217,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
                 d  = ckpt.agentStates[idx].d;
                 s  = ckpt.agentStates[idx].s;
                 pr = ckpt.agentStates[idx].pr;
+                k = ckpt.agentStates[idx].k;
 
                 const int32_t &grabIdx = ckpt.agentStates[idx].grabIdx;
                 if (grabIdx != -1) {
@@ -199,7 +227,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
 
                     // Need to update agent entity ID because this checkpoint
                     // doesn't necessarily correspond to the world where it
-                    // was created. Nee to update e2 to point to the new cube.
+                    // was created. Need to update e2 to point to the new cube.
                     JointConstraint j = ckpt.agentStates[idx].j;
                     j.e1 = agent_e;
                     j.e2 = tempCubeEntities[grabIdx];
@@ -214,12 +242,13 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         // Door parameters
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptDoorQuery, 
-            [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
+            [&](Position &p, Rotation &r, Velocity &v, OpenState& o, KeyCode &k)
             {
                 p = ckpt.doorStates[idx].p;
                 r = ckpt.doorStates[idx].r;
                 v = ckpt.doorStates[idx].v;
                 o = ckpt.doorStates[idx].o;
+                k = ckpt.doorStates[idx].k;
                 idx++;
             }
         );
@@ -295,6 +324,23 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
 
     Checkpoint &ckpt = ctx.singleton<Checkpoint>();
 
+    // Save the random seed.
+    ckpt.seed = ctx.data().seed;
+
+    {
+        // Keys
+        int idx = 0;
+        ctx.iterateQuery(ctx.data().ckptKeyQuery, 
+            [&](Position &p, Rotation &r, KeyState &k)
+            {
+                ckpt.keyStates[idx].p = p;
+                ckpt.keyStates[idx].r = r;
+                ckpt.keyStates[idx].k = k;
+                idx++;
+            }
+        );
+    }
+
     Entity tempCubeEntities[consts::numRooms * 3];
     CountT num_cubes = 0;
     // Cubes, run before agents to track IDs.
@@ -317,7 +363,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
         ctx.iterateQuery(ctx.data().ckptAgentQuery, 
             [&](Entity, Position &p, Rotation &r, Velocity &v,
                 GrabState &g, Reward &re, Done &d,
-            StepsRemaining &s, Progress &pr)
+            StepsRemaining &s, Progress &pr, KeyCode &k)
             {
                 ckpt.agentStates[idx].p = p;
                 ckpt.agentStates[idx].r = r;
@@ -326,6 +372,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
                 ckpt.agentStates[idx].d = d;
                 ckpt.agentStates[idx].s = s;
                 ckpt.agentStates[idx].pr = pr;
+                ckpt.agentStates[idx].k = k;
                 if (g.constraintEntity != Entity::none()) {
                     ckpt.agentStates[idx].j = ctx.get<JointConstraint>(g.constraintEntity);
                     // If the agent was grabbing, find where the info
@@ -348,12 +395,13 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
         // Door parameters
         int idx = 0;
         ctx.iterateQuery(ctx.data().ckptDoorQuery,
-            [&](Position &p, Rotation &r, Velocity &v, OpenState& o)
+            [&](Position &p, Rotation &r, Velocity &v, OpenState &o, KeyCode &k)
             {
                 ckpt.doorStates[idx].p = p;
                 ckpt.doorStates[idx].r = r;
                 ckpt.doorStates[idx].v = v;
                 ckpt.doorStates[idx].o = o;
+                ckpt.doorStates[idx].k = k;
                 idx++;
             }
         );
@@ -394,6 +442,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
             }
         }
     }
+
 
 
     if (should_reset != 0) {
@@ -548,6 +597,24 @@ inline void grabSystem(Engine &ctx,
 }
 
 // Animates the doors opening and closing based on OpenState
+inline void setKeyPositionSystem(Engine &,
+                                 Position &pos,
+                                 KeyState &key_state)
+{
+    if (key_state.claimed) {
+        // Put underground
+        if (pos.z > -std::sqrt(3.0f) * consts::keyWidth) {
+            pos.z += -consts::doorSpeed * consts::deltaT;
+        }
+    }
+    else if (pos.z < std::sqrt(3.0f) * consts::keyWidth) {
+        // Put back on surface
+        pos.z += consts::doorSpeed * consts::deltaT;
+    }
+    
+}
+
+// Animates the doors opening and closing based on OpenState
 inline void setDoorPositionSystem(Engine &,
                                   Position &pos,
                                   OpenState &open_state)
@@ -597,10 +664,46 @@ inline void buttonSystem(Engine &ctx,
     state.isPressed = button_pressed;
 }
 
+// Checks if there is an entity standing on the button and updates
+// ButtonState if so.
+inline void keySystem(Engine &ctx,
+                         Position pos,
+                         KeyState &state)
+{
+    if (state.claimed) {
+        return;
+    }
+
+    AABB button_aabb {
+        .pMin = pos + Vector3 { 
+            -consts::keyWidth / 2.f, 
+            -consts::keyWidth / 2.f,
+            0.f,
+        },
+        .pMax = pos + Vector3 { 
+            consts::keyWidth / 2.f, 
+            consts::keyWidth / 2.f,
+            0.25f
+        },
+    };
+
+    RigidBodyPhysicsSystem::findEntitiesWithinAABB(
+            ctx, button_aabb, [&](Entity &e)
+        {
+            if (ctx.get<EntityType>(e) == EntityType::Agent && !state.claimed) {
+                ctx.get<KeyCode>(e).code = state.code.code;
+                state.claimed = true;
+            } 
+        });
+}
+
+
 // Check if all the buttons linked to the door are pressed and open if so.
 // Optionally, close the door if the buttons aren't pressed.
 inline void doorOpenSystem(Engine &ctx,
+                           Position &pos,
                            OpenState &open_state,
+                           KeyCode &key_code,
                            const DoorProperties &props)
 {
     bool all_pressed = true;
@@ -609,7 +712,33 @@ inline void doorOpenSystem(Engine &ctx,
         all_pressed = all_pressed && ctx.get<ButtonState>(button).isPressed;
     }
 
-    if (all_pressed) {
+    bool key_present = true;
+    if (key_code.code != -1)
+    {
+        key_present = false;
+        // Check for a nearby agent that has the key
+        AABB door_aabb{
+            .pMin = pos + Vector3{
+                -consts::doorWidth / 2.f,
+                -consts::wallWidth / 2.f,
+                0.f,
+            },
+            .pMax = pos + Vector3{
+                consts::doorWidth / 2.f, 
+                consts::wallWidth / 2.f, 
+                0.25f
+            },
+        };
+        RigidBodyPhysicsSystem::findEntitiesWithinAABB(
+        ctx, door_aabb, [&](Entity &e)
+        {
+            if (ctx.get<EntityType>(e) == EntityType::Agent) {
+                key_present = key_present || (ctx.get<KeyCode>(e).code == key_code.code);
+            } 
+        });
+    }
+
+    if (all_pressed && key_present) {
         open_state.isOpen = true;
     } else if (!props.isPersistent) {
         open_state.isOpen = false;
@@ -755,7 +884,7 @@ inline void collectObservationsSystem(Engine &ctx,
         ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
             // We want information on cubes and buttons in the current room.
             if (roomIndex(p) != cur_room_idx ||
-                (e != EntityType::Cube && e != EntityType::Button)) {
+                (e != EntityType::Cube && e != EntityType::Button && e != EntityType::Key)) {
                 return;
             }
 
@@ -1156,11 +1285,17 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Position,
             OpenState
         >>({move_sys});
+    
+    auto set_key_pos_sys = builder.addToGraph<ParallelForNode<Engine,
+        setKeyPositionSystem,
+            Position,
+            KeyState
+        >>({set_door_pos_sys});
 
     // Build BVH for broadphase / raycasting
     auto broadphase_setup_sys =
         phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(builder, 
-                                                           {set_door_pos_sys});
+                                                           {set_key_pos_sys});
 
     // Grab action, post BVH build to allow raycasting
     auto grab_sys = builder.addToGraph<ParallelForNode<Engine,
@@ -1202,13 +1337,21 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Position,
             ButtonState
         >>({phys_done});
+    
+    auto key_sys = builder.addToGraph<ParallelForNode<Engine,
+            keySystem,
+            Position,
+            KeyState
+        >>({button_sys});
 
     // Set door to start opening if button conditions are met
     auto door_open_sys = builder.addToGraph<ParallelForNode<Engine,
         doorOpenSystem,
+            Position,
             OpenState,
+            KeyCode,
             DoorProperties
-        >>({button_sys});
+        >>({key_sys});
 
     TaskGraphNodeID reward_sys;
 
@@ -1438,11 +1581,12 @@ Sim::Sim(Engine &ctx,
     // Create the queries for checkpointing.
     ctx.data().ckptAgentQuery = ctx.query<
         Entity, Position, Rotation, Velocity, GrabState, Reward, Done,
-        StepsRemaining, Progress>();
-    ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState>();
+        StepsRemaining, Progress, KeyCode>();
+    ctx.data().ckptDoorQuery = ctx.query<Position, Rotation, Velocity, OpenState, KeyCode>();
     ctx.data().ckptCubeQuery = ctx.query<Position, Rotation, Velocity, EntityType, Entity>();
     ctx.data().ckptButtonQuery = ctx.query<Position, Rotation, ButtonState>();
     ctx.data().ckptWallQuery = ctx.query<Position, Scale, EntityType>();
+    ctx.data().ckptKeyQuery = ctx.query<Position, Rotation, KeyState>();
 
     ctx.singleton<CheckpointReset>().reset = 0;
     ctx.singleton<CheckpointSave>().save = 1;

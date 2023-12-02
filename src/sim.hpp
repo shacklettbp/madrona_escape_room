@@ -41,6 +41,7 @@ enum class SimObject : uint32_t {
     Door,
     Agent,
     Button,
+    Key,
     Plane,
     NumObjects,
 };
@@ -85,6 +86,9 @@ struct Sim : public madrona::WorldBase {
     // Simple random number generator seeded with episode ID.
     RNG rng;
 
+    // The random seed that generated this world.
+    int32_t seed;
+
     // Floor plane entity, constant across all episodes.
     Entity floorPlane;
 
@@ -106,11 +110,12 @@ struct Sim : public madrona::WorldBase {
 
     // Queries for checkpointing
     Query<Entity, Position, Rotation, Velocity, GrabState, Reward, Done,
-          StepsRemaining, Progress> ckptAgentQuery;
-    Query<Position, Rotation, Velocity, OpenState> ckptDoorQuery;
+          StepsRemaining, Progress, KeyCode> ckptAgentQuery;
+    Query<Position, Rotation, Velocity, OpenState, KeyCode> ckptDoorQuery;
     Query<Position, Rotation, Velocity, EntityType, Entity> ckptCubeQuery;
     Query<Position, Rotation, ButtonState> ckptButtonQuery;
     Query<Position, Scale, EntityType> ckptWallQuery;
+    Query<Position, Rotation, KeyState> ckptKeyQuery;
 
     // Should the environment automatically reset (generate a new episode)
     // at the end of each episode?
