@@ -1,10 +1,10 @@
+import torch
 import madrona_escape_room
 
 from madrona_escape_room_learn import LearningState
 
 from policy import make_policy, setup_obs
 
-import torch
 import numpy as np
 import argparse
 import math

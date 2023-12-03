@@ -20,7 +20,9 @@ public:
         int gpuID; // Which GPU for CUDA backend?
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
-        bool enableBatchRenderer = false;
+        bool enableBatchRenderer;
+        uint32_t batchRenderViewWidth = 64;
+        uint32_t batchRenderViewHeight = 64;
         madrona::render::APIBackend *extRenderAPI = nullptr;
         madrona::render::GPUDevice *extRenderDev = nullptr;
     };
@@ -42,6 +44,8 @@ public:
     madrona::py::Tensor doorObservationTensor() const;
     madrona::py::Tensor lidarTensor() const;
     madrona::py::Tensor stepsRemainingTensor() const;
+    madrona::py::Tensor rgbTensor() const;
+    madrona::py::Tensor depthTensor() const;
 
     // These functions are used by the viewer to control the simulation
     // with keyboard inputs in place of DNN policy actions

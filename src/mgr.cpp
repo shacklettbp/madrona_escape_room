@@ -73,8 +73,8 @@ static inline Optional<render::RenderManager> initRenderManager(
 
     return render::RenderManager(render_api, render_dev, {
         .enableBatchRenderer = mgr_cfg.enableBatchRenderer,
-        .agentViewWidth = 64,
-        .agentViewHeight = 64,
+        .agentViewWidth = mgr_cfg.batchRenderViewWidth,
+        .agentViewHeight = mgr_cfg.batchRenderViewHeight,
         .numWorlds = mgr_cfg.numWorlds,
         .maxViewsPerWorld = consts::numAgents,
         .maxInstancesPerWorld = 1000,
@@ -662,6 +662,32 @@ Tensor Manager::stepsRemainingTensor() const
                                    consts::numAgents,
                                    1,
                                });
+}
+
+Tensor Manager::rgbTensor() const
+{
+    const uint8_t *rgb_ptr = impl_->renderMgr->batchRendererRGBOut();
+
+    return Tensor((void*)rgb_ptr, Tensor::ElementType::UInt8, {
+        impl_->cfg.numWorlds,
+        consts::numAgents,
+        impl_->cfg.batchRenderViewHeight,
+        impl_->cfg.batchRenderViewWidth,
+        4,
+    }, impl_->cfg.gpuID);
+}
+
+Tensor Manager::depthTensor() const
+{
+    const float *depth_ptr = impl_->renderMgr->batchRendererDepthOut();
+
+    return Tensor((void *)depth_ptr, Tensor::ElementType::Float32, {
+        impl_->cfg.numWorlds,
+        consts::numAgents,
+        impl_->cfg.batchRenderViewHeight,
+        impl_->cfg.batchRenderViewWidth,
+        1,
+    }, impl_->cfg.gpuID);
 }
 
 void Manager::triggerReset(int32_t world_idx)

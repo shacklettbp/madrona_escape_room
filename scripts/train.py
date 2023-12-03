@@ -1,3 +1,4 @@
+import torch
 import madrona_escape_room
 
 from madrona_escape_room_learn import (
@@ -6,7 +7,6 @@ from madrona_escape_room_learn import (
 
 from policy import make_policy, setup_obs
 
-import torch
 import argparse
 import math
 from pathlib import Path
