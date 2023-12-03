@@ -46,6 +46,8 @@ NB_MODULE(madrona_escape_room, m) {
              &Manager::doorObservationTensor)
         .def("lidar_tensor", &Manager::lidarTensor)
         .def("steps_remaining_tensor", &Manager::stepsRemainingTensor)
+        .def("rgb_tensor", &Manager::rgbTensor)
+        .def("depth_tensor", &Manager::depthTensor)
     ;
 }
 
