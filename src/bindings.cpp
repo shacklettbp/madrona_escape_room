@@ -21,17 +21,20 @@ NB_MODULE(madrona_escape_room, m) {
                             PyExecMode exec_mode,
                             int64_t gpu_id,
                             int64_t num_worlds,
-                            bool auto_reset) {
+                            bool auto_reset,
+                            bool enable_batch_renderer) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
                 .numWorlds = (uint32_t)num_worlds,
                 .autoReset = auto_reset,
+                .enableBatchRenderer = enable_batch_renderer,
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
            nb::arg("num_worlds"),
-           nb::arg("auto_reset"))
+           nb::arg("auto_reset"),
+           nb::arg("enable_batch_renderer") = false)
         .def("step", &Manager::step)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)
@@ -45,6 +48,8 @@ NB_MODULE(madrona_escape_room, m) {
              &Manager::doorObservationTensor)
         .def("lidar_tensor", &Manager::lidarTensor)
         .def("steps_remaining_tensor", &Manager::stepsRemainingTensor)
+        .def("rgb_tensor", &Manager::rgbTensor)
+        .def("depth_tensor", &Manager::depthTensor)
         .def("jax", JAXInterface::buildEntry<
                 &Manager::trainInterface,
                 &Manager::step
