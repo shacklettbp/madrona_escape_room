@@ -531,25 +531,26 @@ def _update_loop(update_iter_fn : Callable,
         # Does this kill the diversity if it's not coming from the "uncontrolled" worlds? 
         # We may just need to add a lot more checkpoints to the buffer
         # We can also start introducing the binning function here
-        print("Tensor shape", sim.obs[0].shape)
-        per_world_tensor = sim.obs[0].reshape(-1, 2, 8) # 8 features, 2 agents
-        third_room_flag = (per_world_tensor[...,3] > 0.67)
-        second_room_flag = (per_world_tensor[...,3] > 0.34) ^ third_room_flag
-        third_room_flag = third_room_flag.sum(dim=1) > 0
-        second_room_flag = second_room_flag.sum(dim=1) > 0
-        num_second_room = second_room_flag.sum()
-        num_third_room = third_room_flag.sum()
-        print(num_second_room, "agents in second room")
-        print(num_third_room, "agents in third room")
-        if num_second_room > 0:
-            print("Adding", sim.checkpoints[second_room_flag])
-            second_room_ckpts = torch.cat((sim.checkpoints[second_room_flag], second_room_ckpts[:-num_second_room]), dim=0)
-            if total_second_room_ckpts < checkpoint_buffer_size:
-                total_second_room_ckpts += min(checkpoint_buffer_size - total_second_room_ckpts, num_second_room)
-        if num_third_room > 0:
-            third_room_ckpts = torch.cat((sim.checkpoints[third_room_flag], third_room_ckpts[:-num_third_room]), dim=0)
-            if total_third_room_ckpts < checkpoint_buffer_size:
-                total_third_room_ckpts += min(checkpoint_buffer_size - total_third_room_ckpts, num_third_room)
+        if False:
+            print("Tensor shape", sim.obs[0].shape)
+            per_world_tensor = sim.obs[0].reshape(-1, 2, 8) # 8 features, 2 agents
+            third_room_flag = (per_world_tensor[...,3] > 0.67)
+            second_room_flag = (per_world_tensor[...,3] > 0.34) ^ third_room_flag
+            third_room_flag = third_room_flag.sum(dim=1) > 0
+            second_room_flag = second_room_flag.sum(dim=1) > 0
+            num_second_room = second_room_flag.sum()
+            num_third_room = third_room_flag.sum()
+            print(num_second_room, "agents in second room")
+            print(num_third_room, "agents in third room")
+            if num_second_room > 0:
+                print("Adding", sim.checkpoints[second_room_flag])
+                second_room_ckpts = torch.cat((sim.checkpoints[second_room_flag], second_room_ckpts[:-num_second_room]), dim=0)
+                if total_second_room_ckpts < checkpoint_buffer_size:
+                    total_second_room_ckpts += min(checkpoint_buffer_size - total_second_room_ckpts, num_second_room)
+            if num_third_room > 0:
+                third_room_ckpts = torch.cat((sim.checkpoints[third_room_flag], third_room_ckpts[:-num_third_room]), dim=0)
+                if total_third_room_ckpts < checkpoint_buffer_size:
+                    total_third_room_ckpts += min(checkpoint_buffer_size - total_third_room_ckpts, num_third_room)
 
 def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
     print(cfg)
