@@ -89,6 +89,74 @@ class PrefixCommonSimpleAdapter(nn.Module):
         return jnp.concatenate(flattened, axis=-1)
 
 
+class PrefixPixels(nn.Module):
+    dtype: jnp.dtype
+
+    @nn.compact
+    def __call__(
+        self,
+        obs,
+        train,
+    ):
+        rgb = obs['rgb'][..., 0:3]
+
+        x = jnp.concatenate([rgb, obs['depth']], axis=-1)
+
+        width = x.shape[-2]
+        height = x.shape[-3]
+
+        x = x.reshape(
+            *x.shape[:-3],
+            height // 2, 2,
+            width // 2, 2,
+            x.shape[-1],
+        )
+
+        num_leading = len(x.shape) - 5
+
+        x = jnp.transpose(x, axes=(*range(num_leading),
+            num_leading, num_leading + 2,
+            num_leading + 1, num_leading + 3,
+            num_leading + 4))
+
+        x = x.reshape(*x.shape[:-3], -1)
+
+        assert_valid_input(x)
+
+        x = nn.relu(nn.Conv(
+                features=32,
+                kernel_size=(3, 3),
+                padding=(1, 1),
+                strides=2,
+                dtype=self.dtype,
+            )(x))
+
+        x = nn.relu(nn.Conv(
+                features=64,
+                kernel_size=(3, 3),
+                padding=(1, 1),
+                strides=2,
+                dtype=self.dtype,
+            )(x))
+
+        x = nn.relu(nn.Conv(
+                features=64,
+                kernel_size=(3, 3),
+                padding=(1, 1),
+                strides=2,
+                dtype=self.dtype,
+            )(x))
+
+        x = nn.relu(nn.Conv(
+                features=64,
+                kernel_size=(3, 3),
+                padding=(1, 1),
+                strides=2,
+                dtype=self.dtype,
+            )(x))
+
+        return x.reshape(*x.shape[:-3], -1)
+
 class ProcessObsMLP(nn.Module):
     dtype: jnp.dtype
 
@@ -151,20 +219,21 @@ class PolicyLSTM(nn.Module):
 def make_policy(dtype, use_simple_policy):
 
     if use_simple_policy:
-        prefix = PrefixCommonSimpleAdapter(dtype)
+        #prefix = PrefixCommonSimpleAdapter(dtype)
         #prefix = ProcessObsMLP(dtype)
-        encoder = madrona_learn.BackboneEncoder(
+        prefix = PrefixPixels(dtype)
+        encoder = madrona_learn.RecurrentBackboneEncoder(
             net = MLP(
                 num_channels = 256,
-                num_layers = 3,
+                num_layers = 1,
                 dtype = dtype,
                 weight_init = pytorch_initializer(),
             ),
-            #rnn = LSTM(
-            #    num_hidden_channels = 256,
-            #    num_layers = 1,
-            #    dtype = dtype,
-            #),
+            rnn = LSTM(
+                num_hidden_channels = 256,
+                num_layers = 1,
+                dtype = dtype,
+            ),
         )
     else:
         prefix = PrefixCommon(dtype)
@@ -198,6 +267,15 @@ def make_policy(dtype, use_simple_policy):
     obs_preprocess = ObservationsEMANormalizer.create(
         decay = 0.99999,
         dtype = dtype,
+        #overrides = {
+        #    'rgb': lambda x: x[..., :3].astype(dtype) / 255,
+        #    'depth': lambda x: (x / 20).astype(dtype),
+        #},
+        prep_fns = {
+            'rgb': lambda x: x[..., :3],
+            'depth': lambda x: jnp.where(
+                jnp.logical_or(jnp.isnan(x), jnp.isinf(x)), 0, x),
+        },
     )
 
     #obs_preprocess = ObservationsCaster(dtype=dtype)

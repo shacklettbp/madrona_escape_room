@@ -769,8 +769,7 @@ Tensor Manager::rgbTensor() const
     const uint8_t *rgb_ptr = impl_->renderMgr->batchRendererRGBOut();
 
     return Tensor((void*)rgb_ptr, Tensor::ElementType::UInt8, {
-        impl_->cfg.numWorlds,
-        consts::numAgents,
+        impl_->cfg.numWorlds * consts::numAgents,
         impl_->cfg.batchRenderViewHeight,
         impl_->cfg.batchRenderViewWidth,
         4,
@@ -782,8 +781,7 @@ Tensor Manager::depthTensor() const
     const float *depth_ptr = impl_->renderMgr->batchRendererDepthOut();
 
     return Tensor((void *)depth_ptr, Tensor::ElementType::Float32, {
-        impl_->cfg.numWorlds,
-        consts::numAgents,
+        impl_->cfg.numWorlds * consts::numAgents,
         impl_->cfg.batchRenderViewHeight,
         impl_->cfg.batchRenderViewWidth,
         1,
@@ -792,8 +790,14 @@ Tensor Manager::depthTensor() const
 
 TrainInterface Manager::trainInterface() const
 {
-    return TrainInterface {
-        {
+    std::vector<TrainInterface::NamedTensor> obs;
+    if (impl_->cfg.enableBatchRenderer) {
+        obs = {
+            { "rgb", rgbTensor() },
+            { "depth", depthTensor() },
+        };
+    } else {
+        obs = {
             { "self", selfObservationTensor() },
             { "partners", partnerObservationsTensor() },
             { "roomEntities", roomEntityObservationsTensor() },
@@ -801,7 +805,11 @@ TrainInterface Manager::trainInterface() const
             { "lidar", lidarTensor() },
             { "stepsRemaining", stepsRemainingTensor() },
             { "agentID", agentIDTensor() },
-        },
+        };
+    }
+
+    return TrainInterface {
+        obs,
         actionTensor(),
         rewardTensor(),
         doneTensor(),

@@ -19,7 +19,7 @@ from madrona_learn import (
 from madrona_learn.rnn import LSTM
 from jax_policy import make_policy
 
-madrona_learn.init(0.7)
+madrona_learn.init(0.75)
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--gpu-id', type=int, default=0)
@@ -28,8 +28,8 @@ arg_parser.add_argument('--restore', type=int)
 
 arg_parser.add_argument('--num-worlds', type=int, required=True)
 arg_parser.add_argument('--num-updates', type=int, required=True)
-arg_parser.add_argument('--steps-per-update', type=int, default=40)
-arg_parser.add_argument('--num-bptt-chunks', type=int, default=8)
+arg_parser.add_argument('--steps-per-update', type=int, default=10)
+arg_parser.add_argument('--num-bptt-chunks', type=int, default=2)
 
 arg_parser.add_argument('--lr', type=float, default=1e-4)
 arg_parser.add_argument('--gamma', type=float, default=0.998)
@@ -55,6 +55,7 @@ sim = madrona_escape_room.SimManager(
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
+    enable_batch_renderer = True,
 )
 
 jax_gpu = jax.devices()[0].platform == 'gpu'
@@ -141,14 +142,14 @@ cfg = TrainConfig(
     gamma = args.gamma,
     gae_lambda = 0.95,
     algo = PPOConfig(
-        num_mini_batches = 2,
+        num_mini_batches = 8,
         clip_coef = 0.2,
         value_loss_coef = args.value_loss_coef,
         entropy_coef = args.entropy_loss_coef,
         max_grad_norm = 0.5,
         num_epochs = 2,
         clip_value_loss = args.clip_value_loss,
-        huber_value_loss = False,
+        huber_value_loss = True,
     ),
     pbt = pbt_cfg,
     value_normalizer_decay = 0.999,
