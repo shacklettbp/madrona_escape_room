@@ -354,7 +354,7 @@ static Entity makeKey(Engine &ctx,
         key_y,
         std::sqrt(3.0f) * consts::keyWidth,
     };
-    ctx.get<Rotation>(key) = Quat::angleAxis(math::pi / 4.0f, Vector3(0,1,0)) * Quat::angleAxis(math::pi / 4.0f, Vector3(1,0,0));
+    ctx.get<Rotation>(key) = Quat::angleAxis(math::pi / 4.0f, Vector3{0,1,0}) * Quat::angleAxis(math::pi / 4.0f, Vector3{1,0,0});
     ctx.get<Scale>(key) = Diag3x3 {
         consts::keyWidth,
         consts::keyWidth,
