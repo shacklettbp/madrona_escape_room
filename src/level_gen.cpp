@@ -462,8 +462,6 @@ static CountT makeKeyRoom(Engine &ctx,
         ++openEntityIdx;
     }
 
-    // All other rooms have entities, so if the key was placed
-    // in slot zero it must have been placed in the current room.
     return (openEntityIdx == 0);
 }
 
@@ -644,7 +642,15 @@ static void makeRoom(Engine &ctx,
                      CountT room_idx,
                      RoomType room_type)
 {
+    
     Room &room = level.rooms[room_idx];
+    // Need to set any extra entities to type none so random uninitialized data
+    // from prior episodes isn't exported to pytorch as agent observations.
+    for (CountT i = 0; i < consts::maxEntitiesPerRoom; i++) {
+        room.entities[i] = Entity::none();
+    }
+
+
     makeEndWall(ctx, room, room_idx);
 
     float room_y_min = room_idx * consts::roomLength;
@@ -669,7 +675,7 @@ static void makeRoom(Engine &ctx,
             makeCubeButtonsRoom(ctx, room, room_y_min, room_y_max);
     } break;
     case RoomType::Key: {
-        CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(consts::numRooms));
+        CountT randomRoomIdx = ((int32_t)randBetween(ctx, 0.0f, float(consts::numRooms)) + 2) % consts::numRooms;
         // Put the key in a random room.
         room_y_min = randomRoomIdx * consts::roomLength;
         room_y_max = (randomRoomIdx + 1) * consts::roomLength;
@@ -679,11 +685,7 @@ static void makeRoom(Engine &ctx,
     default: MADRONA_UNREACHABLE();
     }
 
-    // Need to set any extra entities to type none so random uninitialized data
-    // from prior episodes isn't exported to pytorch as agent observations.
-    for (CountT i = num_room_entities; i < consts::maxEntitiesPerRoom; i++) {
-        room.entities[i] = Entity::none();
-    }
+
 }
 
 static void generateLevel(Engine &ctx)
@@ -734,8 +736,8 @@ static void generateComplexLevel(Engine &ctx)
 void generateWorld(Engine &ctx)
 {
     resetPersistentEntities(ctx);
-    generateLevel(ctx);
-    //generateComplexLevel(ctx);
+    //generateLevel(ctx);
+    generateComplexLevel(ctx);
 }
 
 }
