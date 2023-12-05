@@ -462,7 +462,7 @@ def _update_loop(update_iter_fn : Callable,
     checkpoint_buffer_size = sim.checkpoints.shape[0] # Check that this is the right size
     print("Checkpoint buffer shape", second_room_ckpts.shape)
 
-    useCKPT = True
+    useCKPT = False
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 

@@ -207,7 +207,7 @@ class GoExplore:
         #print("Chosen checkpoints", chosen_checkpoint, chosen_checkpoint.shape)
         #print("Bin count", self.bin_count[sampled_bins], self.bin_count[sampled_bins].shape)
         self.curr_returns[:desired_samples] = self.checkpoint_score[[sampled_bins, chosen_checkpoint]]
-        #print("Checkpoints", self.bin_checkpoints[[sampled_bins, chosen_checkpoint]])
+        print("Checkpoints", self.bin_checkpoints[[sampled_bins, chosen_checkpoint]])
         return self.bin_checkpoints[[sampled_bins, chosen_checkpoint]]
 
     # Step 2: Go to state

@@ -127,6 +127,7 @@ class GoExplore:
         self.checkpoint_score = torch.zeros(self.num_bins, self.num_checkpoints, device=device)
         self.bin_count = torch.zeros(self.num_bins, device=device).int()
         self.max_return = 0
+        self.max_progress = 0
 
         self.obs, num_obs_features = setup_obs(self.worlds)
         self.actions = self.worlds.action_tensor().to_torch()
@@ -136,6 +137,8 @@ class GoExplore:
         self.checkpoint_resets = self.worlds.checkpoint_reset_tensor().to_torch()
         self.resets = self.worlds.reset_tensor().to_torch()
         self.bin_checkpoints = torch.zeros((self.num_bins, self.num_checkpoints, self.checkpoints.shape[-1]), device=device, dtype=torch.uint8)
+        self.bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
+        self.world_steps = torch.zeros(self.num_worlds, device=device).int() + 200
 
         self.actions_num_buckets = [4, 8, 5, 2]
         self.action_space = Box(-float('inf'),float('inf'),(sum(self.actions_num_buckets),))
@@ -183,6 +186,7 @@ class GoExplore:
         self.checkpoint_resets[:, 0] = 1
         self.checkpoints[:] = states
         self.worlds.step()
+        #if self.max_progress < 1.01: # REVISIT THIS
         self.obs[5][:] = 200
         return None
 
@@ -191,6 +195,7 @@ class GoExplore:
         for i in range(self.num_exploration_steps):
             # Select actions either at random or by sampling from a trained policy
             self.actions[:] = self.generate_random_actions()
+            prev_bins = self.map_states_to_bins(self.obs)
             self.worlds.step()
             # Map states to bins
             new_bins = self.map_states_to_bins(self.obs)
@@ -203,7 +208,9 @@ class GoExplore:
             #print(self.dones)
             self.curr_returns *= (1 - 0.5*self.dones.view(self.num_worlds,self.num_agents).sum(dim=1)) # Account for dones, this is working!
             #print("Max return", torch.max(self.curr_returns), self.worlds.obs[torch.argmax(self.curr_returns)])
-            self.update_archive(new_bins, self.curr_returns)
+            #print("New bins", new_bins, new_bins.shape)
+            #print("prev bins", prev_bins, prev_bins.shape)
+            self.update_archive(new_bins, self.curr_returns, prev_bins)
         return None
 
     def apply_binning_function(self, states):
@@ -295,11 +302,16 @@ class GoExplore:
         return bins
 
     # Step 5: Update archive
-    def update_archive(self, bins, scores):
+    def update_archive(self, bins, scores, prev_bins=None):
         # For each unique bin, update count in archive and update best score
         # At most can increase bin count by 1 in a single step...
         new_bin_counts = (torch.bincount(bins, minlength=self.num_bins) > 0).int()
         self.bin_count += new_bin_counts
+        # Only overwrite the checkpoints that offer a shorter path, after exit is achieved
+        # Never mind, just track shortest path to bin
+        if prev_bins is not None:
+            #print(self.bin_steps[bins].shape, self.bin_steps[prev_bins].shape)
+            self.bin_steps[bins] = torch.minimum(self.bin_steps[bins], self.bin_steps[prev_bins] + 1)
         # Set the checkpoint for each bin to the latest
         #print(self.checkpoints)
         chosen_checkpoints = self.bin_count[bins] % self.num_checkpoints
@@ -339,6 +351,8 @@ def train(args):
     # Before starting, initialize the first state as an option
     #print("About to initialize archive")
     start_bin = goExplore.map_states_to_bins(goExplore.obs)
+    # Set steps to 0 for start bins
+    goExplore.bin_steps[start_bin] = 0
     goExplore.update_archive(start_bin, torch.zeros(args.num_worlds, device=dev))
     for i in range(args.num_steps):
         # Step 1: Select state from archive
@@ -371,6 +385,10 @@ def train(args):
             self_obs = goExplore.obs[0].view(goExplore.num_worlds, goExplore.num_agents, -1)
             writer.add_scalar("charts/max_agent_0_progress", self_obs[:, 0, 3].max(), global_step)
             writer.add_scalar("charts/max_agent_1_progress", self_obs[:, 1, 3].max(), global_step)
+            goExplore.max_progress = max(goExplore.max_progress, min(self_obs[:, 0, 3].max(), self_obs[:, 1, 3].max()))
+            if goExplore.max_progress > 1.01:
+                exit_bins = goExplore.map_states_to_bins(goExplore.obs)[(goExplore.obs[0][...,3] > 1.01).view(goExplore.num_worlds, goExplore.num_agents)[:,0]]
+                writer.add_scalar("charts/exit_path_length", goExplore.bin_steps[exit_bins].float().mean(), global_step)
             if args.bin_diagnostic:
                 print("Hello there")
                 # Step 1: Select random states from archive that have all checkpoints filled. We want to run k parallel trials from each checkpoint
