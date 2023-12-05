@@ -1131,6 +1131,7 @@ inline void sparseRewardSystem2(Engine &ctx,
     float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
     float reward = 0.0f;
+    /*
     if (reward_pos > 14.0f) {
         // Passed the first room
         reward += 0.01f;
@@ -1138,10 +1139,12 @@ inline void sparseRewardSystem2(Engine &ctx,
     if (reward_pos > 28.0f) {
         reward += 0.01f;
     }
+    */
     if (reward_pos > 41.0f) {
         reward += 0.01f;
     }
 
+    /*
     // Provide reward for open doors
     CountT cur_room_idx = CountT(pos.y / consts::roomLength);
     const LevelState &level = ctx.singleton<LevelState>();
@@ -1152,7 +1155,8 @@ inline void sparseRewardSystem2(Engine &ctx,
     //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
     float isOpen = door_open_state.isOpen ? 1.f : 0.f;
     reward += isOpen*0.01f; // Maybe add scaling to this
-
+    */
+    
     out_reward.v = reward;
 }
 
