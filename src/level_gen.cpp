@@ -675,7 +675,7 @@ static void makeRoom(Engine &ctx,
             makeCubeButtonsRoom(ctx, room, room_y_min, room_y_max);
     } break;
     case RoomType::Key: {
-        CountT randomRoomIdx = ((int32_t)randBetween(ctx, 0.0f, float(consts::numRooms)) + 2) % consts::numRooms;
+        CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(consts::numRooms)) % consts::numRooms;
         // Put the key in a random room.
         room_y_min = randomRoomIdx * consts::roomLength;
         room_y_max = (randomRoomIdx + 1) * consts::roomLength;
