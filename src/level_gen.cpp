@@ -257,7 +257,7 @@ static void resetPersistentEntities(Engine &ctx)
          };
 
          ctx.get<StepsRemaining>(agent_entity).t = consts::episodeLen;
-         ctx.get<KeyCode>(agent_entity).code = -1;
+         ctx.get<KeyCode>(agent_entity).code = 0;
      }
 }
 
@@ -336,7 +336,7 @@ static void makeEndWall(Engine &ctx,
         });
     registerRigidBodyEntity(ctx, door, SimObject::Door);
     ctx.get<OpenState>(door).isOpen = false;
-    ctx.get<KeyCode>(door).code = -1; // Default requires no keys.
+    ctx.get<KeyCode>(door).code = 0; // Default requires no keys.
 
     room.walls[0] = left_wall;
     room.walls[1] = right_wall;
@@ -442,14 +442,15 @@ static CountT makeKeyRoom(Engine &ctx,
                           Room &room,
                           Room &placementRoom,
                           float y_min,
-                          float y_max)
+                          float y_max,
+                          int32_t code)
 {
     float key_x = randInRangeCentered(ctx,
         consts::worldWidth / 2.f - consts::keyWidth);
     float key_y = randBetween(ctx, y_min + consts::roomLength / 4.f,
         y_max - consts::wallWidth - consts::keyWidth / 2.f);
 
-    Entity key = makeKey(ctx, key_x, key_y, 7); // key code
+    Entity key = makeKey(ctx, key_x, key_y, code); // key code
 
     setupDoor(ctx, room.door, {}, ctx.get<KeyState>(key).code, true);
 
@@ -478,7 +479,7 @@ static CountT makeSingleButtonRoom(Engine &ctx,
 
     Entity button = makeButton(ctx, button_x, button_y);
 
-    setupDoor(ctx, room.door, { button }, KeyCode{ -1 }, true);
+    setupDoor(ctx, room.door, { button }, KeyCode{ 0 }, true);
 
     room.entities[0] = button;
 
@@ -512,7 +513,7 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     Entity b = makeButton(ctx, b_x, b_y);
 
-    setupDoor(ctx, room.door, { a, b }, KeyCode{ -1 }, true);
+    setupDoor(ctx, room.door, { a, b }, KeyCode{ 0 }, true);
 
     room.entities[0] = a;
     room.entities[1] = b;
@@ -549,7 +550,7 @@ static CountT makeCubeBlockingRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door, { button_a, button_b }, KeyCode{ -1 }, true);
+    setupDoor(ctx, room.door, { button_a, button_b }, KeyCode{ 0 }, true);
 
     Vector3 door_pos = ctx.get<Position>(room.door);
 
@@ -605,7 +606,7 @@ static CountT makeCubeButtonsRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door, { button_a, button_b }, KeyCode{ -1 }, false);
+    setupDoor(ctx, room.door, { button_a, button_b }, KeyCode{ 0 }, false);
 
     float cube_a_x = randBetween(ctx,
         -consts::worldWidth / 4.f,
@@ -656,31 +657,25 @@ static void makeRoom(Engine &ctx,
     float room_y_min = room_idx * consts::roomLength;
     float room_y_max = (room_idx + 1) * consts::roomLength;
 
-    CountT num_room_entities;
     switch (room_type) {
     case RoomType::SingleButton: {
-        num_room_entities =
-            makeSingleButtonRoom(ctx, room, room_y_min, room_y_max);
+        makeSingleButtonRoom(ctx, room, room_y_min, room_y_max);
     } break;
     case RoomType::DoubleButton: {
-        num_room_entities =
-            makeDoubleButtonRoom(ctx, room, room_y_min, room_y_max);
+        makeDoubleButtonRoom(ctx, room, room_y_min, room_y_max);
     } break;
     case RoomType::CubeBlocking: {
-        num_room_entities =
-            makeCubeBlockingRoom(ctx, room, room_y_min, room_y_max);
+        makeCubeBlockingRoom(ctx, room, room_y_min, room_y_max);
     } break;
     case RoomType::CubeButtons: {
-        num_room_entities =
-            makeCubeButtonsRoom(ctx, room, room_y_min, room_y_max);
+        makeCubeButtonsRoom(ctx, room, room_y_min, room_y_max);
     } break;
     case RoomType::Key: {
-        CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(consts::numRooms)) % consts::numRooms;
-        // Put the key in a random room.
+        CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(room_idx));
+        // Put the key in a random already generate room.
         room_y_min = randomRoomIdx * consts::roomLength;
         room_y_max = (randomRoomIdx + 1) * consts::roomLength;
-        num_room_entities =
-            makeKeyRoom(ctx, room, level.rooms[randomRoomIdx], room_y_min, room_y_max);
+        makeKeyRoom(ctx, room, level.rooms[randomRoomIdx], room_y_min, room_y_max, 1 << room_idx);
     } break;
     default: MADRONA_UNREACHABLE();
     }
@@ -717,8 +712,6 @@ static void generateComplexLevel(Engine &ctx)
     makeRoom(ctx, level, 0, RoomType::DoubleButton);
     makeRoom(ctx, level, 1, RoomType::CubeBlocking);
     makeRoom(ctx, level, 2, RoomType::CubeButtons);
-
-    // Must be made last, as it references the other rooms.
     makeRoom(ctx, level, 3, RoomType::Key);
 
     // // An alternative implementation could randomly select the type for each

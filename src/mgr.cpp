@@ -593,7 +593,7 @@ Tensor Manager::selfObservationTensor() const
                                Tensor::ElementType::Float32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   8,
+                                   sizeof(SelfObservation) / sizeof(float),
                                });
 }
 

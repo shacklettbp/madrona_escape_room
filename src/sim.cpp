@@ -691,7 +691,7 @@ inline void keySystem(Engine &ctx,
             ctx, button_aabb, [&](Entity &e)
         {
             if (ctx.get<EntityType>(e) == EntityType::Agent && !state.claimed) {
-                ctx.get<KeyCode>(e).code = state.code.code;
+                ctx.get<KeyCode>(e).code |= state.code.code;
                 state.claimed = true;
             } 
         });
@@ -713,7 +713,7 @@ inline void doorOpenSystem(Engine &ctx,
     }
 
     bool key_present = true;
-    if (key_code.code != -1)
+    if (key_code.code != 0)
     {
         key_present = false;
         // Check for a nearby agent that has the key
@@ -733,7 +733,8 @@ inline void doorOpenSystem(Engine &ctx,
         ctx, door_aabb, [&](Entity &e)
         {
             if (ctx.get<EntityType>(e) == EntityType::Agent) {
-                key_present = key_present || (ctx.get<KeyCode>(e).code == key_code.code);
+                key_present = key_present ||
+                ((ctx.get<KeyCode>(e).code & key_code.code) == key_code.code);
             } 
         });
     }
@@ -796,6 +797,7 @@ inline void collectObservationsSystem(Engine &ctx,
                                       Rotation rot,
                                       const Progress &progress,
                                       const GrabState &grab,
+                                      const KeyCode &keyCode,
                                       SelfObservation &self_obs,
                                       PartnerObservations &partner_obs,
                                       RoomEntityObservations &room_ent_obs,
@@ -814,6 +816,7 @@ inline void collectObservationsSystem(Engine &ctx,
     self_obs.theta = angleObs(computeZAngle(rot));
     self_obs.isGrabbing = grab.constraintEntity != Entity::none() ?
         1.f : 0.f;
+    self_obs.keyCode = float(keyCode.code);
 
     assert(!isnan(self_obs.roomX));
     assert(!isnan(self_obs.roomY));
@@ -1524,6 +1527,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Rotation,
             Progress,
             GrabState,
+            KeyCode,
             SelfObservation,
             PartnerObservations,
             RoomEntityObservations,
