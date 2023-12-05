@@ -479,7 +479,7 @@ inline void jumpSystem(Engine &ctx,
     auto &bvh = ctx.singleton<broadphase::BVH>();
     // Scale the relative to the agent's height.
     // Assume math.up is normalized and positive.
-    float halfHeight = 0.5f * Vector3(s.d0, s.d1, s.d2).dot(math::up);
+    float halfHeight = 0.5f * Vector3{s.d0, s.d1, s.d2}.dot(math::up);
     Vector3 ray_o = pos + halfHeight * rot.rotateVec(math::up);
     Vector3 ray_d = rot.rotateVec(-math::up);
 
