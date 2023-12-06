@@ -486,7 +486,7 @@ class GoExplore:
         self.update_archive(new_bins, self.curr_returns)
         # Set new state, go to state
         states = self.select_state()
-        #self.go_to_state(states)
+        self.go_to_state(states)
 
 # Maybe we can just write Go-Explore as a callback
 
