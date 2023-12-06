@@ -225,7 +225,7 @@ class GoExplore:
         self.checkpoint_resets[:, 0] = 1
         self.checkpoints[:desired_samples] = states
         self.worlds.step()
-        self.obs[5][:desired_samples, 0] = 40*torch.randint(1, 6, size=(desired_samples,), dtype=torch.int, device=dev) # Maybe set this to random 40 to 200? # 200
+        #self.obs[5][:desired_samples, 0] = 40*torch.randint(1, 6, size=(desired_samples,), dtype=torch.int, device=dev) # Maybe set this to random 40 to 200? # 200
         print("After go-to-state")
         print(self.obs[5][:])
         return None
@@ -284,7 +284,8 @@ class GoExplore:
             # Bin according to the y position of each agent
             granularity = torch.sqrt(torch.tensor(self.num_bins) / 64).int().item()
             increment = 1.33/granularity
-            self_obs = states[0].view(-1, self.num_worlds, self.num_agents, 8)
+            print("States 0 shape", states[0].shape)
+            self_obs = states[0].view(-1, self.num_worlds, self.num_agents, 9)
             y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.3) // increment # Granularity of 0.01 on the y
             y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.3) // increment # Granularity of 0.01 on the y
             x_0 = (torch.clamp(self_obs[..., 0, 2], -0.2, 0.2) + 0.2) // 0.101 #
@@ -293,7 +294,7 @@ class GoExplore:
             # Now check if the door is open
             door_obs = states[3].view(-1, self.num_worlds, self.num_agents, 3)
             door_status = door_obs[..., 0, 2] + 2*door_obs[..., 1, 2]
-            #print(door_status)
+            print("Binning shapes", y_0.shape, y_1.shape, x_0.shape, x_1.shape, door_status.shape)
             return (y_0 + granularity*y_1 + granularity*granularity*x_0 + granularity*granularity*4*x_1 + granularity*granularity*4*4*door_status).int()
         elif self.binning == "y_pos_door_block":
             # Bin according to the y position of each agent
@@ -374,7 +375,7 @@ class GoExplore:
                 reward_min = update_results.rewards[:,desired_samples:].min().cpu().item()
                 reward_max = update_results.rewards[:,desired_samples:].max().cpu().item()
 
-                done_count = (update_results.dones == 1.0).sum()
+                done_count = (update_results.dones[:,desired_samples:] == 1.0).sum()
                 return_mean, return_min, return_max = 0, 0, 0
                 print("Update results shape", update_results.returns.shape)
                 if done_count > 0:
@@ -485,7 +486,7 @@ class GoExplore:
         self.update_archive(new_bins, self.curr_returns)
         # Set new state, go to state
         states = self.select_state()
-        self.go_to_state(states)
+        #self.go_to_state(states)
 
 # Maybe we can just write Go-Explore as a callback
 

@@ -1143,7 +1143,8 @@ inline void sparseRewardSystem2(Engine &ctx,
         reward += 0.01f;
     }
     */
-    if (reward_pos > 41.0f) {
+    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
+    if (cur_room_idx == 3) {
         reward += 0.01f;
     }
 
@@ -1234,6 +1235,18 @@ inline void bonusRewardSystem(Engine &ctx,
 
     if (partners_close && reward.v > 0.f) {
         reward.v *= 1.25f;
+    }
+}
+
+// Done system is now on whether I've exited the last room
+inline void exitRoomSystem(Engine &ctx,
+                           Position pos,
+                           Done &done)
+{
+    if (pos.y > 44) {
+        done.v = 1;
+    } else {
+        done.v = 0;
     }
 }
 
@@ -1419,8 +1432,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
-        stepTrackerSystem,
-            StepsRemaining,
+        exitRoomSystem,
+            Position,
             Done
     //    >>({bonus_reward_sys});
         >>({reward_sys});
