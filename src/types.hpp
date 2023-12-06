@@ -207,7 +207,7 @@ struct Room {
 // A singleton component storing the state of all the rooms in the current
 // randomly generated level
 struct LevelState {
-    Room rooms[consts::numRooms];
+    Room rooms[consts::maxRooms];
 };
 
 // Checkpoint structs.
@@ -254,11 +254,11 @@ struct AgentState {
 
 struct Checkpoint {
     int32_t seed;
-    ButtonSaveState buttonStates[consts::numRooms * 2];
-    PhysicsEntityState cubeStates[consts::numRooms * 3];
-    DoorState doorStates[consts::numRooms];
+    ButtonSaveState buttonStates[consts::maxRooms * 2];
+    PhysicsEntityState cubeStates[consts::maxRooms * 3];
+    DoorState doorStates[consts::maxRooms];
     AgentState agentStates[consts::numAgents];
-    KeySaveState keyStates[consts::numRooms];
+    KeySaveState keyStates[consts::maxRooms];
 };
 
 struct CheckpointReset {
@@ -268,6 +268,10 @@ struct CheckpointReset {
 // For connection to the viewer.
 struct CheckpointSave {
     int32_t save;
+};
+
+struct RoomCount {
+    int32_t count;
 };
 
 /* ECS Archetypes for the game */

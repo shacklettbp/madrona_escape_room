@@ -14,10 +14,10 @@ using namespace madrona::phys;
 namespace madEscape {
 
 // Helper function for determining room membership.
-static inline CountT roomIndex(const Position &p)
+static inline CountT roomIndex(const Position &p, CountT numRooms)
 {
     return std::max(CountT(0),
-    std::min(consts::numRooms - 1, CountT(p.y / consts::roomLength)));
+    std::min(numRooms - 1, CountT(p.y / consts::roomLength)));
 }
 
 static inline float computeZAngle(Quat q)
@@ -63,6 +63,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
     registry.registerSingleton<GlobalProgress>(); // Progress tracking component, reuse existing struct
+    registry.registerSingleton<RoomCount>(); // Number of rooms for this world.
 
     // Checkpoint state.
     registry.registerSingleton<Checkpoint>();
@@ -108,9 +109,10 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
 static inline void cleanupWorld(Engine &ctx)
 {
+    int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Destroy current level entities
     LevelState &level = ctx.singleton<LevelState>();
-    for (CountT i = 0; i < consts::numRooms; i++) {
+    for (CountT i = 0; i < numRooms; i++) {
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
@@ -184,7 +186,7 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
     }
 
 
-    Entity tempCubeEntities[consts::numRooms * 3];
+    Entity tempCubeEntities[consts::maxRooms * 3];
     {
         // Cubes
         int idx = 0;
@@ -254,52 +256,6 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         );
     }
 
-    // TODO: restore, confirm this works.
-    // {
-    //     // Correct the walls now that we have the doors
-    //     ctx.iterateQuery(ctx.data().ckptWallQuery,
-    //         [&](Position &p, Scale &s, EntityType &e)
-    //         {
-    //             if (e == EntityType::Wall)
-    //             {
-    //                 for (int i = 0; i < consts::numRooms; ++i)
-    //                 {
-    //                     // Check all doors.
-    //                     Position door_pos = ckpt.doorStates[i].p;
-    //                     constexpr float doorWidth = consts::worldWidth / 3.f;
-
-    //                     if (door_pos.y == p.y)
-    //                     {
-    //                         float door_center = door_pos.x + consts::worldWidth / 2.f;
-    //                         // We found one of two wall pairs for this door
-    //                         if (p.x < 0.f)
-    //                         {
-    //                             // Left door
-    //                             float left_len = door_center - 0.5f * doorWidth;
-    //                             p.x = (-consts::worldWidth + left_len) / 2.f;
-    //                             s = Diag3x3{
-    //                                 left_len,
-    //                                 consts::wallWidth,
-    //                                 1.75f,
-    //                             };
-    //                         }
-    //                         else
-    //                         {
-    //                             // Right door
-    //                             float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
-    //                             p.x = (consts::worldWidth - right_len) / 2.f;
-    //                             s = Diag3x3{
-    //                                 right_len,
-    //                                 consts::wallWidth,
-    //                                 1.75f,
-    //                             };
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         });
-    // }
-
     {
         // Buttons
         int idx = 0;
@@ -342,7 +298,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
         );
     }
 
-    Entity tempCubeEntities[consts::numRooms * 3];
+    Entity tempCubeEntities[consts::maxRooms * 3];
     CountT num_cubes = 0;
     // Cubes, run before agents to track IDs.
     ctx.iterateQuery(ctx.data().ckptCubeQuery,
@@ -1567,7 +1523,7 @@ Sim::Sim(Engine &ctx,
     // entities that will be stored in the BVH. We plan to fix this in
     // a future release.
     constexpr CountT max_total_entities = consts::numAgents +
-        consts::numRooms * (consts::maxEntitiesPerRoom + 3) +
+        consts::maxRooms * (consts::maxEntitiesPerRoom + 3) +
         4; // side walls + floor
 
     phys::RigidBodyPhysicsSystem::init(ctx, init.rigidBodyObjMgr,
