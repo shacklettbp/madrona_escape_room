@@ -65,6 +65,7 @@ struct SelfObservation {
     float maxY;
     float theta;
     float isGrabbing;
+    float keyCode;
 };
 
 struct AgentID {

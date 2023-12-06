@@ -254,50 +254,51 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         );
     }
 
-    {
-        // Correct the walls now that we have the doors
-        ctx.iterateQuery(ctx.data().ckptWallQuery,
-            [&](Position &p, Scale &s, EntityType &e)
-            {
-                if (e == EntityType::Wall)
-                {
-                    for (int i = 0; i < consts::numRooms; ++i)
-                    {
-                        // Check all doors.
-                        Position door_pos = ckpt.doorStates[i].p;
-                        constexpr float doorWidth = consts::worldWidth / 3.f;
+    // TODO: restore, confirm this works.
+    // {
+    //     // Correct the walls now that we have the doors
+    //     ctx.iterateQuery(ctx.data().ckptWallQuery,
+    //         [&](Position &p, Scale &s, EntityType &e)
+    //         {
+    //             if (e == EntityType::Wall)
+    //             {
+    //                 for (int i = 0; i < consts::numRooms; ++i)
+    //                 {
+    //                     // Check all doors.
+    //                     Position door_pos = ckpt.doorStates[i].p;
+    //                     constexpr float doorWidth = consts::worldWidth / 3.f;
 
-                        if (door_pos.y == p.y)
-                        {
-                            float door_center = door_pos.x + consts::worldWidth / 2.f;
-                            // We found one of two wall pairs for this door
-                            if (p.x < 0.f)
-                            {
-                                // Left door
-                                float left_len = door_center - 0.5f * doorWidth;
-                                p.x = (-consts::worldWidth + left_len) / 2.f;
-                                s = Diag3x3{
-                                    left_len,
-                                    consts::wallWidth,
-                                    1.75f,
-                                };
-                            }
-                            else
-                            {
-                                // Right door
-                                float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
-                                p.x = (consts::worldWidth - right_len) / 2.f;
-                                s = Diag3x3{
-                                    right_len,
-                                    consts::wallWidth,
-                                    1.75f,
-                                };
-                            }
-                        }
-                    }
-                }
-            });
-    }
+    //                     if (door_pos.y == p.y)
+    //                     {
+    //                         float door_center = door_pos.x + consts::worldWidth / 2.f;
+    //                         // We found one of two wall pairs for this door
+    //                         if (p.x < 0.f)
+    //                         {
+    //                             // Left door
+    //                             float left_len = door_center - 0.5f * doorWidth;
+    //                             p.x = (-consts::worldWidth + left_len) / 2.f;
+    //                             s = Diag3x3{
+    //                                 left_len,
+    //                                 consts::wallWidth,
+    //                                 1.75f,
+    //                             };
+    //                         }
+    //                         else
+    //                         {
+    //                             // Right door
+    //                             float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
+    //                             p.x = (consts::worldWidth - right_len) / 2.f;
+    //                             s = Diag3x3{
+    //                                 right_len,
+    //                                 consts::wallWidth,
+    //                                 1.75f,
+    //                             };
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         });
+    // }
 
     {
         // Buttons
@@ -479,7 +480,7 @@ inline void jumpSystem(Engine &ctx,
     auto &bvh = ctx.singleton<broadphase::BVH>();
     // Scale the relative to the agent's height.
     // Assume math.up is normalized and positive.
-    float halfHeight = 0.5f * Vector3(s.d0, s.d1, s.d2).dot(math::up);
+    float halfHeight = 0.5f * Vector3{s.d0, s.d1, s.d2}.dot(math::up);
     Vector3 ray_o = pos + halfHeight * rot.rotateVec(math::up);
     Vector3 ray_d = rot.rotateVec(-math::up);
 
@@ -691,7 +692,7 @@ inline void keySystem(Engine &ctx,
             ctx, button_aabb, [&](Entity &e)
         {
             if (ctx.get<EntityType>(e) == EntityType::Agent && !state.claimed) {
-                ctx.get<KeyCode>(e).code = state.code.code;
+                ctx.get<KeyCode>(e).code |= state.code.code;
                 state.claimed = true;
             } 
         });
@@ -713,7 +714,7 @@ inline void doorOpenSystem(Engine &ctx,
     }
 
     bool key_present = true;
-    if (key_code.code != -1)
+    if (key_code.code != 0)
     {
         key_present = false;
         // Check for a nearby agent that has the key
@@ -733,7 +734,8 @@ inline void doorOpenSystem(Engine &ctx,
         ctx, door_aabb, [&](Entity &e)
         {
             if (ctx.get<EntityType>(e) == EntityType::Agent) {
-                key_present = key_present || (ctx.get<KeyCode>(e).code == key_code.code);
+                key_present = key_present ||
+                ((ctx.get<KeyCode>(e).code & key_code.code) == key_code.code);
             } 
         });
     }
@@ -796,6 +798,7 @@ inline void collectObservationsSystem(Engine &ctx,
                                       Rotation rot,
                                       const Progress &progress,
                                       const GrabState &grab,
+                                      const KeyCode &keyCode,
                                       SelfObservation &self_obs,
                                       PartnerObservations &partner_obs,
                                       RoomEntityObservations &room_ent_obs,
@@ -814,6 +817,7 @@ inline void collectObservationsSystem(Engine &ctx,
     self_obs.theta = angleObs(computeZAngle(rot));
     self_obs.isGrabbing = grab.constraintEntity != Entity::none() ?
         1.f : 0.f;
+    self_obs.keyCode = float(keyCode.code);
 
     assert(!isnan(self_obs.roomX));
     assert(!isnan(self_obs.roomY));
@@ -1131,6 +1135,7 @@ inline void sparseRewardSystem2(Engine &ctx,
     float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
     float reward = 0.0f;
+    /*
     if (reward_pos > 14.0f) {
         // Passed the first room
         reward += 0.01f;
@@ -1138,10 +1143,13 @@ inline void sparseRewardSystem2(Engine &ctx,
     if (reward_pos > 28.0f) {
         reward += 0.01f;
     }
-    if (reward_pos > 41.0f) {
+    */
+    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
+    if (cur_room_idx == 3) {
         reward += 0.01f;
     }
 
+    /*
     // Provide reward for open doors
     CountT cur_room_idx = CountT(pos.y / consts::roomLength);
     const LevelState &level = ctx.singleton<LevelState>();
@@ -1152,7 +1160,8 @@ inline void sparseRewardSystem2(Engine &ctx,
     //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
     float isOpen = door_open_state.isOpen ? 1.f : 0.f;
     reward += isOpen*0.01f; // Maybe add scaling to this
-
+    */
+    
     out_reward.v = reward;
 }
 
@@ -1227,6 +1236,18 @@ inline void bonusRewardSystem(Engine &ctx,
 
     if (partners_close && reward.v > 0.f) {
         reward.v *= 1.25f;
+    }
+}
+
+// Done system is now on whether I've exited the last room
+inline void exitRoomSystem(Engine &ctx,
+                           Position pos,
+                           Done &done)
+{
+    if (pos.y > 44) {
+        done.v = 1;
+    } else {
+        done.v = 0;
     }
 }
 
@@ -1412,8 +1433,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
-        stepTrackerSystem,
-            StepsRemaining,
+        exitRoomSystem,
+            Position,
             Done
     //    >>({bonus_reward_sys});
         >>({reward_sys});
@@ -1524,6 +1545,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Rotation,
             Progress,
             GrabState,
+            KeyCode,
             SelfObservation,
             PartnerObservations,
             RoomEntityObservations,

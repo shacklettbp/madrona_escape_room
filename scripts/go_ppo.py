@@ -59,6 +59,7 @@ arg_parser.add_argument('--binning', type=str, required=True)
 arg_parser.add_argument('--num-steps', type=int, required=True)
 arg_parser.add_argument('--num-bins', type=int, required=True)
 arg_parser.add_argument('--num-checkpoints', type=int, default=1)
+arg_parser.add_argument('--new-frac', type=float, default=0.5)
 
 # Binning diagnostic args
 arg_parser.add_argument('--bin-diagnostic', action='store_true')
@@ -151,6 +152,7 @@ class GoExplore:
         self.checkpoint_score = torch.zeros(self.num_bins, self.num_checkpoints, device=device)
         self.bin_count = torch.zeros(self.num_bins, device=device).int()
         self.max_return = 0
+        self.max_progress = 0
 
         self.obs, num_obs_features = setup_obs(self.worlds)
         self.policy = make_policy(num_obs_features, args.num_channels, args.separate_value)
@@ -161,6 +163,8 @@ class GoExplore:
         self.checkpoint_resets = self.worlds.checkpoint_reset_tensor().to_torch()
         self.resets = self.worlds.reset_tensor().to_torch()
         self.bin_checkpoints = torch.zeros((self.num_bins, self.num_checkpoints, self.checkpoints.shape[-1]), device=device, dtype=torch.uint8)
+        self.bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
+        self.world_steps = torch.zeros(self.num_worlds, device=device).int() + 200
 
         self.actions_num_buckets = [4, 8, 5, 2]
         self.action_space = Box(-float('inf'),float('inf'),(sum(self.actions_num_buckets),))
@@ -196,11 +200,17 @@ class GoExplore:
         valid_bins = torch.nonzero(self.bin_count > 0).flatten()
         weights = 1./(torch.sqrt(self.bin_count[valid_bins]) + 1)
         # Sample bins
-        sampled_bins = valid_bins[torch.multinomial(weights, num_samples=self.num_worlds, replacement=True).type(torch.int)]
+        desired_samples = int(self.num_worlds*args.new_frac)
+        sampled_bins = valid_bins[torch.multinomial(weights, num_samples=desired_samples, replacement=True).type(torch.int)]
         # Sample states from bins: either sample first occurrence in each bin (what's in the paper), or something better...
         # Need the last checkpoint for each bin
-        chosen_checkpoint = self.bin_count[sampled_bins] % self.num_checkpoints
-        self.curr_returns[:] = self.checkpoint_score[[sampled_bins, chosen_checkpoint]]
+        chosen_checkpoint = (self.bin_count[sampled_bins] - 1) % self.num_checkpoints
+        #chosen_checkpoint = torch.randint(0, self.num_checkpoints, size=(desired_samples,), device=self.device, dtype=torch.int)
+        #chosen_checkpoint[chosen_checkpoint >= self.bin_count[sampled_bins]] = self.bin_count[sampled_bins][chosen_checkpoint >= self.bin_count[sampled_bins]] - 1
+        #print("Chosen checkpoints", chosen_checkpoint, chosen_checkpoint.shape)
+        #print("Bin count", self.bin_count[sampled_bins], self.bin_count[sampled_bins].shape)
+        self.curr_returns[:desired_samples] = self.checkpoint_score[[sampled_bins, chosen_checkpoint]]
+        print("Checkpoints", self.bin_checkpoints[[sampled_bins, chosen_checkpoint]])
         return self.bin_checkpoints[[sampled_bins, chosen_checkpoint]]
 
     # Step 2: Go to state
@@ -211,10 +221,11 @@ class GoExplore:
         # Run checkpoint-restoration here
         print("Before go-to-state")
         print(self.obs[5][:])
+        desired_samples = int(self.num_worlds*args.new_frac) # Only set state for some worlds
         self.checkpoint_resets[:, 0] = 1
-        self.checkpoints[:] = states
+        self.checkpoints[:desired_samples] = states
         self.worlds.step()
-        self.obs[5][:] = 200
+        #self.obs[5][:desired_samples, 0] = 40*torch.randint(1, 6, size=(desired_samples,), dtype=torch.int, device=dev) # Maybe set this to random 40 to 200? # 200
         print("After go-to-state")
         print(self.obs[5][:])
         return None
@@ -249,9 +260,9 @@ class GoExplore:
             # Determine granularity from num_bins
             granularity = torch.sqrt(torch.tensor(self.num_bins)).int().item()
             increment = 1.11/granularity
-            self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            self_obs = states[0].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             y_out = (y_0 + granularity*y_1).int()
             #print("Max agent 0 progress", self_obs[:, 0, 3].max())
             #print("Max agent 1 progress", self_obs[:, 1, 3].max())
@@ -260,46 +271,47 @@ class GoExplore:
             # Bin according to the y position of each agent
             granularity = torch.sqrt(torch.tensor(self.num_bins) / 4).int().item()
             increment = 1.11/granularity
-            self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            self_obs = states[0].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
-            door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
-            door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
+            door_obs = states[3].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            door_status = door_obs[..., 0, 2] + 2*door_obs[..., 1, 2]
             #print(door_status)
             return (y_0 + granularity*y_1 + granularity*granularity*door_status).int()
         elif self.binning == "x_y_pos_door":
             # Bin according to the y position of each agent
             granularity = torch.sqrt(torch.tensor(self.num_bins) / 64).int().item()
-            increment = 1.11/granularity
-            self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
-            x_0 = (torch.clamp(self_obs[:, 0, 2], -0.2, 0.2) + 0.2) // 0.1 #
-            x_1 = (torch.clamp(self_obs[:, 1, 2], -0.2, 0.2) + 0.2) // 0.1 #
+            increment = 1.33/granularity
+            print("States 0 shape", states[0].shape)
+            self_obs = states[0].view(-1, self.num_worlds, self.num_agents, 9)
+            y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.3) // increment # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.3) // increment # Granularity of 0.01 on the y
+            x_0 = (torch.clamp(self_obs[..., 0, 2], -0.2, 0.2) + 0.2) // 0.101 #
+            x_1 = (torch.clamp(self_obs[..., 1, 2], -0.2, 0.2) + 0.2) // 0.101 #
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
-            door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
-            door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
-            #print(door_status)
+            door_obs = states[3].view(-1, self.num_worlds, self.num_agents, 3)
+            door_status = door_obs[..., 0, 2] + 2*door_obs[..., 1, 2]
+            print("Binning shapes", y_0.shape, y_1.shape, x_0.shape, x_1.shape, door_status.shape)
             return (y_0 + granularity*y_1 + granularity*granularity*x_0 + granularity*granularity*4*x_1 + granularity*granularity*4*4*door_status).int()
         elif self.binning == "y_pos_door_block":
             # Bin according to the y position of each agent
             granularity = torch.sqrt(torch.tensor(self.num_bins) / 40).int().item()
             increment = 1.11/granularity
-            self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
-            y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            self_obs = states[0].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
-            door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
-            door_status = door_obs[:, 0, 2] + 2*door_obs[:, 1, 2]
+            door_obs = states[3].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            door_status = door_obs[..., 0, 2] + 2*door_obs[..., 1, 2]
             # Also bin block_pos since we want the blocks on the doors
             #print(states[2].shape)
             # Maybe for now average distance of the blocks from each agent
-            block_obs = states[2].view(self.num_worlds, self.num_agents, -1, 3)
-            block_val = (block_obs[:, :, :, 2].mean(dim=1).sum(dim=1)*8).int() % 10
+            block_obs = states[2].view(args.steps_per_update, self.num_worlds, self.num_agents, -1, 3)
+            block_val = (block_obs[..., 2].mean(dim=2).sum(dim=2)*8).int() % 10
             #print("Block val", block_val.mean())
             #print(door_status)
             return (block_val*(granularity*granularity*4) + door_status*(granularity*granularity) + (y_0 + granularity*y_1)).int()
@@ -310,18 +322,27 @@ class GoExplore:
     def map_states_to_bins(self, states):
         # Apply binning function to define bin for new states
         bins = self.apply_binning_function(states)
+        if torch.any(bins > self.num_bins):
+            # throw error
+            raise ValueError("Bin value too large")
         # Now return the binning of all states
         return bins
+
+    def update_bin_steps(self, bins, prev_bins):
+        #print(self.bin_steps[bins].shape, self.bin_steps[prev_bins].shape)
+        #self.bin_steps[bins] = torch.minimum(self.bin_steps[bins], self.bin_steps[prev_bins] + 1)
+        for i in range(1, args.steps_per_update):
+            self.bin_steps[prev_bins[-i]] = torch.minimum(self.bin_steps[prev_bins[-i]], self.bin_steps[bins[-i]] + 1)
 
     # Step 5: Update archive
     def update_archive(self, bins, scores):
         # For each unique bin, update count in archive and update best score
         # At most can increase bin count by 1 in a single step...
         new_bin_counts = (torch.bincount(bins, minlength=self.num_bins) > 0).int()
-        self.bin_count += new_bin_counts
         # Set the checkpoint for each bin to the latest
         #print(self.checkpoints)
         chosen_checkpoints = self.bin_count[bins] % self.num_checkpoints
+        self.bin_count += new_bin_counts
         #print(chosen_checkpoints)
         #print(bins)
         self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints # Will this have double-writes? Yes, shouldn't matter
@@ -345,36 +366,43 @@ class GoExplore:
         ppo = update_results.ppo_stats
 
         if not skip_log:
+            # Only log stuff from the worlds where we're not setting state
+            desired_samples = int(self.num_worlds*args.new_frac)*self.num_agents
+            print("Desired samples", desired_samples)
             with torch.no_grad():
-                reward_mean = update_results.rewards.mean().cpu().item()
-                reward_min = update_results.rewards.min().cpu().item()
-                reward_max = update_results.rewards.max().cpu().item()
+                print(update_results.rewards.shape)
+                reward_mean = update_results.rewards[:,desired_samples:].mean().cpu().item()
+                reward_min = update_results.rewards[:,desired_samples:].min().cpu().item()
+                reward_max = update_results.rewards[:,desired_samples:].max().cpu().item()
 
-                done_count = (update_results.dones == 1.0).sum()
+                done_count = (update_results.dones[:,desired_samples:] == 1.0).sum()
                 return_mean, return_min, return_max = 0, 0, 0
+                print("Update results shape", update_results.returns.shape)
                 if done_count > 0:
-                    return_mean = update_results.returns[update_results.dones == 1.0].mean().cpu().item()
-                    return_min = update_results.returns[update_results.dones == 1.0].min().cpu().item()
-                    return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
+                    print("Update results shape", update_results.returns[update_results.dones == 1.0].shape)
+                    return_mean = update_results.returns[:,desired_samples:][update_results.dones[:,desired_samples:] == 1.0].mean().cpu().item()
+                    return_min = update_results.returns[:,desired_samples:][update_results.dones[:,desired_samples:] == 1.0].min().cpu().item()
+                    return_max = update_results.returns[:,desired_samples:][update_results.dones[:,desired_samples:] == 1.0].max().cpu().item()
 
                 # compute visits to second and third room
                 print("Update results shape", update_results.obs[0].shape, update_results.obs[3].shape)
-                second_room_count = (update_results.obs[0][...,3] > 0.34).sum()
-                third_room_count = (update_results.obs[0][...,3] > 0.67).sum()
-                exit_count = (update_results.obs[0][...,3] > 1.01).sum()
-                door_count = (update_results.obs[3][...,2] > 0.5).sum()
+                second_room_count = (update_results.obs[0][...,3] > 0.34)[:,:,desired_samples:].float().mean()
+                third_room_count = (update_results.obs[0][...,3] > 0.67)[:,:,desired_samples:].float().mean()
+                exit_count = (update_results.obs[0][...,3] > 1.01)[:,:,desired_samples:].float().mean()
+                door_count = (update_results.obs[3][...,2] > 0.5)[:,:,desired_samples:].float().mean()
 
-                value_mean = update_results.values.mean().cpu().item()
-                value_min = update_results.values.min().cpu().item()
-                value_max = update_results.values.max().cpu().item()
+                second_room_count_unfiltered = (update_results.obs[0][...,3] > 0.34).float().mean()
+                third_room_count_unfiltered = (update_results.obs[0][...,3] > 0.67).float().mean()
+                exit_count_unfiltered = (update_results.obs[0][...,3] > 1.01).float().mean()
+                door_count_unfiltered = (update_results.obs[3][...,2] > 0.5).float().mean()
 
-                advantage_mean = update_results.advantages.mean().cpu().item()
-                advantage_min = update_results.advantages.min().cpu().item()
-                advantage_max = update_results.advantages.max().cpu().item()
+                value_mean = update_results.values[:,desired_samples:].mean().cpu().item()
+                value_min = update_results.values[:,desired_samples:].min().cpu().item()
+                value_max = update_results.values[:,desired_samples:].max().cpu().item()
 
-                bootstrap_value_mean = update_results.bootstrap_values.mean().cpu().item()
-                bootstrap_value_min = update_results.bootstrap_values.min().cpu().item()
-                bootstrap_value_max = update_results.bootstrap_values.max().cpu().item()
+                advantage_mean = update_results.advantages[:,desired_samples:].mean().cpu().item()
+                advantage_min = update_results.advantages[:,desired_samples:].min().cpu().item()
+                advantage_max = update_results.advantages[:,desired_samples:].max().cpu().item()
 
                 vnorm_mu = 0
                 vnorm_sigma = 0
@@ -388,9 +416,11 @@ class GoExplore:
             print(f"    Rewards          => Avg: {reward_mean: .3e}, Min: {reward_min: .3e}, Max: {reward_max: .3e}")
             print(f"    Values           => Avg: {value_mean: .3e}, Min: {value_min: .3e}, Max: {value_max: .3e}")
             print(f"    Advantages       => Avg: {advantage_mean: .3e}, Min: {advantage_min: .3e}, Max: {advantage_max: .3e}")
-            print(f"    Bootstrap Values => Avg: {bootstrap_value_mean: .3e}, Min: {bootstrap_value_min: .3e}, Max: {bootstrap_value_max: .3e}")
             print(f"    Returns          => Avg: {return_mean}, max: {return_max}")
             print(f"    Value Normalizer => Mean: {vnorm_mu: .3e}, σ: {vnorm_sigma :.3e}")
+
+            # Log average steps to end from known bins
+            avg_steps = self.bin_steps[self.bin_count > 0].float().mean()
 
             # Add all this to wandb
             wandb.log({
@@ -408,7 +438,13 @@ class GoExplore:
                 "third_room_count": third_room_count,
                 "exit_count": exit_count,
                 "door_count": door_count,
+                "second_room_count_unfiltered": second_room_count_unfiltered,
+                "third_room_count_unfiltered": third_room_count_unfiltered,
+                "exit_count_unfiltered": exit_count_unfiltered,
+                "door_count_unfiltered": door_count_unfiltered,
                 "vnorm_mu": vnorm_mu,
+                "steps_to_end": avg_steps,
+                "max_progress": self.max_progress,
                 }
             )
 
@@ -425,8 +461,19 @@ class GoExplore:
         #    return
 
         # Now do the go-explore stuff
+        goExplore.max_progress = max(goExplore.max_progress, min(update_results.obs[0][..., 0, 3].max(), update_results.obs[0][..., 1, 3].max()))
+        if goExplore.max_progress > 1.01:
+            exit_bins = goExplore.map_states_to_bins(goExplore.obs)[0,:][(goExplore.obs[0][...,3] > 1.01).view(goExplore.num_worlds, goExplore.num_agents).all(dim=1)]
+            # Set exit path length to 0 for exit bins
+            goExplore.bin_steps[exit_bins] = 0
+            print("Exit bins", torch.unique(exit_bins).shape)
+            #writer.add_scalar("charts/exit_path_length", goExplore.bin_steps[exit_bins].float().mean(), global_step)
+
         # Update archive from rollout
-        new_bins = self.map_states_to_bins(self.obs)
+        #new_bins = self.map_states_to_bins(self.obs)
+        all_bins = self.map_states_to_bins(update_results.obs) # num_timesteps * num_worlds
+        self.update_bin_steps(all_bins[1:], all_bins[:-1])
+        new_bins = all_bins[-1]
         # Update archive
         #print(self.curr_returns.shape)
         #print(self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1).shape)

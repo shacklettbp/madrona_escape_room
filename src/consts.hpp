@@ -8,7 +8,7 @@ namespace consts {
 // Each random world is composed of a fixed number of rooms that the agents
 // must solve in order to maximize their reward.
 // Change to 4 for key room setups.
-inline constexpr madrona::CountT numRooms = 4;
+inline constexpr madrona::CountT numRooms = 3;
 
 // Generated levels assume 2 agents
 inline constexpr madrona::CountT numAgents = 2;
@@ -22,7 +22,7 @@ inline constexpr madrona::CountT maxEntitiesPerRoom = 6;
 inline constexpr madrona::CountT maxObservationsPerAgent = 9;
 
 // Various world / entity size parameters
-inline constexpr float worldLength = 15.0f * numRooms;
+inline constexpr float worldLength = 40.0f; //15.0f * numRooms;
 inline constexpr float worldWidth = 20.f;
 inline constexpr float doorWidth = worldWidth / 3.f;
 inline constexpr float wallWidth = 1.f;
