@@ -254,50 +254,51 @@ inline void loadCheckpointSystem(Engine &ctx, CheckpointReset &reset)
         );
     }
 
-    {
-        // Correct the walls now that we have the doors
-        ctx.iterateQuery(ctx.data().ckptWallQuery,
-            [&](Position &p, Scale &s, EntityType &e)
-            {
-                if (e == EntityType::Wall)
-                {
-                    for (int i = 0; i < consts::numRooms; ++i)
-                    {
-                        // Check all doors.
-                        Position door_pos = ckpt.doorStates[i].p;
-                        constexpr float doorWidth = consts::worldWidth / 3.f;
+    // TODO: restore, confirm this works.
+    // {
+    //     // Correct the walls now that we have the doors
+    //     ctx.iterateQuery(ctx.data().ckptWallQuery,
+    //         [&](Position &p, Scale &s, EntityType &e)
+    //         {
+    //             if (e == EntityType::Wall)
+    //             {
+    //                 for (int i = 0; i < consts::numRooms; ++i)
+    //                 {
+    //                     // Check all doors.
+    //                     Position door_pos = ckpt.doorStates[i].p;
+    //                     constexpr float doorWidth = consts::worldWidth / 3.f;
 
-                        if (door_pos.y == p.y)
-                        {
-                            float door_center = door_pos.x + consts::worldWidth / 2.f;
-                            // We found one of two wall pairs for this door
-                            if (p.x < 0.f)
-                            {
-                                // Left door
-                                float left_len = door_center - 0.5f * doorWidth;
-                                p.x = (-consts::worldWidth + left_len) / 2.f;
-                                s = Diag3x3{
-                                    left_len,
-                                    consts::wallWidth,
-                                    1.75f,
-                                };
-                            }
-                            else
-                            {
-                                // Right door
-                                float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
-                                p.x = (consts::worldWidth - right_len) / 2.f;
-                                s = Diag3x3{
-                                    right_len,
-                                    consts::wallWidth,
-                                    1.75f,
-                                };
-                            }
-                        }
-                    }
-                }
-            });
-    }
+    //                     if (door_pos.y == p.y)
+    //                     {
+    //                         float door_center = door_pos.x + consts::worldWidth / 2.f;
+    //                         // We found one of two wall pairs for this door
+    //                         if (p.x < 0.f)
+    //                         {
+    //                             // Left door
+    //                             float left_len = door_center - 0.5f * doorWidth;
+    //                             p.x = (-consts::worldWidth + left_len) / 2.f;
+    //                             s = Diag3x3{
+    //                                 left_len,
+    //                                 consts::wallWidth,
+    //                                 1.75f,
+    //                             };
+    //                         }
+    //                         else
+    //                         {
+    //                             // Right door
+    //                             float right_len = consts::worldWidth - door_center - 0.5f * doorWidth;
+    //                             p.x = (consts::worldWidth - right_len) / 2.f;
+    //                             s = Diag3x3{
+    //                                 right_len,
+    //                                 consts::wallWidth,
+    //                                 1.75f,
+    //                             };
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //         });
+    // }
 
     {
         // Buttons
