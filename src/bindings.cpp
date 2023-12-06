@@ -21,7 +21,8 @@ NB_MODULE(madrona_escape_room, m) {
                             int64_t num_worlds,
                             int64_t rand_seed,
                             bool auto_reset,
-                            bool enable_batch_renderer) {
+                            bool enable_batch_renderer,
+                            nb::handle state_log_dir) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
@@ -29,13 +30,17 @@ NB_MODULE(madrona_escape_room, m) {
                 .randSeed = (uint32_t)rand_seed,
                 .autoReset = auto_reset,
                 .enableBatchRenderer = enable_batch_renderer,
+                .stateLogDir = state_log_dir.is_none() ? nullptr :
+                    nb::cast<const char *>(state_log_dir),
+                .replayStateLog = false,
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
            nb::arg("num_worlds"),
            nb::arg("rand_seed"),
            nb::arg("auto_reset"),
-           nb::arg("enable_batch_renderer") = false)
+           nb::arg("enable_batch_renderer") = false,
+           nb::arg("state_log_dir") = nb::none())
         .def("step", &Manager::step)
         .def("reset_tensor", &Manager::resetTensor)
         .def("action_tensor", &Manager::actionTensor)

@@ -1,4 +1,5 @@
 #include <madrona/mw_gpu_entry.hpp>
+#include <madrona/learning_utils.hpp>
 
 #include "sim.hpp"
 #include "level_gen.hpp"
@@ -16,6 +17,7 @@ namespace madEscape {
 void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
 {
     base::registerTypes(registry);
+    LearningMetadataSystem::registerTypes(registry);
     phys::RigidBodyPhysicsSystem::registerTypes(registry);
 
     RenderingSystem::registerTypes(registry, cfg.renderBridge);
@@ -39,6 +41,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
 
     registry.registerSingleton<WorldReset>();
     registry.registerSingleton<LevelState>();
+
+    registry.registerStateLogEntry<PositionUpdate>();
 
     registry.registerArchetype<Agent>();
     registry.registerArchetype<PhysicsEntity>();
@@ -118,6 +122,7 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
     if (should_reset != 0) {
         reset.reset = 0;
 
+        ctx.stateLog(EpisodeFinished {});
         cleanupWorld(ctx);
         initWorld(ctx);
     }

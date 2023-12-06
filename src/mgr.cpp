@@ -463,6 +463,8 @@ Manager::Impl * Manager::Impl::init(
             ThreadPoolExecutor::Config {
                 .numWorlds = mgr_cfg.numWorlds,
                 .numExportedBuffers = (uint32_t)ExportID::NumExports,
+                .stateLogRecordDirectory = mgr_cfg.replayStateLog ? nullptr :
+                    mgr_cfg.stateLogDir,
             },
             sim_cfg,
             world_inits.data(),

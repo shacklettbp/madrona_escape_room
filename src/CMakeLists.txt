@@ -14,6 +14,7 @@ target_link_libraries(mad_escape_cpu_impl
     PRIVATE
         madrona_common
         madrona_mw_physics
+        madrona_learning_utils
         madrona_rendering_system
 )
 

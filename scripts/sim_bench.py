@@ -2,19 +2,24 @@ import torch
 import madrona_escape_room
 import argparse
 import time
+from typing import Optional
 
 arg_parser = argparse.ArgumentParser()
 arg_parser.add_argument('--num-worlds', type=int, required=True)
 arg_parser.add_argument('--num-steps', type=int, required=True)
 arg_parser.add_argument('--gpu-id', type=int, default=0)
+arg_parser.add_argument('--gpu-sim', type=bool, default=False)
 
 args = arg_parser.parse_args()
 
 sim = madrona_escape_room.SimManager(
-    exec_mode = madrona_escape_room.madrona.ExecMode.CUDA,
+    exec_mode = (madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim
+                 else madrona_escape_room.madrona.ExecMode.CPU),
     gpu_id = args.gpu_id,
     num_worlds = args.num_worlds,
     auto_reset = True,
+    enable_batch_renderer = False,
+    state_log_dir = "/tmp/test_log",
 )
 
 actions = sim.action_tensor().to_torch()

@@ -26,6 +26,8 @@ public:
         uint32_t batchRenderViewHeight = 64;
         madrona::render::APIBackend *extRenderAPI = nullptr;
         madrona::render::GPUDevice *extRenderDev = nullptr;
+        const char *stateLogDir = nullptr;
+        bool replayStateLog = false;
     };
 
     Manager(const Config &cfg);

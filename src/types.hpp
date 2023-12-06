@@ -194,6 +194,10 @@ struct LevelState {
     Room rooms[consts::numRooms];
 };
 
+struct PositionUpdate {
+    Vector3 pos;
+};
+
 /* ECS Archetypes for the game */
 
 // There are 2 Agents in the environment trying to get to the destination
