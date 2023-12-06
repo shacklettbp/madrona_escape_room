@@ -71,6 +71,7 @@ static void registerRigidBodyEntity(
 // All these entities persist across all episodes.
 void createPersistentEntities(Engine &ctx)
 {
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Create the floor entity, just a simple static plane.
     ctx.data().floorPlane = ctx.makeEntity<PhysicsEntity>();
     setupRigidBodyEntity(
@@ -110,7 +111,7 @@ void createPersistentEntities(Engine &ctx)
         ctx.data().borders[1],
         Vector3 {
             consts::worldWidth / 2.f + consts::wallWidth / 2.f,
-            consts::worldLength / 2.f,
+            consts::roomLength * numRooms / 2.f,
             0,
         },
         Quat { 1, 0, 0, 0 },
@@ -119,7 +120,7 @@ void createPersistentEntities(Engine &ctx)
         ResponseType::Static,
         Diag3x3 {
             consts::wallWidth,
-            consts::worldLength,
+            consts::roomLength * numRooms,
             2.f,
         });
 
@@ -130,7 +131,7 @@ void createPersistentEntities(Engine &ctx)
         ctx.data().borders[2],
         Vector3 {
             -consts::worldWidth / 2.f - consts::wallWidth / 2.f,
-            consts::worldLength / 2.f,
+            consts::roomLength * numRooms / 2.f,
             0,
         },
         Quat { 1, 0, 0, 0 },
@@ -139,7 +140,7 @@ void createPersistentEntities(Engine &ctx)
         ResponseType::Static,
         Diag3x3 {
             consts::wallWidth,
-            consts::worldLength,
+            consts::roomLength * numRooms,
             2.f,
         });
 
@@ -187,13 +188,14 @@ static void resetPersistentEntities(Engine &ctx)
          registerRigidBodyEntity(ctx, wall_entity, SimObject::Wall);
      }
 
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
      auto second_rng = RNG::make(ctx.data().curEpisodeIdx);
      // VISHNU MOD: RETRIEVE PROGRESS SO FAR
      //printf("About to access illegally\n");
      GlobalProgress& progress = ctx.singleton<GlobalProgress>();
      //printf("About to access illegally %f \n", *(progress.progressPtr));
      // VISHNU MOD: what if we place them in any room we want
-     float max_room = 0.999 + (int)(fmax(0.f, fmin(3.0f, (*(progress.progressPtr)) * 3 / consts::worldLength))); 
+     float max_room = 0.999 + (int)(fmax(0.f, fmin(float(numRooms), (*(progress.progressPtr)) * 3 / consts::worldLength))); 
      int rand_room = ((int)(second_rng.rand() * max_room));
      for (CountT i = 0; i < consts::numAgents; i++) {
          Entity agent_entity = ctx.data().agents[i];
@@ -216,7 +218,7 @@ static void resetPersistentEntities(Engine &ctx)
 
         if ((ctx.data().simFlags & SimFlags::StartInDiscoveredRooms) ==
                 SimFlags::StartInDiscoveredRooms) {
-            pos[1] += consts::worldLength * rand_room / 3;
+            pos[1] += consts::roomLength * rand_room;
             if (rand_room > 0) {
                float range = consts::worldWidth / 2.f - 2.5f * consts::agentRadius;
                float x_pos = second_rng.rand() * range - range / 2.f;
