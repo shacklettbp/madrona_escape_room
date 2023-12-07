@@ -195,7 +195,7 @@ static void resetPersistentEntities(Engine &ctx)
      GlobalProgress& progress = ctx.singleton<GlobalProgress>();
      //printf("About to access illegally %f \n", *(progress.progressPtr));
      // VISHNU MOD: what if we place them in any room we want
-     float max_room = 0.999 + (int)(fmax(0.f, fmin(float(numRooms), (*(progress.progressPtr)) * 3 / consts::worldLength))); 
+     float max_room = 0.999 + (int)(fmax(0.f, fmin(float(numRooms), (*(progress.progressPtr)) / consts::roomLength))); 
      int rand_room = ((int)(second_rng.rand() * max_room));
      for (CountT i = 0; i < consts::numAgents; i++) {
          Entity agent_entity = ctx.data().agents[i];
@@ -710,7 +710,6 @@ static void generateComplexLevel(Engine &ctx)
 {
     LevelState &level = ctx.singleton<LevelState>();
 
-
     makeRoom(ctx, level, 0, RoomType::DoubleButton);
     makeRoom(ctx, level, 1, RoomType::CubeBlocking);
     makeRoom(ctx, level, 2, RoomType::CubeButtons);
@@ -731,8 +730,16 @@ static void generateComplexLevel(Engine &ctx)
 void generateWorld(Engine &ctx)
 {
     resetPersistentEntities(ctx);
-    generateLevel(ctx);
-    //generateComplexLevel(ctx);
+
+    if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
+        SimFlags::UseComplexLevel)
+    {
+        generateComplexLevel(ctx);
+    }
+    else
+    {
+        generateLevel(ctx);
+    }
 }
 
 }

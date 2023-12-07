@@ -54,13 +54,17 @@ int main(int argc, char *argv[])
         num_worlds = (uint32_t)atoi(argv[1]);
     }
 
+
+    SimFlags flags = SimFlags::Default;
     ExecMode exec_mode = ExecMode::CPU;
     if (argc >= 3) {
         if (!strcmp("--cpu", argv[2])) {
             exec_mode = ExecMode::CPU;
         } else if (!strcmp("--cuda", argv[2])) {
             exec_mode = ExecMode::CUDA;
-        }
+        } else if (!strcmp("--complex", argv[2])) {
+            flags = SimFlags::UseComplexLevel;
+        } 
     }
 
     const char *replay_log_path = nullptr;
@@ -128,7 +132,7 @@ int main(int argc, char *argv[])
         .maxInstancesPerWorld = 1000,
         .defaultSimTickRate = 20,
         .cameraMoveSpeed = 10.f,
-        .cameraPosition = { 0, consts::worldLength / 2.f, 30 },
+        .cameraPosition = { 0, consts::maxRooms / 2.f, 30 },
         .cameraRotation = initial_camera_rotation,
         .execMode = exec_mode,
     });
@@ -160,7 +164,7 @@ int main(int argc, char *argv[])
         .gpuID = 0,
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
-        .simFlags = SimFlags::Default,
+        .simFlags = flags,
         .rewardMode = RewardMode::OG,
     }, viewer.rendererBridge());
 

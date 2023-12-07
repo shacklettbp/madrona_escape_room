@@ -716,18 +716,18 @@ inline void agentZeroVelSystem(Engine &,
     vel.angular = Vector3::zero();
 }
 
-static inline float distObs(float v)
+static inline float distObs(float v, int32_t numRooms)
 {
-    return v / consts::worldLength;
+    return v / (numRooms * consts::roomLength);
 }
 
-static inline float globalPosObs(float v)
+static inline float globalPosObs(float v, int32_t numRooms)
 {
-    return v / consts::worldLength;
+    return v / (numRooms * consts::roomLength);
 }
 
 // Translate xy delta to polar observations for learning.
-static inline PolarObservation xyToPolar(Vector3 v)
+static inline PolarObservation xyToPolar(Vector3 v, int32_t numRooms)
 {
     Vector2 xy { v.x, v.y };
 
@@ -737,7 +737,7 @@ static inline PolarObservation xyToPolar(Vector3 v)
     float theta = atan2f(xy.x, xy.y);
 
     return PolarObservation {
-        .r = distObs(r),
+        .r = distObs(r, numRooms),
         .theta = angleObs(theta),
     };
 }
@@ -761,15 +761,19 @@ inline void collectObservationsSystem(Engine &ctx,
                                       DoorObservation &door_obs)
 {
 
-    const CountT cur_room_idx = roomIndex(pos);
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
+
+
+    const CountT cur_room_idx = roomIndex(pos, numRooms);
+
 
     self_obs.roomX = pos.x / (consts::worldWidth / 2.f);
     self_obs.roomY = (pos.y - cur_room_idx * consts::roomLength) /
         consts::roomLength;
-    self_obs.globalX = globalPosObs(pos.x);
-    self_obs.globalY = globalPosObs(pos.y);
-    self_obs.globalZ = globalPosObs(pos.z);
-    self_obs.maxY = globalPosObs(progress.maxY);
+    self_obs.globalX = globalPosObs(pos.x, numRooms);
+    self_obs.globalY = globalPosObs(pos.y, numRooms);
+    self_obs.globalZ = globalPosObs(pos.z, numRooms);
+    self_obs.maxY = globalPosObs(progress.maxY, numRooms);
     self_obs.theta = angleObs(computeZAngle(rot));
     self_obs.isGrabbing = grab.constraintEntity != Entity::none() ?
         1.f : 0.f;
@@ -816,7 +820,7 @@ inline void collectObservationsSystem(Engine &ctx,
                 }
 
                 partner_obs.obs[idx++] = {
-                    .polar = xyToPolar(to_view.rotateVec(to_other)),
+                    .polar = xyToPolar(to_view.rotateVec(to_other), numRooms),
                     .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
                 };
 
@@ -843,39 +847,29 @@ inline void collectObservationsSystem(Engine &ctx,
        int idx = 0;
         ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
             // We want information on cubes and buttons in the current room.
-            if (roomIndex(p) != cur_room_idx ||
+            if (roomIndex(p, numRooms) != cur_room_idx ||
                 (e != EntityType::Cube && e != EntityType::Button && e != EntityType::Key)) {
                 return;
             }
 
             EntityObservation ob;
             Vector3 to_entity = p - pos;
-            ob.polar = xyToPolar(to_view.rotateVec(to_entity));
+            ob.polar = xyToPolar(to_view.rotateVec(to_entity), numRooms);
             ob.encodedType = encodeType(e);
 
             if (idx < consts::maxObservationsPerAgent) {
                 room_ent_obs.obs[idx++] = ob;
-
-                //printf("room_obs (r, theta, type): %f, %f, %f\n", 
-                //room_ent_obs.obs[idx - 1].polar.r,
-                //room_ent_obs.obs[idx - 1].polar.theta,
-                //room_ent_obs.obs[idx - 1].encodedType);
             }
         });
     }
 
     // Context.query() version.
     ctx.iterateQuery(ctx.data().doorQuery, [&](Position &p, OpenState &os) {
-       if (roomIndex(p) != cur_room_idx) {
+       if (roomIndex(p, numRooms) != cur_room_idx) {
            return;
        }
-       door_obs.polar = xyToPolar(to_view.rotateVec(p - pos));
+       door_obs.polar = xyToPolar(to_view.rotateVec(p - pos), numRooms);
        door_obs.isOpen = os.isOpen ? 1.f : 0.f;
-
-    //    printf("Door obs (r, theta, isOpen): %f, %f, %f\n", 
-    //    door_obs.polar.r,
-    //    door_obs.polar.theta,
-    //    door_obs.isOpen);
     });
 }
 
@@ -890,6 +884,8 @@ inline void lidarSystem(Engine &ctx,
     Vector3 pos = ctx.get<Position>(e);
     Quat rot = ctx.get<Rotation>(e);
     auto &bvh = ctx.singleton<broadphase::BVH>();
+
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
 
     Vector3 agent_fwd = rot.rotateVec(math::fwd);
     Vector3 right = rot.rotateVec(math::right);
@@ -917,7 +913,7 @@ inline void lidarSystem(Engine &ctx,
             EntityType entity_type = ctx.get<EntityType>(hit_entity);
 
             lidar.samples[idx] = {
-                .depth = distObs(hit_t),
+                .depth = distObs(hit_t, numRooms),
                 .encodedType = encodeType(entity_type),
             };
         }
@@ -943,13 +939,14 @@ inline void lidarSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void denseRewardSystem(Engine &,
+inline void denseRewardSystem(Engine &ctx,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
 {
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
 
     float old_max_y = progress.maxY;
 
@@ -976,15 +973,16 @@ inline void denseRewardSystem(Engine &,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void denseRewardSystem2(Engine &,
+inline void denseRewardSystem2(Engine &ctx,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
 {
     (void)progress;
 
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
     if (reward_pos < 14.0f && reward_pos > 9.0f) {
         // Passed the first room
         reward_pos = 10.0f;
@@ -1007,8 +1005,9 @@ inline void denseRewardSystem3(Engine &ctx,
                          Progress &progress,
                          Reward &out_reward)
 {
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
     if (reward_pos < 14.0f && reward_pos > 9.0f) {
         // Passed the first room
         reward_pos = 10.0f;
@@ -1049,13 +1048,14 @@ inline void denseRewardSystem3(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void sparseRewardSystem(Engine &,
+inline void sparseRewardSystem(Engine &ctx,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
 {
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
 
     float old_max_y = progress.maxY;
 
@@ -1087,8 +1087,9 @@ inline void sparseRewardSystem2(Engine &ctx,
 {
     (void)progress;
 
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
 
     float reward = 0.0f;
     /*
@@ -1124,13 +1125,14 @@ inline void sparseRewardSystem2(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void rewardSystem(Engine &,
+inline void rewardSystem(Engine &ctx,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
 {
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
 
     float old_max_y = progress.maxY;
 
@@ -1150,13 +1152,14 @@ inline void rewardSystem(Engine &,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void rewardSystemFixed(Engine &,
+inline void rewardSystemFixed(Engine &ctx,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
 {
+    const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
 
     float old_max_y = progress.maxY;
 
@@ -1196,7 +1199,7 @@ inline void bonusRewardSystem(Engine &ctx,
 }
 
 // Done system is now on whether I've exited the last room
-inline void exitRoomSystem(Engine &ctx,
+inline void exitRoomSystem(Engine &,
                            Position pos,
                            Done &done)
 {
@@ -1540,6 +1543,15 @@ Sim::Sim(Engine &ctx,
     autoReset = cfg.autoReset;
 
     simFlags = cfg.simFlags;
+
+    // createPersistentEntities must know the RoomCount
+    if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
+            SimFlags::UseComplexLevel) {
+            ctx.singleton<RoomCount>().count = 4;
+        } else {
+            ctx.singleton<RoomCount>().count = 3;
+        }
+
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);
