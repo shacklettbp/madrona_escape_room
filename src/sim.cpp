@@ -119,10 +119,18 @@ static inline void cleanupWorld(Engine &ctx)
                 ctx.destroyEntity(room.entities[j]);
             }
         }
-        
-        ctx.destroyEntity(room.walls[0]);
-        ctx.destroyEntity(room.walls[1]);
-        ctx.destroyEntity(room.door);
+
+        for (int32_t j = 0; j < 8; ++j) {
+            if (room.walls[i] != Entity::none()) {
+                ctx.destroyEntity(room.walls[j]);
+            }
+        }
+
+        for (int32_t j = 0; j < 4; ++j) {
+            if (room.door[i] != Entity::none()) {
+                ctx.destroyEntity(room.door[j]);
+            }
+        }
     }
 }
 
@@ -1026,7 +1034,7 @@ inline void denseRewardSystem3(Engine &ctx,
         // Still in a room
         const LevelState &level = ctx.singleton<LevelState>();
         const Room &room = level.rooms[cur_room_idx];
-        Entity cur_door = room.door;
+        Entity cur_door = room.door[0];
         //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
         OpenState door_open_state = ctx.get<OpenState>(cur_door);
         //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
@@ -1547,7 +1555,8 @@ Sim::Sim(Engine &ctx,
     // createPersistentEntities must know the RoomCount
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
-            ctx.singleton<RoomCount>().count = 4;
+            // TODO: restore
+            ctx.singleton<RoomCount>().count = 1;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }
