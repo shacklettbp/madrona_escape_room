@@ -321,30 +321,33 @@ static void makeWall(Engine &ctx,
                     int32_t orientation)
 {
     // No door wall
-    // Entity wall = ctx.makeEntity<PhysicsEntity>();
-    // setupRigidBodyEntity(
-    //     ctx,
-    //     wall,
-    //     pos,
-    //     Quat { 1, 0, 0, 0 },
-    //     SimObject::Wall,
-    //     EntityType::Wall,
-    //     ResponseType::Static,
-    //     Diag3x3 {
-    //         consts::roomLength,
-    //         consts::wallWidth,
-    //         1.75f,
-    // });
+    if (orientation % 2 == 1)
+    {
+        Entity wall = ctx.makeEntity<PhysicsEntity>();
+        setupRigidBodyEntity(
+            ctx,
+            wall,
+            pos,
+            Quat{1, 0, 0, 0},
+            SimObject::Wall,
+            EntityType::Wall,
+            ResponseType::Static,
+            Diag3x3{
+                consts::roomLength,
+                consts::wallWidth,
+                1.75f,
+            });
 
-    // // Wall with a door.
+        // Wall with a door.
 
-    // ctx.get<Rotation>(wall) = Quat::angleAxis((orientation) * math::pi * 0.5, math::up);
+        ctx.get<Rotation>(wall) = Quat::angleAxis((orientation)*math::pi * 0.5, math::up);
 
-    // registerRigidBodyEntity(ctx, wall, SimObject::Wall);
+        registerRigidBodyEntity(ctx, wall, SimObject::Wall);
 
-    // room.walls[orientation] = wall;
+        room.walls[2 * orientation] = wall;
 
-    // return;
+        return;
+    }
 
     // Quarter door of buffer on both sides, place door and then build walls
     // up to the door gap on both sides
@@ -395,6 +398,7 @@ static void makeWall(Engine &ctx,
     ctx.get<Rotation>(right_wall) = Quat::angleAxis((orientation) * math::pi * 0.5, math::up);
     registerRigidBodyEntity(ctx, right_wall, SimObject::Wall);
 
+    printf("Making door in makeWall in room %d\n", room_idx);
     Entity door = ctx.makeEntity<DoorEntity>();
     setupRigidBodyEntity(
         ctx,
@@ -416,13 +420,13 @@ static void makeWall(Engine &ctx,
     ctx.get<Rotation>(door) = Quat::angleAxis((orientation) * math::pi * 0.5, math::up);
     registerRigidBodyEntity(ctx, door, SimObject::Door);
     ctx.get<OpenState>(door).isOpen = false;
-    ctx.get<KeyCode>(door).code = 1 << orientation; // Default requires no keys.
 
-        float key_x = randInRangeCentered(ctx,
+    // TODO: key to random room.
+    float key_x = randInRangeCentered(ctx,
         consts::worldWidth / 2.f - consts::keyWidth);
     float key_y = randInRangeCentered(ctx,
         consts::worldWidth / 2.f - consts::keyWidth);
-    Entity key = makeKey(ctx, key_x, key_y, 1 << orientation); // key code
+    Entity key = makeKey(ctx, key_x, key_y, 1 << (orientation + room_idx * 4)); // key code
     setupDoor(ctx, door, {}, ctx.get<KeyState>(key).code, true);
 
     room.walls[2 * orientation] = left_wall;
@@ -781,11 +785,9 @@ static void makeComplexRoom(Engine &ctx,
     for (CountT i = 0; i < consts::maxEntitiesPerRoom; i++) {
         room.entities[i] = Entity::none();
     }
-
     for (CountT i = 0; i < 8; i++) {
         room.walls[i] = Entity::none();
     }
-
     for (CountT i = 0; i < 4; i++) {
         room.door[i] = Entity::none();
     }
@@ -795,20 +797,27 @@ static void makeComplexRoom(Engine &ctx,
     float room_center_x = consts::roomLength * this_room.x;
     float room_center_y = consts::roomLength * this_room.y;
 
-    // N, E, S, W
+    // W, N, E, S
     int32_t wallsToGenerate[4] = {1, 1, 1, 1};
     for (int i = 0; i < consts::maxRooms; ++i) {
-        if (roomList[i].y == this_room.y + 1) {
-            wallsToGenerate[0] = 0;
+        int32_t i_x = roomList[i].x;
+        int32_t i_y = roomList[i].y;
+        if (i_y == this_room.y) {
+            if (roomList[i].x == this_room.x + 1) {
+                wallsToGenerate[1] = 0;
+            }
+            if (roomList[i].x == this_room.x - 1) {
+                wallsToGenerate[3] = 0;
+            }
         }
-        if (roomList[i].x == this_room.x + 1) {
-            wallsToGenerate[1] = 0;
-        }
-        if (roomList[i].y == this_room.y - 1) {
-            wallsToGenerate[2] = 0;
-        }
-        if (roomList[i].x == this_room.x - 1) {
-            wallsToGenerate[3] = 0;
+
+        if (i_x == this_room.x ) {
+            if (i_y == this_room.y + 1) {
+                wallsToGenerate[0] = 0;
+            }
+            if (roomList[i].y == this_room.y - 1) {
+                wallsToGenerate[2] = 0;
+            }
         }
     }
 
@@ -844,37 +853,6 @@ static void makeComplexRoom(Engine &ctx,
     // 3. Randomly decide which walls get doors, and build those.
     // 4. Keep going until you've placed the total number of rooms.
     // 5. Resolve key doors by scattering keys to open rooms. For each new key, update the open rooms list.
-
-
-
-    makeEndWall(ctx, room, room_idx);
-
-    float room_y_min = room_idx * consts::roomLength;
-    float room_y_max = (room_idx + 1) * consts::roomLength;
-
-    switch (room_type) {
-    case RoomType::SingleButton: {
-        makeSingleButtonRoom(ctx, room, room_y_min, room_y_max);
-    } break;
-    case RoomType::DoubleButton: {
-        makeDoubleButtonRoom(ctx, room, room_y_min, room_y_max);
-    } break;
-    case RoomType::CubeBlocking: {
-        makeCubeBlockingRoom(ctx, room, room_y_min, room_y_max);
-    } break;
-    case RoomType::CubeButtons: {
-        makeCubeButtonsRoom(ctx, room, room_y_min, room_y_max);
-    } break;
-    case RoomType::Key: {
-        CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(room_idx));
-        // Put the key in a random already generate room.
-        room_y_min = randomRoomIdx * consts::roomLength;
-        room_y_max = (randomRoomIdx + 1) * consts::roomLength;
-        makeKeyRoom(ctx, room, level.rooms[randomRoomIdx], room_y_min, room_y_max, 1 << room_idx);
-    } break;
-    default: MADRONA_UNREACHABLE();
-    }
-
 
 }
 
@@ -957,6 +935,7 @@ static void generateComplexLevel(Engine &ctx)
         doorList[i] = Entity::none();
     }
 
+    // Pared down room representation used only for generation.
     RoomRep roomList[consts::maxRooms];
     for (int i = 0; i < consts::maxRooms; ++i) {
         roomList[i].x = 2 * consts::maxRooms;
@@ -967,9 +946,58 @@ static void generateComplexLevel(Engine &ctx)
     // First room. Agents start in this room.
     roomList[0].x = 0;
     roomList[0].y = 0;
-
     // RoomType is interpreted as DoorType.
     makeComplexRoom(ctx, level, 0, RoomType::DoubleButton, roomList, &doorList[doorIdx]);
+
+    //Second room, make above
+    roomList[1].x = 0;
+    roomList[1].y = 1;
+    makeComplexRoom(ctx, level, 1, RoomType::Key, roomList, &doorList[doorIdx]);
+
+    roomList[2].x = 1;
+    roomList[2].y = 1;
+    makeComplexRoom(ctx, level, 2, RoomType::Key, roomList, &doorList[doorIdx]);
+
+    roomList[3].x = 1;
+    roomList[3].y = 0;
+    makeComplexRoom(ctx, level, 3, RoomType::Key, roomList, &doorList[doorIdx]);
+
+
+    int32_t keyCount = 0;
+    int32_t wallCount = 0;
+    int32_t doorCount = 0;
+    for (CountT i = 0; i < ctx.singleton<RoomCount>().count; ++i) {
+        printf("Room %d\n", i);
+        Room &room = level.rooms[i];
+        for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
+            if (room.entities[j] != Entity::none()) {
+                assert(ctx.get<EntityType>(room.entities[j]) == EntityType::Key);
+                printf("room.entities[%d] is a key\n", j);
+                keyCount += 1;
+                printf("ObjectID = %d\n", ctx.get<ObjectID>(room.entities[j]).idx);
+            }
+        }
+
+        for (int32_t j = 0; j < 8; ++j) {
+            if (room.walls[j] != Entity::none()) {
+                printf("room.walls[%d]\n", j);
+                wallCount += 1;
+                printf("ObjectID = %d\n", ctx.get<ObjectID>(room.walls[j]).idx);
+            }
+        }
+
+        for (int32_t j = 0; j < 4; ++j) {
+            if (room.door[j] != Entity::none()) {
+                printf("room.doors[%d]\n", j);
+                doorCount += 1;
+                printf("ObjectID = %d\n", ctx.get<ObjectID>(room.door[j]).idx);
+            }
+        }
+    }
+
+    printf("Created %d keys\n", keyCount);
+    printf("Created %d walls\n", wallCount);
+    printf("Created %d doors\n", doorCount);
 
     //makeRoom(ctx, level, 0, RoomType::DoubleButton);
     //makeRoom(ctx, level, 1, RoomType::CubeBlocking);
@@ -1001,8 +1029,6 @@ void generateWorld(Engine &ctx)
     {
         generateLevel(ctx);
     }
-
-    printf("Generated World!\n");
 }
 
 }

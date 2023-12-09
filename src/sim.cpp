@@ -109,6 +109,11 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
 static inline void cleanupWorld(Engine &ctx)
 {
+
+    int32_t keyCount = 0;
+    int32_t wallCount = 0;
+    int32_t doorCount = 0;
+
     int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Destroy current level entities
     LevelState &level = ctx.singleton<LevelState>();
@@ -117,21 +122,29 @@ static inline void cleanupWorld(Engine &ctx)
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
                 ctx.destroyEntity(room.entities[j]);
+                keyCount += 1;
             }
         }
 
         for (int32_t j = 0; j < 8; ++j) {
-            if (room.walls[i] != Entity::none()) {
+            if (room.walls[j] != Entity::none()) {
                 ctx.destroyEntity(room.walls[j]);
+                wallCount += 1;
             }
         }
 
         for (int32_t j = 0; j < 4; ++j) {
-            if (room.door[i] != Entity::none()) {
+            if (room.door[j] != Entity::none()) {
                 ctx.destroyEntity(room.door[j]);
+                doorCount += 1;
             }
         }
     }
+
+    printf("Destroyed %d keys\n", keyCount);
+    printf("Destroyed %d walls\n", wallCount);
+    printf("Destroyed %d doors\n", doorCount);
+
 }
 
 static inline void initWorld(Engine &ctx)
@@ -291,7 +304,6 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
 
     // Save the random seed.
     ckpt.seed = ctx.data().seed;
-
     {
         // Keys
         int idx = 0;
@@ -306,6 +318,7 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
         );
     }
 
+    return; // TODO: restore
     Entity tempCubeEntities[consts::maxRooms * 3];
     CountT num_cubes = 0;
     // Cubes, run before agents to track IDs.
@@ -1535,7 +1548,7 @@ Sim::Sim(Engine &ctx,
     // a future release.
     constexpr CountT max_total_entities = consts::numAgents +
         consts::maxRooms * (consts::maxEntitiesPerRoom + 3) +
-        4; // side walls + floor
+        4 * 3 * consts::maxRooms; // side walls + floor
 
     phys::RigidBodyPhysicsSystem::init(ctx, init.rigidBodyObjMgr,
         consts::deltaT, consts::numPhysicsSubsteps, -9.8f * math::up,
@@ -1556,7 +1569,7 @@ Sim::Sim(Engine &ctx,
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
             // TODO: restore
-            ctx.singleton<RoomCount>().count = 1;
+            ctx.singleton<RoomCount>().count = 4;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }

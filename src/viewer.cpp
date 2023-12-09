@@ -329,6 +329,7 @@ int main(int argc, char *argv[])
 
         mgr.step();
         
-        printObs();
+        // TODO: restore
+        //printObs();
     }, []() {});
 }
