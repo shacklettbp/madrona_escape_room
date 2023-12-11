@@ -321,7 +321,8 @@ static void makeWall(Engine &ctx,
                     int32_t orientation)
 {
     // No door wall
-    if (orientation % 2 == 1)
+    // TODO: restore, make a single door in the second room.
+    if (false && room_idx > 0 && orientation > 0)
     {
         Entity wall = ctx.makeEntity<PhysicsEntity>();
         setupRigidBodyEntity(
@@ -363,7 +364,7 @@ static void makeWall(Engine &ctx,
             orientation % 2 != 0 ? (-consts::roomLength + left_len) / 2.f : 0,
             0,
         },
-        Quat { 1, 0, 0, 0 },
+        Quat::angleAxis((orientation) * math::pi * 0.5, math::up),
         SimObject::Wall,
         EntityType::Wall,
         ResponseType::Static,
@@ -372,7 +373,6 @@ static void makeWall(Engine &ctx,
             consts::wallWidth,
             1.75f,
         });
-    ctx.get<Rotation>(left_wall) = Quat::angleAxis((orientation) * math::pi * 0.5, math::up);
     registerRigidBodyEntity(ctx, left_wall, SimObject::Wall);
 
     float right_len =
@@ -386,7 +386,7 @@ static void makeWall(Engine &ctx,
             orientation % 2 != 0 ? (consts::roomLength - right_len) / 2.f : 0,
             0,
         },
-        Quat { 1, 0, 0, 0 },
+        Quat::angleAxis((orientation) * math::pi * 0.5, math::up),
         SimObject::Wall,
         EntityType::Wall,
         ResponseType::Static,
@@ -395,44 +395,47 @@ static void makeWall(Engine &ctx,
             consts::wallWidth,
             1.75f,
         });
-    ctx.get<Rotation>(right_wall) = Quat::angleAxis((orientation) * math::pi * 0.5, math::up);
     registerRigidBodyEntity(ctx, right_wall, SimObject::Wall);
 
-    printf("Making door in makeWall in room %d\n", room_idx);
-    Entity door = ctx.makeEntity<DoorEntity>();
-    setupRigidBodyEntity(
-        ctx,
-        door,
-        pos + Vector3 {
-            orientation % 2 == 0 ? door_center - consts::worldWidth / 2.f : 0,
-            orientation % 2 != 0 ? door_center - consts::worldWidth / 2.f : 0,
-            0,
-        },
-        Quat { 1, 0, 0, 0 },
-        SimObject::Door,
-        EntityType::Door,
-        ResponseType::Static,
-        Diag3x3 {
-            consts::doorWidth * 0.8f,
-            consts::wallWidth,
-            1.75f,
-        });
-    ctx.get<Rotation>(door) = Quat::angleAxis((orientation) * math::pi * 0.5, math::up);
-    registerRigidBodyEntity(ctx, door, SimObject::Door);
-    ctx.get<OpenState>(door).isOpen = false;
 
-    // TODO: key to random room.
-    float key_x = randInRangeCentered(ctx,
-        consts::worldWidth / 2.f - consts::keyWidth);
-    float key_y = randInRangeCentered(ctx,
-        consts::worldWidth / 2.f - consts::keyWidth);
-    Entity key = makeKey(ctx, key_x, key_y, 1 << (orientation + room_idx * 4)); // key code
-    setupDoor(ctx, door, {}, ctx.get<KeyState>(key).code, true);
+    // Make doors in the first room, and one door in the second.
+    if (room_idx == 0 || (room_idx == 1 && orientation == 0)) {
+        printf("Making door in makeWall in room %d\n", room_idx);
+        Entity door = ctx.makeEntity<DoorEntity>();
+        setupRigidBodyEntity(
+            ctx,
+            door,
+            pos + Vector3 {
+                orientation % 2 == 0 ? door_center - consts::worldWidth / 2.f : 0,
+                orientation % 2 != 0 ? door_center - consts::worldWidth / 2.f : 0,
+                0,
+            },
+            Quat::angleAxis((orientation) * math::pi * 0.5, math::up),
+            SimObject::Door,
+            EntityType::Door,
+            ResponseType::Static,
+            Diag3x3 {
+                consts::doorWidth * 0.8f,
+                consts::wallWidth,
+                1.75f,
+            });
+        registerRigidBodyEntity(ctx, door, SimObject::Door);
+        ctx.get<OpenState>(door).isOpen = false;
+
+        float key_x = randInRangeCentered(ctx,
+            consts::worldWidth / 2.f - consts::keyWidth);
+        float key_y = randInRangeCentered(ctx,
+            consts::worldWidth / 2.f - consts::keyWidth);
+        Entity key = makeKey(ctx, key_x, key_y, 1 << (orientation + room_idx * 4)); // key code
+        setupDoor(ctx, door, {}, ctx.get<KeyState>(key).code, true);
+
+        room.door[orientation] = door;
+        room.entities[orientation] = key;
+    }
 
     room.walls[2 * orientation] = left_wall;
     room.walls[2 * orientation + 1] = right_wall;
-    room.door[orientation] = door;
-    room.entities[orientation] = key;
+
 }
 
 
