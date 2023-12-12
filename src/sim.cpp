@@ -318,7 +318,6 @@ inline void checkpointSystem(Engine &ctx, CheckpointSave &save)
         );
     }
 
-    return; // TODO: restore
     Entity tempCubeEntities[consts::maxRooms * 3];
     CountT num_cubes = 0;
     // Cubes, run before agents to track IDs.
@@ -666,7 +665,7 @@ inline void keySystem(Engine &ctx,
     };
 
     RigidBodyPhysicsSystem::findEntitiesWithinAABB(
-            ctx, button_aabb, [&](Entity &e)
+            ctx, button_aabb, [&](Entity e)
         {
             if (ctx.get<EntityType>(e) == EntityType::Agent && !state.claimed) {
                 ctx.get<KeyCode>(e).code |= state.code.code;
@@ -1434,8 +1433,10 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         builder, {sort_agents});
     auto sort_buttons = queueSortByWorld<ButtonEntity>(
         builder, {sort_phys_objects});
-    auto sort_walls = queueSortByWorld<DoorEntity>(
+    auto sort_keys = queueSortByWorld<KeyEntity>(
         builder, {sort_buttons});
+    auto sort_walls = queueSortByWorld<DoorEntity>(
+        builder, {sort_keys});
 #endif
     // Conditionally load the checkpoint here including Done, Reward, 
     // and StepsRemaining. With Observations this should reconstruct 
@@ -1601,7 +1602,8 @@ Sim::Sim(Engine &ctx,
     ctx.data().ckptKeyQuery = ctx.query<Position, Rotation, KeyState>();
 
     ctx.singleton<CheckpointReset>().reset = 0;
-    ctx.singleton<CheckpointSave>().save = 1;
+    // TODO: Restore
+    ctx.singleton<CheckpointSave>().save = 0;
 }
 
 // This declaration is needed for the GPU backend in order to generate the

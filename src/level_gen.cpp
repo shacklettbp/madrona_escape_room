@@ -299,7 +299,7 @@ static Entity makeKey(Engine &ctx,
 static void setupDoor(Engine &ctx,
                       Entity door,
                       Span<const Entity> buttons,
-                      KeyCode key_code,
+                      int32_t code,
                       bool is_persistent)
 {
     DoorProperties &props = ctx.get<DoorProperties>(door);
@@ -310,8 +310,32 @@ static void setupDoor(Engine &ctx,
     props.numButtons = (int32_t)buttons.size();
     props.isPersistent = is_persistent;
 
-    ctx.get<KeyCode>(door).code = key_code.code;
+    ctx.get<KeyCode>(door).code = code;
 }
+
+static Entity makeButton(Engine &ctx,
+                         float button_x,
+                         float button_y)
+{
+    Entity button = ctx.makeEntity<ButtonEntity>();
+    ctx.get<Position>(button) = Vector3 {
+        button_x,
+        button_y,
+        0.f,
+    };
+    ctx.get<Rotation>(button) = Quat { 1, 0, 0, 0 };
+    ctx.get<Scale>(button) = Diag3x3 {
+        consts::buttonWidth,
+        consts::buttonWidth,
+        0.2f,
+    };
+    ctx.get<ObjectID>(button) = ObjectID { (int32_t)SimObject::Button };
+    ctx.get<ButtonState>(button).isPressed = false;
+    ctx.get<EntityType>(button) = EntityType::Button;
+
+    return button;
+}
+
 
 // Builds the two walls & door that block the end of the challenge room
 static void makeWall(Engine &ctx,
@@ -354,6 +378,9 @@ static void makeWall(Engine &ctx,
     // up to the door gap on both sides
     float door_center = randBetween(ctx, 0.75f * consts::doorWidth, 
         consts::worldWidth - 0.75f * consts::doorWidth);
+    // Only make the door on the last one.
+
+
     float left_len = door_center - 0.5f * consts::doorWidth;
     Entity left_wall = ctx.makeEntity<PhysicsEntity>();
     setupRigidBodyEntity(
@@ -397,9 +424,12 @@ static void makeWall(Engine &ctx,
         });
     registerRigidBodyEntity(ctx, right_wall, SimObject::Wall);
 
+    room.walls[2 * orientation] = left_wall;
+    room.walls[2 * orientation + 1] = right_wall;
+
 
     // Make doors in the first room, and one door in the second.
-    if (room_idx == 0 || (room_idx == 1 && orientation == 0)) {
+    if (true || room_idx == 0 /*&& orientation < 4*/) {
         printf("Making door in makeWall in room %d\n", room_idx);
         Entity door = ctx.makeEntity<DoorEntity>();
         setupRigidBodyEntity(
@@ -422,19 +452,20 @@ static void makeWall(Engine &ctx,
         registerRigidBodyEntity(ctx, door, SimObject::Door);
         ctx.get<OpenState>(door).isOpen = false;
 
+        // TODO: restore
         float key_x = randInRangeCentered(ctx,
             consts::worldWidth / 2.f - consts::keyWidth);
         float key_y = randInRangeCentered(ctx,
             consts::worldWidth / 2.f - consts::keyWidth);
-        Entity key = makeKey(ctx, key_x, key_y, 1 << (orientation + room_idx * 4)); // key code
-        setupDoor(ctx, door, {}, ctx.get<KeyState>(key).code, true);
+        const int32_t code = 1 << (orientation + room_idx * 4);
+        Entity key = makeKey(ctx, key_x, key_y, code); // key code
+        
+        setupDoor(ctx, door, {}, code, true);
 
         room.door[orientation] = door;
         room.entities[orientation] = key;
     }
 
-    room.walls[2 * orientation] = left_wall;
-    room.walls[2 * orientation + 1] = right_wall;
 
 }
 
@@ -521,28 +552,6 @@ static void makeEndWall(Engine &ctx,
     room.door[0] = door;
 }
 
-static Entity makeButton(Engine &ctx,
-                         float button_x,
-                         float button_y)
-{
-    Entity button = ctx.makeEntity<ButtonEntity>();
-    ctx.get<Position>(button) = Vector3 {
-        button_x,
-        button_y,
-        0.f,
-    };
-    ctx.get<Rotation>(button) = Quat { 1, 0, 0, 0 };
-    ctx.get<Scale>(button) = Diag3x3 {
-        consts::buttonWidth,
-        consts::buttonWidth,
-        0.2f,
-    };
-    ctx.get<ObjectID>(button) = ObjectID { (int32_t)SimObject::Button };
-    ctx.get<ButtonState>(button).isPressed = false;
-    ctx.get<EntityType>(button) = EntityType::Button;
-
-    return button;
-}
 
 static Entity makeCube(Engine &ctx,
                        float cube_x,
@@ -588,7 +597,8 @@ static CountT makeKeyRoom(Engine &ctx,
 
     Entity key = makeKey(ctx, key_x, key_y, code); // key code
 
-    setupDoor(ctx, room.door[0], {}, ctx.get<KeyState>(key).code, true);
+    // TODO: Restore
+    //setupDoor(ctx, room.door[0], {}, ctx.get<KeyState>(key).code, true);
 
     CountT openEntityIdx = 0;
     while (openEntityIdx < consts::maxEntitiesPerRoom) {
@@ -615,7 +625,7 @@ static CountT makeSingleButtonRoom(Engine &ctx,
 
     Entity button = makeButton(ctx, button_x, button_y);
 
-    setupDoor(ctx, room.door[0], { button }, KeyCode{ 0 }, true);
+    setupDoor(ctx, room.door[0], { button }, 0, true);
 
     room.entities[0] = button;
 
@@ -649,7 +659,7 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     Entity b = makeButton(ctx, b_x, b_y);
 
-    setupDoor(ctx, room.door[0], { a, b }, KeyCode{ 0 }, true);
+    setupDoor(ctx, room.door[0], { a, b }, 0, true);
 
     room.entities[0] = a;
     room.entities[1] = b;
@@ -686,7 +696,7 @@ static CountT makeCubeBlockingRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door[0], { button_a, button_b }, KeyCode{ 0 }, true);
+    setupDoor(ctx, room.door[0], { button_a, button_b }, 0, true);
 
     Vector3 door_pos = ctx.get<Position>(room.door[0]);
 
@@ -742,7 +752,7 @@ static CountT makeCubeButtonsRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door[0], { button_a, button_b }, KeyCode{ 0 }, false);
+    setupDoor(ctx, room.door[0], { button_a, button_b }, 0, false);
 
     float cube_a_x = randBetween(ctx,
         -consts::worldWidth / 4.f,
@@ -847,6 +857,8 @@ static void makeComplexRoom(Engine &ctx,
         }
         makeWall(ctx, room, room_idx, wallCenter, i);
     }
+
+    //makeWall(ctx, room, room_idx, Vector3{0,0,4}, 4);
 
     return;
     // 1. Room centerpoint from door position and orientation. 
@@ -974,8 +986,6 @@ static void generateComplexLevel(Engine &ctx)
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
-                assert(ctx.get<EntityType>(room.entities[j]) == EntityType::Key);
-                printf("room.entities[%d] is a key\n", j);
                 keyCount += 1;
                 printf("ObjectID = %d\n", ctx.get<ObjectID>(room.entities[j]).idx);
             }

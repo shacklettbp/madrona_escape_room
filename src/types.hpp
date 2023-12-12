@@ -187,7 +187,7 @@ struct KeyCode {
 
 // False before an agent claims the key, true after.
 struct KeyState {
-    int32_t claimed;
+    bool claimed;
     KeyCode code; // Which door the key opens.
 };
 
@@ -260,11 +260,11 @@ struct AgentState {
 
 struct Checkpoint {
     int32_t seed;
-    ButtonSaveState buttonStates[consts::maxRooms * 2];
+    ButtonSaveState buttonStates[consts::maxRooms * 2 * 4];
     PhysicsEntityState cubeStates[consts::maxRooms * 3];
-    DoorState doorStates[consts::maxRooms];
+    DoorState doorStates[consts::maxRooms * 4];
     AgentState agentStates[consts::numAgents];
-    KeySaveState keyStates[consts::maxRooms];
+    KeySaveState keyStates[consts::maxRooms * 4];
 };
 
 struct CheckpointReset {

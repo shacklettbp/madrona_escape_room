@@ -625,8 +625,8 @@ Tensor Manager::doorObservationTensor() const
                                Tensor::ElementType::Float32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   4, // TODO: Restore, 1
-                                   4, // TOOD: Restore, 3
+                                   5, // TODO: Restore, 1
+                                   5, // TOOD: Restore, 3
                                });
 }
 
