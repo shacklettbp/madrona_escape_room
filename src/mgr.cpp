@@ -231,11 +231,23 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
         (std::filesystem::path(DATA_DIR) / "wall_collision.obj").string();
     asset_paths[(size_t)SimObject::Door] =
         (std::filesystem::path(DATA_DIR) / "wall_collision.obj").string();
+    asset_paths[(size_t)SimObject::PurpleDoor] =
+        (std::filesystem::path(DATA_DIR) / "wall_collision.obj").string();
+    asset_paths[(size_t)SimObject::BlueDoor] =
+        (std::filesystem::path(DATA_DIR) / "wall_collision.obj").string();
+    asset_paths[(size_t)SimObject::CyanDoor] =
+        (std::filesystem::path(DATA_DIR) / "wall_collision.obj").string();
     asset_paths[(size_t)SimObject::Agent] =
         (std::filesystem::path(DATA_DIR) / "agent_collision_simplified.obj").string();
     asset_paths[(size_t)SimObject::Button] =
         (std::filesystem::path(DATA_DIR) / "cube_collision.obj").string();
     asset_paths[(size_t)SimObject::Key] =
+        (std::filesystem::path(DATA_DIR) / "cube_collision.obj").string();
+    asset_paths[(size_t)SimObject::PurpleKey] =
+        (std::filesystem::path(DATA_DIR) / "cube_collision.obj").string();
+    asset_paths[(size_t)SimObject::BlueKey] =
+        (std::filesystem::path(DATA_DIR) / "cube_collision.obj").string();
+    asset_paths[(size_t)SimObject::CyanKey] =
         (std::filesystem::path(DATA_DIR) / "cube_collision.obj").string();
 
 
@@ -299,6 +311,19 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
         .muD = 0.5f,
     });
 
+    setupHull(SimObject::PurpleDoor, 0.f, {
+        .muS = 0.5f,
+        .muD = 0.5f,
+    });
+    setupHull(SimObject::BlueDoor, 0.f, {
+        .muS = 0.5f,
+        .muD = 0.5f,
+    });
+    setupHull(SimObject::CyanDoor, 0.f, {
+        .muS = 0.5f,
+        .muD = 0.5f,
+    });
+
     setupHull(SimObject::Agent, 1.f, {
         .muS = 0.5f,
         .muD = 0.5f,
@@ -310,6 +335,19 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
     });
 
     setupHull(SimObject::Key, 1.f, {
+        .muS = 0.5f,
+        .muD = 0.5f,
+    });
+
+    setupHull(SimObject::PurpleKey, 1.f, {
+        .muS = 0.5f,
+        .muD = 0.5f,
+    });
+    setupHull(SimObject::BlueKey, 1.f, {
+        .muS = 0.5f,
+        .muD = 0.5f,
+    });
+    setupHull(SimObject::CyanKey, 1.f, {
         .muS = 0.5f,
         .muD = 0.5f,
     });
@@ -444,7 +482,8 @@ Manager::Impl * Manager::Impl::init(
         // Allocate what I want here on heap
         float *progress_ptr = new float(0.f);
 
-        PhysicsLoader phys_loader(ExecMode::CPU, 10);
+        // TODO: restore, 10.
+        PhysicsLoader phys_loader(ExecMode::CPU, 20);
         loadPhysicsObjects(phys_loader);
 
         ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();

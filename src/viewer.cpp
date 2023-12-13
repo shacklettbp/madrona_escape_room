@@ -87,6 +87,12 @@ int main(int argc, char *argv[])
         (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
     render_asset_paths[(size_t)SimObject::Door] =
         (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
+    render_asset_paths[(size_t)SimObject::PurpleDoor] =
+        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
+    render_asset_paths[(size_t)SimObject::BlueDoor] =
+        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
+    render_asset_paths[(size_t)SimObject::CyanDoor] =
+        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
     render_asset_paths[(size_t)SimObject::Agent] =
         (std::filesystem::path(DATA_DIR) / "agent_render.obj").string();
     render_asset_paths[(size_t)SimObject::Button] =
@@ -94,6 +100,12 @@ int main(int argc, char *argv[])
     render_asset_paths[(size_t)SimObject::Plane] =
         (std::filesystem::path(DATA_DIR) / "plane.obj").string();
     render_asset_paths[(size_t)SimObject::Key] =
+        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
+    render_asset_paths[(size_t)SimObject::PurpleKey] =
+        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
+    render_asset_paths[(size_t)SimObject::BlueKey] =
+        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
+    render_asset_paths[(size_t)SimObject::CyanKey] =
         (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
 
     std::array<const char *, (size_t)SimObject::NumObjects> render_asset_cstrs;
@@ -115,8 +127,11 @@ int main(int argc, char *argv[])
         { math::Vector4{1.f, 1.f, 1.f, 0.0f}, 1, 0.5f, 1.0f,},
         { rgb8ToFloat(230, 230, 230),   -1, 0.8f, 1.0f },
         { math::Vector4{0.5f, 0.3f, 0.3f, 0.0f},  0, 0.8f, 0.2f,},
-        { rgb8ToFloat(230, 20, 20),   -1, 0.8f, 1.0f },
-        { rgb8ToFloat(230, 230, 20),   -1, 0.8f, 1.0f },
+        { rgb8ToFloat(230, 20, 20),   -1, 0.8f, 1.0f }, // Red
+        { rgb8ToFloat(230, 230, 20),   -1, 0.8f, 1.0f }, // Yellow
+        { rgb8ToFloat(20, 20, 230),   -1, 0.8f, 1.0f }, // blue
+        { rgb8ToFloat(230, 20, 230),   -1, 0.8f, 1.0f }, // purple
+        { rgb8ToFloat(20, 230, 230),   -1, 0.8f, 1.0f }, // cyan
     });
 
     math::Quat initial_camera_rotation =
@@ -140,12 +155,22 @@ int main(int argc, char *argv[])
     // Override materials
     render_assets->objects[(CountT)SimObject::Cube].meshes[0].materialIDX = 0;
     render_assets->objects[(CountT)SimObject::Wall].meshes[0].materialIDX = 1;
+
     render_assets->objects[(CountT)SimObject::Door].meshes[0].materialIDX = 5;
+    render_assets->objects[(CountT)SimObject::PurpleDoor].meshes[0].materialIDX = 8;
+    render_assets->objects[(CountT)SimObject::BlueDoor].meshes[0].materialIDX = 7;
+    render_assets->objects[(CountT)SimObject::CyanDoor].meshes[0].materialIDX = 9;
+
+    render_assets->objects[(CountT)SimObject::Key].meshes[0].materialIDX = 5;
+    render_assets->objects[(CountT)SimObject::PurpleKey].meshes[0].materialIDX = 8;
+    render_assets->objects[(CountT)SimObject::BlueKey].meshes[0].materialIDX = 7;
+    render_assets->objects[(CountT)SimObject::CyanKey].meshes[0].materialIDX = 9;
+
     render_assets->objects[(CountT)SimObject::Agent].meshes[0].materialIDX = 2;
     render_assets->objects[(CountT)SimObject::Agent].meshes[1].materialIDX = 3;
     render_assets->objects[(CountT)SimObject::Agent].meshes[2].materialIDX = 3;
     render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
-    render_assets->objects[(CountT)SimObject::Key].meshes[0].materialIDX = 5;
+
     render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
 
     viewer.loadObjects(render_assets->objects, materials, {

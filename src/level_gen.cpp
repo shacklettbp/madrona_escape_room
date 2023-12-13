@@ -288,7 +288,22 @@ static Entity makeKey(Engine &ctx,
         consts::keyWidth,
         consts::keyWidth,
     };
-    ctx.get<ObjectID>(key) = ObjectID { (int32_t)SimObject::Key };
+
+    // Pick the color for this key.
+    int32_t colorIdx = 0;
+    while ((code >> colorIdx) > 0) { colorIdx++; }
+    colorIdx = colorIdx % 4;
+
+    SimObject simObj = SimObject::Key;
+    switch (colorIdx) {
+        case 0: simObj = SimObject::Key; break;
+        case 1: simObj = SimObject::PurpleKey; break;
+        case 2: simObj = SimObject::BlueKey; break;
+        case 3: simObj = SimObject::CyanKey; break;
+        default: assert(false);
+    }
+
+    ctx.get<ObjectID>(key) = ObjectID { (int32_t)simObj };
     ctx.get<KeyState>(key).claimed = false;
     ctx.get<KeyState>(key).code.code = code;
     ctx.get<EntityType>(key) = EntityType::Key;
@@ -430,6 +445,22 @@ static void makeWall(Engine &ctx,
     room.walls[2 * orientation + 1] = right_wall;
 
 
+    const int32_t code = 1 << (orientation + room_idx * 4);
+
+    // Pick the color for this door.
+    int32_t colorIdx = 0;
+    while ((code >> colorIdx) > 0) { colorIdx++; }
+    colorIdx = colorIdx % 4;
+
+    SimObject simObj = SimObject::Door;
+    switch (colorIdx) {
+        case 0: simObj = SimObject::Door; break;
+        case 1: simObj = SimObject::PurpleDoor; break;
+        case 2: simObj = SimObject::BlueDoor; break;
+        case 3: simObj = SimObject::CyanDoor; break;
+        default: assert(false);
+    }
+
     Entity door = ctx.makeEntity<DoorEntity>();
     setupRigidBodyEntity(
         ctx,
@@ -440,7 +471,7 @@ static void makeWall(Engine &ctx,
             0,
         },
         Quat::angleAxis((orientation) * math::pi * 0.5, math::up),
-        SimObject::Door,
+        simObj,
         EntityType::Door,
         ResponseType::Static,
         Diag3x3 {
@@ -448,21 +479,10 @@ static void makeWall(Engine &ctx,
             consts::wallWidth,
             1.75f,
         });
-    registerRigidBodyEntity(ctx, door, SimObject::Door);
+    registerRigidBodyEntity(ctx, door, simObj);
     ctx.get<OpenState>(door).isOpen = false;
     
     
-    //float key_x = randInRangeCentered(ctx,
-    //    consts::worldWidth / 2.f - consts::keyWidth);
-    //float key_y = randInRangeCentered(ctx,
-    //    consts::worldWidth / 2.f - consts::keyWidth);
-//
-    //int32_t roomToHoldKey = int32_t(randBetween(ctx, 0.0f, room_idx));
-    //key_x += roomList[roomToHoldKey].x * consts::roomLength;
-    //key_y += roomList[roomToHoldKey].y * consts::roomLength;
-
-    const int32_t code = 1 << (orientation + room_idx * 4);
-    //Entity key = makeKey(ctx, key_x, key_y, code);
     
     setupDoor(ctx, door, {}, code, true);
     room.door[orientation] = door;
@@ -1080,9 +1100,11 @@ static void generateComplexLevel(Engine &ctx)
         Entity &door = doorList[i].door;
 
         // Pick a room to store the key.
+        // Attempt first to not put it in the first room.
         int32_t keyStoreRoomIdx = int32_t(randBetween(ctx, i > 0 ? 1.0f : 0.0f, (float)totalRooms));
         while(roomList[keyStoreRoomIdx].door != Entity::none()) {
-            keyStoreRoomIdx = int32_t(randBetween(ctx, i > 0 ? 1.0f : 0.0f, (float)totalRooms));
+            // If that fails, fall back to include all rooms as options.
+            keyStoreRoomIdx = int32_t(randBetween(ctx, 0.0f, (float)totalRooms));
         }
 
         float key_x = randInRangeCentered(ctx,
