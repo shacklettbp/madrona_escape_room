@@ -197,6 +197,13 @@ struct RoomRep {
     Entity door;
 };
 
+struct DoorRep {
+    Entity door;
+    int32_t roomIdx;
+    int32_t code;
+    bool exit;
+};
+
 // Room itself is not a component but is used by the singleton
 // component "LevelState" (below) to represent the state of the full level
 struct Room {
