@@ -141,9 +141,9 @@ static inline void cleanupWorld(Engine &ctx)
         }
     }
 
-    printf("Destroyed %d keys\n", keyCount);
-    printf("Destroyed %d walls\n", wallCount);
-    printf("Destroyed %d doors\n", doorCount);
+    //printf("Destroyed %d keys\n", keyCount);
+    //printf("Destroyed %d walls\n", wallCount);
+    //printf("Destroyed %d doors\n", doorCount);
 
 }
 
@@ -170,6 +170,7 @@ static inline void initWorld(Engine &ctx)
             // seed that generated that world.
             seed = ctx.singleton<Checkpoint>().seed;
         } else {
+            // TODO: restore, debugging.
             seed = episode_idx;
         }
     }
@@ -1570,7 +1571,7 @@ Sim::Sim(Engine &ctx,
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
             // TODO: restore
-            ctx.singleton<RoomCount>().count = 4;
+            ctx.singleton<RoomCount>().count = 8;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }

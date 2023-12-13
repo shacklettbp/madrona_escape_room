@@ -243,6 +243,12 @@ int main(int argc, char *argv[])
             mgr.triggerReset(world_idx);
         }
 
+        if (int32_t(agent_idx) == -1) {
+            // Allow reset from overview camera.
+            // TODO: remove, depends on uncommitted madrona change.
+            return;
+        }
+
         // By default, checkpointing happens every frame,
         // so disable that behavior here.
         mgr.setSaveCheckpoint(world_idx, 0);
