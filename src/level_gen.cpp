@@ -351,6 +351,248 @@ static Entity makeButton(Engine &ctx,
     return button;
 }
 
+static Entity makeCube(Engine &ctx,
+                       float cube_x,
+                       float cube_y,
+                       float scale = 1.f)
+{
+    Entity cube = ctx.makeEntity<PhysicsEntity>();
+    setupRigidBodyEntity(
+        ctx,
+        cube,
+        Vector3 {
+            cube_x,
+            cube_y,
+            1.f * scale,
+        },
+        Quat { 1, 0, 0, 0 },
+        SimObject::Cube,
+        EntityType::Cube,
+        ResponseType::Dynamic,
+        Diag3x3 {
+            scale,
+            scale,
+            scale,
+        });
+    registerRigidBodyEntity(ctx, cube, SimObject::Cube);
+
+    return cube;
+}
+
+
+static CountT makeCubeBlockingDoor(Engine &ctx,
+                                   Room &room,
+                                   float room_center_x,
+                                   float room_center_y,
+                                   int32_t orientation = 0)
+{
+    float button_a_x =  room_center_x + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth - consts::worldWidth / 4.f);
+
+    float button_a_y = room_center_y + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth - consts::worldWidth / 4.f);
+
+    Entity button_a = makeButton(ctx, button_a_x, button_a_y);
+
+    float button_b_x = room_center_x + randBetween(ctx,
+        consts::buttonWidth + consts::worldWidth / 4.f,
+        consts::worldWidth / 2.f - consts::buttonWidth);
+
+    float button_b_y = room_center_y + randBetween(ctx,
+        consts::buttonWidth + consts::worldWidth / 4.f,
+        consts::worldWidth / 2.f - consts::buttonWidth);
+
+    Entity button_b = makeButton(ctx, button_b_x, button_b_y);
+
+    setupDoor(ctx, room.door[orientation], { button_a, button_b }, 0, true);
+
+    Vector3 door_pos = ctx.get<Position>(room.door[orientation]);
+
+    Vector3 doorNormal = Vector3{0,0,0};
+    switch (orientation) {
+        case 0: doorNormal.y = 1; break;
+        case 1: doorNormal.x = 1; break;
+        case 2: doorNormal.y = -1; break;
+        case 3: doorNormal.x = -1; break;
+        default: break;
+    }
+
+    Vector3 cube_x_comp = math::cross(doorNormal, math::up) * 3.f;
+    Vector3 cube_y_comp = -doorNormal * 2.f;
+
+    Vector3 cube_a_pos = door_pos + cube_x_comp + cube_y_comp;
+    Entity cube_a = makeCube(ctx, cube_a_pos.x, cube_a_pos.y, 1.5f);
+
+    Vector3 cube_b_pos = door_pos + cube_y_comp;
+    Entity cube_b = makeCube(ctx, cube_b_pos.x, cube_b_pos.y, 1.5f);
+
+    Vector3 cube_c_pos = door_pos - cube_x_comp + cube_y_comp;
+    Entity cube_c = makeCube(ctx, cube_c_pos.x, cube_c_pos.y, 1.5f);
+
+    Entity entities[5] = {
+        button_a,
+        button_b,
+        cube_a,
+        cube_b,
+        cube_c,
+    };
+    int32_t placementIdx = 0;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = entities[placementIdx];
+            placementIdx++;
+            if (placementIdx == 5) {
+                break;
+            }
+        }
+    }
+
+    return 5;
+}
+
+// A room with two buttons that need to be pressed simultaneously,
+// the door stays open.
+static CountT makeDoubleButtonDoor(Engine &ctx,
+                                   Room &room,
+                                   float room_center_x,
+                                   float room_center_y,
+                                   int32_t orientation)
+{
+    float a_x = room_center_x + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth);
+
+    float a_y = room_center_y + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth);
+
+    Entity a = makeButton(ctx, a_x, a_y);
+
+    float b_x = room_center_x + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth);
+
+    float b_y = room_center_y + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth);
+
+    Entity b = makeButton(ctx, b_x, b_y);
+
+    setupDoor(ctx, room.door[orientation], { a, b }, 0, true);
+
+    Entity buttons[2] = {a, b};
+    int32_t placementIdx = 0;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = buttons[placementIdx];
+            placementIdx++;
+            if (placementIdx == 2) {
+                break;
+            }
+        }
+    }
+    return 2;
+}
+
+// This room has 2 buttons and 2 cubes. The buttons need to remain pressed
+// for the door to stay open. To progress, the agents must push at least one
+// cube onto one of the buttons, or more optimally, both.
+static CountT makeCubeButtonsDoor(Engine &ctx,
+                                  Room &room,
+                                  float room_center_x,
+                                  float room_center_y, 
+                                  int32_t orientation)
+{
+    float button_a_x = room_center_x + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth - consts::worldWidth / 4.f);
+
+    float button_a_y = room_center_y + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth - consts::worldWidth / 4.f);
+
+    Entity button_a = makeButton(ctx, button_a_x, button_a_y);
+
+    float button_b_x = room_center_x + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth - consts::worldWidth / 4.f);
+
+    float button_b_y = room_center_y + randBetween(ctx,
+        -consts::worldWidth / 2.f + consts::buttonWidth,
+        -consts::buttonWidth - consts::worldWidth / 4.f);
+
+    Entity button_b = makeButton(ctx, button_b_x, button_b_y);
+
+    setupDoor(ctx, room.door[orientation], { button_a, button_b }, 0, false);
+
+    float cube_a_x = room_center_x + randBetween(ctx,
+        -consts::worldWidth / 4.f,
+        -1.5f);
+
+    float cube_a_y = room_center_y + randBetween(ctx,
+        -consts::worldWidth / 4.f,
+        -1.5f);
+
+    Entity cube_a = makeCube(ctx, cube_a_x, cube_a_y, 1.5f);
+
+    float cube_b_x = room_center_x + randBetween(ctx,
+        1.5f,
+        consts::worldWidth / 4.f);
+
+    float cube_b_y = room_center_y + randBetween(ctx,
+        1.5f,
+        consts::worldWidth / 4.f);
+
+    Entity cube_b = makeCube(ctx, cube_b_x, cube_b_y, 1.5f);
+
+    Entity entities[4] =  {
+    button_a,
+    button_b,
+    cube_a,
+    cube_b
+    };
+    int32_t placementIdx = 0;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = entities[placementIdx];
+            placementIdx++;
+            if (placementIdx == 4) {
+                break;
+            }
+        }
+    }
+
+    return 4;
+}
+
+// A door with a single button that needs to be pressed, the door stays open.
+// TODO: unify with makeSingleButtonRoom.
+static CountT makeSingleButtonDoor(Engine &ctx,
+                                   Room &room,
+                                   float room_center_x,
+                                   float room_center_y,
+                                   int32_t orientation)
+{
+    float button_x = room_center_x + randInRangeCentered(ctx,
+            consts::worldWidth / 2.f - consts::buttonWidth);
+    float button_y = room_center_y + randInRangeCentered(ctx,
+            consts::worldWidth / 2.f - consts::buttonWidth);
+
+    Entity button = makeButton(ctx, button_x, button_y);
+
+    setupDoor(ctx, room.door[orientation], { button }, 0, true);
+
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = button;
+            break;
+        }
+    }
+
+    return 1;
+}
 
 // Builds the two walls & door that block the end of the challenge room
 static void makeWall(Engine &ctx,
@@ -362,6 +604,12 @@ static void makeWall(Engine &ctx,
                     DoorRep *doorList,
                     const RoomRep *roomList)
 {
+
+    RoomRep this_room = roomList[room_idx];
+
+    float room_center_x = consts::roomLength * this_room.x;
+    float room_center_y = consts::roomLength * this_room.y;
+
     // Wall with no door.
     if (!makeDoor)
     {
@@ -445,7 +693,11 @@ static void makeWall(Engine &ctx,
     room.walls[2 * orientation + 1] = right_wall;
 
 
-    const int32_t code = 1 << (orientation + room_idx * 4);
+    // Door setup
+
+    // The code this door will have if it's a key door.
+    // Used to determine door color.
+    int32_t code = 1 << (orientation + room_idx * 4);
 
     // Pick the color for this door.
     int32_t colorIdx = 0;
@@ -482,11 +734,35 @@ static void makeWall(Engine &ctx,
     registerRigidBodyEntity(ctx, door, simObj);
     ctx.get<OpenState>(door).isOpen = false;
     
-    
-    
-    setupDoor(ctx, door, {}, code, true);
     room.door[orientation] = door;
-    //room.entities[orientation] = key;
+
+
+    int32_t randomDoorType = int32_t(randBetween(ctx, 0.0f, (float)RoomType::NumTypes));
+    RoomType door_type = RoomType(randomDoorType);
+
+    // TODO: these should take the room center and compute the offset from there.
+    switch (door_type) {
+    case RoomType::SingleButton: {
+        code = 0;
+        makeSingleButtonDoor(ctx, room, room_center_x, room_center_y, orientation);
+    } break;
+    case RoomType::DoubleButton: {
+        code = 0;
+        makeDoubleButtonDoor(ctx, room, room_center_x, room_center_y, orientation);
+    } break;
+    case RoomType::CubeBlocking: {
+        code = 0;
+        makeCubeBlockingDoor(ctx, room, room_center_x, room_center_y, orientation);
+    } break;
+    case RoomType::CubeButtons: {
+        code = 0;
+        makeCubeButtonsDoor(ctx, room, room_center_x, room_center_y, orientation);
+    } break;
+    case RoomType::Key: {
+        setupDoor(ctx, door, {}, code, true);
+    } break;
+    default: MADRONA_UNREACHABLE();
+    }
 
     doorList->door = door;
     doorList->code = code;
@@ -575,35 +851,6 @@ static void makeEndWall(Engine &ctx,
     room.door[0] = door;
 }
 
-
-static Entity makeCube(Engine &ctx,
-                       float cube_x,
-                       float cube_y,
-                       float scale = 1.f)
-{
-    Entity cube = ctx.makeEntity<PhysicsEntity>();
-    setupRigidBodyEntity(
-        ctx,
-        cube,
-        Vector3 {
-            cube_x,
-            cube_y,
-            1.f * scale,
-        },
-        Quat { 1, 0, 0, 0 },
-        SimObject::Cube,
-        EntityType::Cube,
-        ResponseType::Dynamic,
-        Diag3x3 {
-            scale,
-            scale,
-            scale,
-        });
-    registerRigidBodyEntity(ctx, cube, SimObject::Cube);
-
-    return cube;
-}
-
 // A room with a door unlocked by a key.
 // Door opens to an agent with the key.
 static CountT makeKeyRoom(Engine &ctx,
@@ -635,11 +882,13 @@ static CountT makeKeyRoom(Engine &ctx,
     return (openEntityIdx == 0);
 }
 
+
 // A room with a single button that needs to be pressed, the door stays open.
 static CountT makeSingleButtonRoom(Engine &ctx,
                                    Room &room,
                                    float y_min,
-                                   float y_max)
+                                   float y_max,
+                                   int32_t orientation = 0)
 {
     float button_x = randInRangeCentered(ctx,
         consts::worldWidth / 2.f - consts::buttonWidth);
@@ -648,9 +897,13 @@ static CountT makeSingleButtonRoom(Engine &ctx,
 
     Entity button = makeButton(ctx, button_x, button_y);
 
-    setupDoor(ctx, room.door[0], { button }, 0, true);
+    setupDoor(ctx, room.door[orientation], { button }, 0, true);
 
-    room.entities[0] = button;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = button;
+        }
+    }
 
     return 1;
 }
@@ -660,7 +913,8 @@ static CountT makeSingleButtonRoom(Engine &ctx,
 static CountT makeDoubleButtonRoom(Engine &ctx,
                                    Room &room,
                                    float y_min,
-                                   float y_max)
+                                   float y_max,
+                                   int32_t orientation = 0)
 {
     float a_x = randBetween(ctx,
         -consts::worldWidth / 2.f + consts::buttonWidth,
@@ -682,11 +936,19 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     Entity b = makeButton(ctx, b_x, b_y);
 
-    setupDoor(ctx, room.door[0], { a, b }, 0, true);
+    setupDoor(ctx, room.door[orientation], { a, b }, 0, true);
 
-    room.entities[0] = a;
-    room.entities[1] = b;
-
+    Entity buttons[2] = {a, b};
+    int32_t placementIdx = 0;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = buttons[placementIdx];
+            placementIdx++;
+            if (placementIdx == 2) {
+                break;
+            }
+        }
+    }
     return 2;
 }
 
@@ -697,7 +959,8 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 static CountT makeCubeBlockingRoom(Engine &ctx,
                                    Room &room,
                                    float y_min,
-                                   float y_max)
+                                   float y_max,
+                                   int32_t orientation = 0)
 {
     float button_a_x = randBetween(ctx,
         -consts::worldWidth / 2.f + consts::buttonWidth,
@@ -719,7 +982,7 @@ static CountT makeCubeBlockingRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door[0], { button_a, button_b }, 0, true);
+    setupDoor(ctx, room.door[orientation], { button_a, button_b }, 0, true);
 
     Vector3 door_pos = ctx.get<Position>(room.door[0]);
 
@@ -738,11 +1001,23 @@ static CountT makeCubeBlockingRoom(Engine &ctx,
 
     Entity cube_c = makeCube(ctx, cube_c_x, cube_c_y, 1.5f);
 
-    room.entities[0] = button_a;
-    room.entities[1] = button_b;
-    room.entities[2] = cube_a;
-    room.entities[3] = cube_b;
-    room.entities[4] = cube_c;
+    Entity entities[5] = {
+        button_a,
+        button_b,
+        cube_a,
+        cube_b,
+        cube_c,
+    };
+    int32_t placementIdx = 0;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = entities[placementIdx];
+            placementIdx++;
+            if (placementIdx == 5) {
+                break;
+            }
+        }
+    }
 
     return 5;
 }
@@ -753,7 +1028,8 @@ static CountT makeCubeBlockingRoom(Engine &ctx,
 static CountT makeCubeButtonsRoom(Engine &ctx,
                                   Room &room,
                                   float y_min,
-                                  float y_max)
+                                  float y_max, 
+                                  int32_t orientation = 0)
 {
     float button_a_x = randBetween(ctx,
         -consts::worldWidth / 2.f + consts::buttonWidth,
@@ -775,7 +1051,7 @@ static CountT makeCubeButtonsRoom(Engine &ctx,
 
     Entity button_b = makeButton(ctx, button_b_x, button_b_y);
 
-    setupDoor(ctx, room.door[0], { button_a, button_b }, 0, false);
+    setupDoor(ctx, room.door[orientation], { button_a, button_b }, 0, false);
 
     float cube_a_x = randBetween(ctx,
         -consts::worldWidth / 4.f,
@@ -797,10 +1073,22 @@ static CountT makeCubeButtonsRoom(Engine &ctx,
 
     Entity cube_b = makeCube(ctx, cube_b_x, cube_b_y, 1.5f);
 
-    room.entities[0] = button_a;
-    room.entities[1] = button_b;
-    room.entities[2] = cube_a;
-    room.entities[3] = cube_b;
+    Entity entities[4] =  {
+    button_a,
+    button_b,
+    cube_a,
+    cube_b
+    };
+    int32_t placementIdx = 0;
+    for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
+        if (room.entities[i] == Entity::none()) {
+            room.entities[i] = entities[placementIdx];
+            placementIdx++;
+            if (placementIdx == 4) {
+                break;
+            }
+        }
+    }
 
     return 4;
 }
@@ -1047,7 +1335,16 @@ static void generateComplexLevel(Engine &ctx)
             // This room depends on this door being openable for it to be accessible.
             // We need to know at this point if it's a key door.
             // If it's not a key door, it depends on its parent room's accessibility.
-            roomList[room_idx].door = doorList[chosenDoor].door;
+            if (doorList[chosenDoor].code != 0) {
+                roomList[room_idx].door = doorList[chosenDoor].door;
+            } else {
+                // You depend on your parent room's door.
+                for (int i = 0; i < consts::maxRooms; ++i) {
+                    if (roomList[i].x == doorRoom.x && roomList[i].y == doorRoom.y) {
+                        roomList[room_idx].door = roomList[i].door;
+                    }
+                }
+            }
             return;
         }
     };
@@ -1093,12 +1390,11 @@ static void generateComplexLevel(Engine &ctx)
 
     int32_t totalRooms = ctx.singleton<RoomCount>().count;
     for (int i = 0; i < consts::maxRooms * 4; ++i) {
-        if (doorList[i].door == Entity::none()) {
+        if (doorList[i].door == Entity::none() || doorList[i].code == 0) {
             continue;
         }
 
         Entity &door = doorList[i].door;
-
         // Pick a room to store the key.
         // Attempt first to not put it in the first room.
         int32_t keyStoreRoomIdx = int32_t(randBetween(ctx, i > 0 ? 1.0f : 0.0f, (float)totalRooms));
@@ -1131,62 +1427,6 @@ static void generateComplexLevel(Engine &ctx)
             }
         }
     }
-
-
-    // Scatter keys here.
-    // 1. Pick a door that needs a key.
-    // 2. Pick a random room rejection sampling until one with no dependencies.
-    // 2. When key placed, loop through all rooms and unlock each that depended on that door.
-    // 4. Repeat until all keys scattered.
-
-
-    // int32_t keyCount = 0;
-    // int32_t wallCount = 0;
-    // int32_t doorCount = 0;
-    // for (CountT i = 0; i < ctx.singleton<RoomCount>().count; ++i) {
-    //     printf("Room %d\n", i);
-    //     Room &room = level.rooms[i];
-    //     for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
-    //         if (room.entities[j] != Entity::none()) {
-    //             keyCount += 1;
-    //             printf("ObjectID = %d\n", ctx.get<ObjectID>(room.entities[j]).idx);
-    //         }
-    //     }
-
-    //     for (int32_t j = 0; j < 8; ++j) {
-    //         if (room.walls[j] != Entity::none()) {
-    //             printf("room.walls[%d]\n", j);
-    //             wallCount += 1;
-    //             printf("ObjectID = %d\n", ctx.get<ObjectID>(room.walls[j]).idx);
-    //         }
-    //     }
-
-    //     for (int32_t j = 0; j < 4; ++j) {
-    //         if (room.door[j] != Entity::none()) {
-    //             printf("room.doors[%d]\n", j);
-    //             doorCount += 1;
-    //             printf("ObjectID = %d\n", ctx.get<ObjectID>(room.door[j]).idx);
-    //         }
-    //     }
-    // }
-
-    // printf("Created %d keys\n", keyCount);
-    // printf("Created %d walls\n", wallCount);
-    // printf("Created %d doors\n", doorCount);
-
-    //makeRoom(ctx, level, 0, RoomType::DoubleButton);
-    //makeRoom(ctx, level, 1, RoomType::CubeBlocking);
-    //makeRoom(ctx, level, 2, RoomType::CubeButtons);
-    //makeRoom(ctx, level, 3, RoomType::Key);
-
-    // // An alternative implementation could randomly select the type for each
-    // // room rather than a fixed progression of challenge difficulty
-    // for (CountT i = 0; i < consts::numRooms; i++) {
-    //     RoomType room_type = (RoomType)(
-    //         ctx.data().rng.rand() * (uint32_t)RoomType::NumTypes);
-
-    //     makeRoom(ctx, level, i, room_type);
-    // }
 }
 
 
