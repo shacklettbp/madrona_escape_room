@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
         .maxInstancesPerWorld = 1000,
         .defaultSimTickRate = 20,
         .cameraMoveSpeed = 10.f,
-        .cameraPosition = { 0, consts::maxRooms / 2.f, 30 },
+        .cameraPosition = { 0, consts::maxRooms / 2.f, 60 },
         .cameraRotation = initial_camera_rotation,
         .execMode = exec_mode,
     });

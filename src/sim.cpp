@@ -1571,7 +1571,7 @@ Sim::Sim(Engine &ctx,
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
             // TODO: restore
-            ctx.singleton<RoomCount>().count = 8;
+            ctx.singleton<RoomCount>().count = 3;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }

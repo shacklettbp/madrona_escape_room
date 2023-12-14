@@ -471,12 +471,12 @@ static CountT makeDoubleButtonDoor(Engine &ctx,
     Entity a = makeButton(ctx, a_x, a_y);
 
     float b_x = room_center_x + randBetween(ctx,
-        -consts::worldWidth / 2.f + consts::buttonWidth,
-        -consts::buttonWidth);
+        consts::buttonWidth,
+        consts::worldWidth / 2.f - consts::buttonWidth);
 
     float b_y = room_center_y + randBetween(ctx,
-        -consts::worldWidth / 2.f + consts::buttonWidth,
-        -consts::buttonWidth);
+        consts::buttonWidth,
+        consts::worldWidth / 2.f - consts::buttonWidth);
 
     Entity b = makeButton(ctx, b_x, b_y);
 
