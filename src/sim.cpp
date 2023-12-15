@@ -8,8 +8,7 @@ using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
 
-
-
+namespace RenderingSystem = madrona::render::RenderingSystem;
 
 namespace madEscape {
 
@@ -36,11 +35,12 @@ static inline float angleObs(float v)
 
 // Register all the ECS components and archetypes that will be
 // used in the simulation
-void Sim::registerTypes(ECSRegistry &registry, const Config &)
+void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
 {
     base::registerTypes(registry);
     phys::RigidBodyPhysicsSystem::registerTypes(registry);
-    viz::VizRenderingSystem::registerTypes(registry);
+
+    RenderingSystem::registerTypes(registry, cfg.renderBridge);
 
     registry.registerComponent<Action>();
     registry.registerComponent<SelfObservation>();
@@ -118,19 +118,19 @@ static inline void cleanupWorld(Engine &ctx)
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
-                ctx.destroyEntity(room.entities[j]);
+                ctx.destroyRenderableEntity(room.entities[j]);
             }
         }
 
         for (int32_t j = 0; j < 8; ++j) {
             if (room.walls[j] != Entity::none()) {
-                ctx.destroyEntity(room.walls[j]);
+                ctx.destroyRenderableEntity(room.walls[j]);
             }
         }
 
         for (int32_t j = 0; j < 4; ++j) {
             if (room.door[j] != Entity::none()) {
-                ctx.destroyEntity(room.door[j]);
+                ctx.destroyRenderableEntity(room.door[j]);
             }
         }
     }
@@ -138,10 +138,6 @@ static inline void cleanupWorld(Engine &ctx)
 
 static inline void initWorld(Engine &ctx)
 {
-    if (ctx.data().enableVizRender) {
-        viz::VizRenderingSystem::reset(ctx);
-    }
-
     phys::RigidBodyPhysicsSystem::reset(ctx);
 
     // Assign a new episode ID
@@ -416,10 +412,6 @@ inline void resetSystem(Engine &ctx, WorldReset &reset)
         
         cleanupWorld(ctx);
         initWorld(ctx);
-
-        if (ctx.data().enableVizRender) {
-            viz::VizRenderingSystem::markEpisode(ctx);
-        }
     }
 }
 
@@ -1491,8 +1483,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Lidar
         >>({post_reset_broadphase});
 
-    if (cfg.enableViewer) {
-        viz::VizRenderingSystem::setupTasks(builder, {reset_sys});
+    if (cfg.renderBridge) {
+        RenderingSystem::setupTasks(builder, {reset_sys});
     }
 
 
@@ -1538,10 +1530,10 @@ Sim::Sim(Engine &ctx,
         max_total_entities, max_total_entities * max_total_entities / 2,
         consts::numAgents);
 
-    enableVizRender = cfg.enableViewer;
+    enableRender = cfg.renderBridge != nullptr;
 
-    if (enableVizRender) {
-        viz::VizRenderingSystem::init(ctx, init.vizBridge);
+    if (enableRender) {
+        RenderingSystem::init(ctx, cfg.renderBridge);
     }
 
     autoReset = cfg.autoReset;

@@ -73,7 +73,7 @@ void createPersistentEntities(Engine &ctx)
 {
     const int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Create the floor entity, just a simple static plane.
-    ctx.data().floorPlane = ctx.makeEntity<PhysicsEntity>();
+    ctx.data().floorPlane = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         ctx.data().floorPlane,
@@ -152,7 +152,17 @@ void createPersistentEntities(Engine &ctx)
     // uninitialized, these will be set during world generation, which is
     // called for every episode.
     for (CountT i = 0; i < consts::numAgents; ++i) {
-        Entity agent = ctx.data().agents[i] = ctx.makeEntity<Agent>();
+        Entity agent = ctx.data().agents[i] =
+            ctx.makeRenderableEntity<Agent>();
+    sim.hpp sim.cpp
+
+        // Create a render view for the agent
+        if (ctx.data().enableRender) {
+            render::RenderingSystem::attachEntityToView(ctx,
+                    agent,
+                    100.f, 0.001f,
+                    1.5f * math::up);
+        }
 
         ctx.get<Scale>(agent) = Diag3x3 { 1, 1, 1 };
         ctx.get<ObjectID>(agent) = ObjectID { (int32_t)SimObject::Agent };
@@ -782,7 +792,7 @@ static void makeEndWall(Engine &ctx,
     float door_center = randBetween(ctx, 0.75f * consts::doorWidth, 
         consts::worldWidth - 0.75f * consts::doorWidth);
     float left_len = door_center - 0.5f * consts::doorWidth;
-    Entity left_wall = ctx.makeEntity<PhysicsEntity>();
+    Entity left_wall = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         left_wall,
@@ -804,7 +814,7 @@ static void makeEndWall(Engine &ctx,
 
     float right_len =
         consts::worldWidth - door_center - 0.5f * consts::doorWidth;
-    Entity right_wall = ctx.makeEntity<PhysicsEntity>();
+    Entity right_wall = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         right_wall,
@@ -824,7 +834,7 @@ static void makeEndWall(Engine &ctx,
         });
     registerRigidBodyEntity(ctx, right_wall, SimObject::Wall);
 
-    Entity door = ctx.makeEntity<DoorEntity>();
+    Entity door = ctx.makeRenderableEntity<DoorEntity>();
     setupRigidBodyEntity(
         ctx,
         door,

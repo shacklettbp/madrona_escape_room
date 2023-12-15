@@ -1,7 +1,6 @@
 set(SIMULATOR_SRCS
     sim_flags.hpp sim_flags.inl
-    types.hpp 
-    sim.hpp sim.cpp
+    sim.hpp sim.inl sim.cpp
     init.hpp rng.hpp
     level_gen.hpp level_gen.cpp
 )
@@ -16,10 +15,10 @@ target_link_libraries(mad_escape_cpu_impl
     PRIVATE
         madrona_common
         madrona_mw_physics
-        madrona_viz_system
+        madrona_rendering_system
 )
 
-add_library(mad_escape_mgr SHARED
+add_library(mad_escape_mgr STATIC
     mgr.hpp mgr.cpp
 )
 
@@ -32,6 +31,7 @@ target_link_libraries(mad_escape_mgr
         madrona_common
         madrona_importer
         madrona_physics_loader
+        madrona_render
 )
 
 if (TARGET madrona_mw_gpu)
@@ -64,10 +64,10 @@ target_link_libraries(madrona_escape_room PRIVATE
     mad_escape_mgr
 )
 
-if (TARGET madrona_viewer)
+if (TARGET madrona_viz)
     add_executable(viewer viewer.cpp)
-    target_link_libraries(viewer madrona_viewer
-        madrona_mw_core mad_escape_mgr)
+    target_link_libraries(viewer PRIVATE
+        madrona_mw_core mad_escape_mgr madrona_viz)
 
     target_compile_definitions(viewer PRIVATE
         -DDATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../data/"

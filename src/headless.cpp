@@ -7,8 +7,9 @@
 #include <fstream>
 #include <random>
 
+#include <madrona/heap_array.hpp>
+
 using namespace madrona;
-using namespace madrona::viz;
 
 [[maybe_unused]] static void saveWorldActions(
     const HeapArray<int32_t> &action_store,

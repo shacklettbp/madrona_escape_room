@@ -1,3 +1,4 @@
+import torch
 import madrona_escape_room
 from madrona_escape_room import SimFlags, RewardMode
 

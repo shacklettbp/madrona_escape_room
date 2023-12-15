@@ -38,7 +38,8 @@ NB_MODULE(madrona_escape_room, m) {
                             int64_t num_worlds,
                             bool auto_reset,
                             uint32_t sim_flags,
-                            RewardMode reward_mode) {
+                            RewardMode reward_mode,
+                            bool enable_batch_renderer) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
@@ -46,13 +47,15 @@ NB_MODULE(madrona_escape_room, m) {
                 .autoReset = auto_reset,
                 .simFlags = SimFlags(sim_flags),
                 .rewardMode = reward_mode,
+                .enableBatchRenderer = enable_batch_renderer,
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
            nb::arg("num_worlds"),
            nb::arg("auto_reset"),
            nb::arg("sim_flags"),
-           nb::arg("reward_mode"))
+           nb::arg("reward_mode"),
+           nb::arg("enable_batch_renderer") = false)
         .def("step", &Manager::step)
         .def("checkpoint_reset_tensor", &Manager::checkpointResetTensor)
         .def("checkpoint_tensor", &Manager::checkpointTensor)
@@ -68,13 +71,8 @@ NB_MODULE(madrona_escape_room, m) {
              &Manager::roomDoorObservationsTensor)
         .def("lidar_tensor", &Manager::lidarTensor)
         .def("steps_remaining_tensor", &Manager::stepsRemainingTensor)
-        .def("jax", JAXInterface::buildEntry<
-                &Manager::trainInterface,
-                &Manager::step
-#ifdef MADRONA_CUDA_SUPPORT
-                , &Manager::gpuRolloutStep
-#endif
-             >())
+        .def("rgb_tensor", &Manager::rgbTensor)
+        .def("depth_tensor", &Manager::depthTensor)
     ;
 }
 

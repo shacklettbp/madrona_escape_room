@@ -1,4 +1,6 @@
 #include <madrona/viz/viewer.hpp>
+#include <madrona/render/render_mgr.hpp>
+#include <madrona/window.hpp>
 
 #include "sim.hpp"
 #include "mgr.hpp"
@@ -9,25 +11,6 @@
 
 using namespace madrona;
 using namespace madrona::viz;
-
-static inline float srgbToLinear(float srgb)
-{
-    if (srgb <= 0.04045f) {
-        return srgb / 12.92f;
-    }
-
-    return powf((srgb + 0.055f) / 1.055f, 2.4f);
-}
-
-static inline math::Vector4 rgb8ToFloat(uint8_t r, uint8_t g, uint8_t b)
-{
-    return {
-        srgbToLinear((float)r / 255.f),
-        srgbToLinear((float)g / 255.f),
-        srgbToLinear((float)b / 255.f),
-        1.f,
-    };
-}
 
 static HeapArray<int32_t> readReplayLog(const char *path)
 {
@@ -49,6 +32,7 @@ int main(int argc, char *argv[])
 
     constexpr int64_t num_views = 2;
 
+    // Read command line arguments
     uint32_t num_worlds = 1;
     if (argc >= 2) {
         num_worlds = (uint32_t)atoi(argv[1]);
@@ -67,6 +51,7 @@ int main(int argc, char *argv[])
         } 
     }
 
+    // Setup replay log
     const char *replay_log_path = nullptr;
     if (argc >= 4) {
         replay_log_path = argv[3];
@@ -183,7 +168,18 @@ int main(int argc, char *argv[])
     viewer.configureLighting({
         { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
     });
+    bool enable_batch_renderer =
+#ifdef MADRONA_MACOS
+        false;
+#else
+        true;
+#endif
 
+    WindowManager wm {};
+    WindowHandle window = wm.makeWindow("Escape Room", 2730, 1536);
+    render::GPUHandle render_gpu = wm.initGPU(0, { window.get() });
+
+    // Create the simulation manager
     Manager mgr({
         .execMode = exec_mode,
         .gpuID = 0,
@@ -191,8 +187,30 @@ int main(int argc, char *argv[])
         .autoReset = replay_log.has_value(),
         .simFlags = flags,
         .rewardMode = RewardMode::OG,
+        .enableBatchRenderer = enable_batch_renderer,
+        .extRenderAPI = wm.gpuAPIManager().backend(),
+        .extRenderDev = render_gpu.device(),
     }, viewer.rendererBridge());
 
+    float camera_move_speed = 10.f;
+
+    math::Vector3 initial_camera_position = { 0, consts::worldLength / 2.f, 30 };
+
+    math::Quat initial_camera_rotation =
+        (math::Quat::angleAxis(-math::pi / 2.f, math::up) *
+        math::Quat::angleAxis(-math::pi / 2.f, math::right)).normalize();
+
+
+    // Create the viewer viewer
+    viz::Viewer viewer(mgr.getRenderManager(), window.get(), {
+        .numWorlds = num_worlds,
+        .simTickRate = 20,
+        .cameraMoveSpeed = camera_move_speed,
+        .cameraPosition = initial_camera_position,
+        .cameraRotation = initial_camera_rotation,
+    });
+
+    // Replay step
     auto replayStep = [&]() {
         if (cur_replay_step == num_replay_steps - 1) {
             return true;
@@ -222,6 +240,7 @@ int main(int argc, char *argv[])
         return false;
     };
 
+    // Printers
     auto self_printer = mgr.selfObservationTensor().makePrinter();
     auto partner_printer = mgr.partnerObservationsTensor().makePrinter();
     auto room_ent_printer = mgr.roomEntityObservationsTensor().makePrinter();
@@ -255,8 +274,11 @@ int main(int argc, char *argv[])
         printf("\n");
     };
 
+
+
+    // Main loop for the viewer viewer
     viewer.loop([&mgr](CountT world_idx, CountT agent_idx,
-                       const Viewer::UserInput &input) {
+                           const Viewer::UserInput &input) {
         using Key = Viewer::KeyboardKey;
 
         int32_t x = 0;
@@ -359,7 +381,7 @@ int main(int argc, char *argv[])
         }
 
         mgr.step();
-        
+
         printObs();
     }, []() {});
 }

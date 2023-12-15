@@ -1,17 +1,9 @@
-#pragma once
-#ifdef madrona_3d_example_mgr_EXPORTS
-#define MGR_EXPORT MADRONA_EXPORT
-#else
-#define MGR_EXPORT MADRONA_IMPORT
-#endif
-
 #include <memory>
 
 #include <madrona/py/utils.hpp>
 #include <madrona/exec_mode.hpp>
 
-#include <madrona/render/mw.hpp>
-#include <madrona/viz/system.hpp>
+#include <madrona/render/render_mgr.hpp>
 
 #include "sim_flags.hpp"
 
@@ -32,14 +24,17 @@ public:
         bool autoReset; // Immediately generate new world on episode end
         SimFlags simFlags;
         RewardMode rewardMode;
+        bool enableBatchRenderer;
+        uint32_t batchRenderViewWidth = 64;
+        uint32_t batchRenderViewHeight = 64;
+        madrona::render::APIBackend *extRenderAPI = nullptr;
+        madrona::render::GPUDevice *extRenderDev = nullptr;
     };
 
-    MGR_EXPORT Manager(
-        const Config &cfg,
-        const madrona::viz::VizECSBridge *viz_bridge = nullptr);
-    MGR_EXPORT ~Manager();
+    Manager(const Config &cfg);
+    ~Manager();
 
-    MGR_EXPORT void step();
+    void step();
 
 #ifdef MADRONA_CUDA_SUPPORT
     MGR_EXPORT void gpuRolloutStep(cudaStream_t strm, void **rollout_buffers);
@@ -73,6 +68,10 @@ public:
                               int32_t move_angle,
                               int32_t rotate,
                               int32_t interact);
+    madrona::py::Tensor rgbTensor() const;
+    madrona::py::Tensor depthTensor() const;
+
+    madrona::render::RenderManager & getRenderManager();
 
 private:
     struct Impl;
