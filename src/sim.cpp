@@ -14,10 +14,12 @@ using namespace madrona::phys;
 namespace madEscape {
 
 // Helper function for determining room membership.
-static inline CountT roomIndex(const Position &p, CountT numRooms)
+static inline CountT proxyRoomIndex(const Position &p)
 {
-    return std::max(CountT(0),
-    std::min(numRooms - 1, CountT(p.y / consts::roomLength)));
+    int32_t x = round(p.x / consts::roomLength) + consts::maxRooms;
+    int32_t y = round(p.y / consts::roomLength) + consts::maxRooms;
+
+    return x + y * consts::maxRooms;
 }
 
 static inline float computeZAngle(Quat q)
@@ -50,7 +52,7 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
     registry.registerComponent<OtherAgents>();
     registry.registerComponent<PartnerObservations>();
     registry.registerComponent<RoomEntityObservations>();
-    registry.registerComponent<DoorObservation>();
+    registry.registerComponent<RoomDoorObservations>();
     registry.registerComponent<ButtonState>();
     registry.registerComponent<OpenState>();
     registry.registerComponent<DoorProperties>();
@@ -95,8 +97,8 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
         (uint32_t)ExportID::PartnerObservations);
     registry.exportColumn<Agent, RoomEntityObservations>(
         (uint32_t)ExportID::RoomEntityObservations);
-    registry.exportColumn<Agent, DoorObservation>(
-        (uint32_t)ExportID::DoorObservation);
+    registry.exportColumn<Agent, RoomDoorObservations>(
+        (uint32_t)ExportID::RoomDoorObservations);
     registry.exportColumn<Agent, Lidar>(
         (uint32_t)ExportID::Lidar);
     registry.exportColumn<Agent, StepsRemaining>(
@@ -109,42 +111,29 @@ void Sim::registerTypes(ECSRegistry &registry, const Config &)
 
 static inline void cleanupWorld(Engine &ctx)
 {
-
-    int32_t keyCount = 0;
-    int32_t wallCount = 0;
-    int32_t doorCount = 0;
-
     int32_t numRooms = ctx.singleton<RoomCount>().count;
     // Destroy current level entities
     LevelState &level = ctx.singleton<LevelState>();
-    for (CountT i = 0; i < numRooms; i++) {
+    for (int32_t i = 0; i < numRooms; i++) {
         Room &room = level.rooms[i];
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
                 ctx.destroyEntity(room.entities[j]);
-                keyCount += 1;
             }
         }
 
         for (int32_t j = 0; j < 8; ++j) {
             if (room.walls[j] != Entity::none()) {
                 ctx.destroyEntity(room.walls[j]);
-                wallCount += 1;
             }
         }
 
         for (int32_t j = 0; j < 4; ++j) {
             if (room.door[j] != Entity::none()) {
                 ctx.destroyEntity(room.door[j]);
-                doorCount += 1;
             }
         }
     }
-
-    //printf("Destroyed %d keys\n", keyCount);
-    //printf("Destroyed %d walls\n", wallCount);
-    //printf("Destroyed %d doors\n", doorCount);
-
 }
 
 static inline void initWorld(Engine &ctx)
@@ -170,7 +159,6 @@ static inline void initWorld(Engine &ctx)
             // seed that generated that world.
             seed = ctx.singleton<Checkpoint>().seed;
         } else {
-            // TODO: restore, debugging.
             seed = episode_idx;
         }
     }
@@ -779,14 +767,13 @@ inline void collectObservationsSystem(Engine &ctx,
                                       SelfObservation &self_obs,
                                       PartnerObservations &partner_obs,
                                       RoomEntityObservations &room_ent_obs,
-                                      DoorObservation &door_obs)
+                                      RoomDoorObservations &room_door_obs)
 {
 
     const int32_t numRooms = ctx.singleton<RoomCount>().count;
 
 
-    const CountT cur_room_idx = roomIndex(pos, numRooms);
-
+    const CountT cur_room_idx = proxyRoomIndex(pos);
 
     self_obs.roomX = pos.x / (consts::worldWidth / 2.f);
     self_obs.roomY = (pos.y - cur_room_idx * consts::roomLength) /
@@ -809,22 +796,6 @@ inline void collectObservationsSystem(Engine &ctx,
     assert(!isnan(self_obs.theta));
     assert(!isnan(self_obs.isGrabbing));
 
-    //int ckptIdx = ctx.singleton<CheckpointIndices>().currentCheckpointIdx;
-
-    //printf("SelfObs roomx %f\n", self_obs.roomX);
-    //printf("SelfObs roomY %f\n", self_obs.roomY);
-    //printf("SelfObs globalX %f\n", self_obs.globalX);
-    //printf("SelfObs globalY %f\n", self_obs.globalY);
-    //printf("SelfObs globalZ %f\n", self_obs.globalZ);
-    //printf("SelfObs maxY %f\n", self_obs.maxY);
-    //printf("SelfObs theta %f\n", self_obs.theta);
-    //printf("SelfObs isGrabbing %f\n", self_obs.isGrabbing);
-    //printf("SelfObs reward %f\n", reward.v);
-    //printf("SelfObs steps %d\n", steps.t);
-    //printf("SelfObs Force %f, %f, %f\n", force.x, force.y, force.z);
-    //printf("SelfObs Torque %f, %f, %f\n", torque.x, torque.y, torque.z);
-
-
     Quat to_view = rot.inv();
 
     // Context::iterateQuery() runs serially over archteypes
@@ -844,11 +815,6 @@ inline void collectObservationsSystem(Engine &ctx,
                     .polar = xyToPolar(to_view.rotateVec(to_other), numRooms),
                     .isGrabbing = other_grab.constraintEntity != Entity::none() ? 1.f : 0.f,
                 };
-
-                // printf("partner_obs (r, theta, grabbing): %f, %f, %f\n", 
-                // partner_obs.obs[idx - 1].polar.r,
-                // partner_obs.obs[idx - 1].polar.theta,
-                // partner_obs.obs[idx - 1].isGrabbing);
             });
     }
 
@@ -868,7 +834,7 @@ inline void collectObservationsSystem(Engine &ctx,
        int idx = 0;
         ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
             // We want information on cubes and buttons in the current room.
-            if (roomIndex(p, numRooms) != cur_room_idx ||
+            if (proxyRoomIndex(p) != cur_room_idx ||
                 (e != EntityType::Cube && e != EntityType::Button && e != EntityType::Key)) {
                 return;
             }
@@ -884,14 +850,29 @@ inline void collectObservationsSystem(Engine &ctx,
         });
     }
 
-    // Context.query() version.
-    ctx.iterateQuery(ctx.data().doorQuery, [&](Position &p, OpenState &os) {
-       if (roomIndex(p, numRooms) != cur_room_idx) {
-           return;
-       }
-       door_obs.polar = xyToPolar(to_view.rotateVec(p - pos), numRooms);
-       door_obs.isOpen = os.isOpen ? 1.f : 0.f;
-    });
+    {
+        DoorObservation door_ob;
+        door_ob.polar = {0.f, 1.f};
+        door_ob.isOpen = 0.0f;
+        for (int i = 0; i < 4; ++i)
+        {
+            room_door_obs.obs[i] = door_ob;
+        }
+
+        // Context.query() version.
+        int doorIdx = 0;
+        ctx.iterateQuery(ctx.data().doorQuery, [&](Position &p, OpenState &os)
+        {
+            CountT firstIdx = proxyRoomIndex(p + Vector3(0.5, 0.5, 0.0f));
+            CountT secondIdx = proxyRoomIndex(p - Vector3(0.5, 0.5, 0.0f));
+            if (firstIdx != cur_room_idx && secondIdx != cur_room_idx) {
+                return;
+            }
+            room_door_obs.obs[doorIdx].polar = xyToPolar(to_view.rotateVec(p - pos), numRooms);
+            room_door_obs.obs[doorIdx].isOpen = os.isOpen ? 1.f : 0.f;
+            doorIdx++; 
+        });
+    }
 }
 
 // Launches consts::numLidarSamples per agent.
@@ -1531,7 +1512,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             SelfObservation,
             PartnerObservations,
             RoomEntityObservations,
-            DoorObservation
+            RoomDoorObservations
         >>({checkpoint_sys, 
 #ifdef MADRONA_GPU_MODE
         sort_constraints
@@ -1571,7 +1552,7 @@ Sim::Sim(Engine &ctx,
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
             // TODO: restore
-            ctx.singleton<RoomCount>().count = 3;
+            ctx.singleton<RoomCount>().count = 2;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }

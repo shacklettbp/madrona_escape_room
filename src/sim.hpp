@@ -24,7 +24,7 @@ enum class ExportID : uint32_t {
     AgentID,
     PartnerObservations,
     RoomEntityObservations,
-    DoorObservation,
+    RoomDoorObservations,
     Lidar,
     StepsRemaining,
     Checkpoint,

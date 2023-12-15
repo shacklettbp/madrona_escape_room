@@ -3,7 +3,7 @@
 #include <madrona/components.hpp>
 #include <madrona/math.hpp>
 #include <madrona/physics.hpp>
-#include <madrona/viz/system.hpp>
+//#include <madrona/viz/system.hpp>
 
 #include "consts.hpp"
 
@@ -115,6 +115,10 @@ static_assert(sizeof(RoomEntityObservations) == sizeof(float) *
 struct DoorObservation {
     PolarObservation polar;
     float isOpen; // 1.0 when open, 0.0 when closed.
+};
+
+struct RoomDoorObservations {
+    DoorObservation obs[4];
 };
 
 struct LidarSample {
@@ -322,7 +326,7 @@ struct Agent : public madrona::Archetype<
     AgentID,
     PartnerObservations,
     RoomEntityObservations,
-    DoorObservation,
+    RoomDoorObservations,
     Lidar,
     StepsRemaining,
 

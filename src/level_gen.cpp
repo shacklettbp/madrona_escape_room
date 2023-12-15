@@ -867,8 +867,7 @@ static CountT makeKeyRoom(Engine &ctx,
 
     Entity key = makeKey(ctx, key_x, key_y, code); // key code
 
-    // TODO: Restore
-    //setupDoor(ctx, room.door[0], {}, ctx.get<KeyState>(key).code, true);
+    setupDoor(ctx, room.door[0], {}, ctx.get<KeyState>(key).code.code, true);
 
     CountT openEntityIdx = 0;
     while (openEntityIdx < consts::maxEntitiesPerRoom) {
@@ -1098,7 +1097,6 @@ static CountT makeCubeButtonsRoom(Engine &ctx,
 static int32_t makeComplexRoom(Engine &ctx,
                      LevelState &level,
                      CountT room_idx,
-                     RoomType room_type,
                      const RoomRep *roomList,
                      DoorRep *doorList)
 {
@@ -1125,7 +1123,8 @@ static int32_t makeComplexRoom(Engine &ctx,
     // W, N, E, S
     int32_t wallsToGenerate[4] = {1, 1, 1, 1};
     int32_t existingWalls = 0;
-    for (int i = 0; i < consts::maxRooms; ++i) {
+    // Search all previous rooms.
+    for (int i = 0; i < room_idx; ++i) {
         int32_t i_x = roomList[i].x;
         int32_t i_y = roomList[i].y;
         if (i_y == this_room.y) {
@@ -1215,7 +1214,13 @@ static void makeRoom(Engine &ctx,
     for (CountT i = 0; i < consts::maxEntitiesPerRoom; i++) {
         room.entities[i] = Entity::none();
     }
-
+    // These limits are independent of the number of rooms.
+    for (CountT i = 0; i < 8; i++) {
+        room.walls[i] = Entity::none();
+    }
+    for (CountT i = 0; i < 4; i++) {
+        room.door[i] = Entity::none();
+    }
 
     makeEndWall(ctx, room, room_idx);
 
@@ -1237,7 +1242,7 @@ static void makeRoom(Engine &ctx,
     } break;
     case RoomType::Key: {
         CountT randomRoomIdx = (int32_t)randBetween(ctx, 0.0f, float(room_idx));
-        // Put the key in a random already generate room.
+        // Put the key in a random already generated room.
         room_y_min = randomRoomIdx * consts::roomLength;
         room_y_max = (randomRoomIdx + 1) * consts::roomLength;
         makeKeyRoom(ctx, room, level.rooms[randomRoomIdx], room_y_min, room_y_max, 1 << room_idx);
@@ -1296,7 +1301,7 @@ static void generateComplexLevel(Engine &ctx)
     roomList[0].x = 0;
     roomList[0].y = 0;
     // RoomType is interpreted as DoorType.
-    doorIdx += makeComplexRoom(ctx, level, 0, RoomType::Key, roomList, &doorList[doorIdx]);
+    doorIdx += makeComplexRoom(ctx, level, 0, roomList, &doorList[doorIdx]);
 
 
 
@@ -1382,13 +1387,14 @@ static void generateComplexLevel(Engine &ctx)
         }
     };
 
-    for (int i = 1; i < consts::maxRooms; ++i) {
+    int32_t totalRooms = ctx.singleton<RoomCount>().count;
+
+    for (int i = 1; i < totalRooms; ++i) {
         chooseNextRoom(i, doorIdx);
         removeBlockedDoors(i);
-        doorIdx += makeComplexRoom(ctx, level, i, RoomType::Key, roomList, &doorList[doorIdx]);
+        doorIdx += makeComplexRoom(ctx, level, i, roomList, &doorList[doorIdx]);
     }
 
-    int32_t totalRooms = ctx.singleton<RoomCount>().count;
     for (int i = 0; i < consts::maxRooms * 4; ++i) {
         if (doorList[i].door == Entity::none() || doorList[i].code == 0) {
             continue;

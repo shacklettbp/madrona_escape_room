@@ -658,14 +658,14 @@ Tensor Manager::roomEntityObservationsTensor() const
                                });
 }
 
-Tensor Manager::doorObservationTensor() const
+Tensor Manager::roomDoorObservationsTensor() const
 {
-    return impl_->exportTensor(ExportID::DoorObservation,
+    return impl_->exportTensor(ExportID::RoomDoorObservations,
                                Tensor::ElementType::Float32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   5, // TODO: Restore, 1
-                                   5, // TOOD: Restore, 3
+                                   4,
+                                   3
                                });
 }
 
@@ -706,7 +706,7 @@ TrainInterface Manager::trainInterface() const
             { "self", selfObservationTensor() },
             { "partners", partnerObservationsTensor() },
             { "roomEntities", roomEntityObservationsTensor() },
-            { "door", doorObservationTensor() },
+            { "doors", roomDoorObservationsTensor() },
             { "lidar", lidarTensor() },
             { "stepsRemaining", stepsRemainingTensor() },
             { "agentID", agentIDTensor() },

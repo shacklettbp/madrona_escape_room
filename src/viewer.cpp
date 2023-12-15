@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
     auto self_printer = mgr.selfObservationTensor().makePrinter();
     auto partner_printer = mgr.partnerObservationsTensor().makePrinter();
     auto room_ent_printer = mgr.roomEntityObservationsTensor().makePrinter();
-    auto door_printer = mgr.doorObservationTensor().makePrinter();
+    auto door_printer = mgr.roomDoorObservationsTensor().makePrinter();
     auto lidar_printer = mgr.lidarTensor().makePrinter();
     auto steps_remaining_printer = mgr.stepsRemainingTensor().makePrinter();
     auto reward_printer = mgr.rewardTensor().makePrinter();
@@ -268,12 +268,6 @@ int main(int argc, char *argv[])
             mgr.triggerReset(world_idx);
         }
 
-        if (int32_t(agent_idx) == -1) {
-            // Allow reset from overview camera.
-            // TODO: remove, depends on uncommitted madrona change.
-            return;
-        }
-
         // By default, checkpointing happens every frame,
         // so disable that behavior here.
         mgr.setSaveCheckpoint(world_idx, 0);
@@ -285,6 +279,12 @@ int main(int argc, char *argv[])
         if (input.keyHit(Key::X)) {
             // Triggers a world reset.
             mgr.triggerLoadCheckpoint(world_idx);
+        }
+
+
+        if (int32_t(agent_idx) == -1) {
+            // Allow reset and checkpointing from camera.
+            return;
         }
 
         bool shift_pressed = input.keyPressed(Key::Shift);
@@ -360,7 +360,6 @@ int main(int argc, char *argv[])
 
         mgr.step();
         
-        // TODO: restore
-        //printObs();
+        printObs();
     }, []() {});
 }
