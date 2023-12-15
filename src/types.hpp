@@ -371,7 +371,8 @@ struct KeyEntity : public madrona::Archetype<
     Scale,
     ObjectID,
     KeyState,
-    EntityType
+    EntityType,
+    madrona::render::Renderable
 > {};
 
 // Archetype for the button objects that open the doors

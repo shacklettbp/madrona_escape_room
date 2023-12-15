@@ -88,7 +88,7 @@ void createPersistentEntities(Engine &ctx)
     {
         // Create the outer wall entities
         // Behind
-        ctx.data().borders[0] = ctx.makeEntity<PhysicsEntity>();
+        ctx.data().borders[0] = ctx.makeRenderableEntity<PhysicsEntity>();
         setupRigidBodyEntity(
             ctx,
             ctx.data().borders[0],
@@ -108,7 +108,7 @@ void createPersistentEntities(Engine &ctx)
             });
 
         // Right
-        ctx.data().borders[1] = ctx.makeEntity<PhysicsEntity>();
+        ctx.data().borders[1] = ctx.makeRenderableEntity<PhysicsEntity>();
         setupRigidBodyEntity(
             ctx,
             ctx.data().borders[1],
@@ -128,7 +128,7 @@ void createPersistentEntities(Engine &ctx)
             });
 
         // Left
-        ctx.data().borders[2] = ctx.makeEntity<PhysicsEntity>();
+        ctx.data().borders[2] = ctx.makeRenderableEntity<PhysicsEntity>();
         setupRigidBodyEntity(
             ctx,
             ctx.data().borders[2],
@@ -154,7 +154,6 @@ void createPersistentEntities(Engine &ctx)
     for (CountT i = 0; i < consts::numAgents; ++i) {
         Entity agent = ctx.data().agents[i] =
             ctx.makeRenderableEntity<Agent>();
-    sim.hpp sim.cpp
 
         // Create a render view for the agent
         if (ctx.data().enableRender) {
@@ -222,10 +221,6 @@ static void resetPersistentEntities(Engine &ctx)
          // VISHNU MOD: LOG PROGRESS SO FAR
          *(progress.progressPtr) = fmax(*(progress.progressPtr), ctx.get<Position>(agent_entity)[1]);
 
-         ctx.get<viz::VizCamera>(agent_entity) =
-             viz::VizRenderingSystem::setupView(ctx, 90.f, 0.001f,
-                 1.5f * math::up, (int32_t)i);
-
          // Place the agents near the starting wall
          Vector3 pos {
              randInRangeCentered(ctx, 
@@ -286,7 +281,7 @@ static Entity makeKey(Engine &ctx,
                          float key_y,
                          int32_t code)
 {
-    Entity key = ctx.makeEntity<KeyEntity>();
+    Entity key = ctx.makeRenderableEntity<KeyEntity>();
     ctx.get<Position>(key) = Vector3 {
         key_x,
         key_y,
@@ -342,7 +337,7 @@ static Entity makeButton(Engine &ctx,
                          float button_x,
                          float button_y)
 {
-    Entity button = ctx.makeEntity<ButtonEntity>();
+    Entity button = ctx.makeRenderableEntity<ButtonEntity>();
     ctx.get<Position>(button) = Vector3 {
         button_x,
         button_y,
@@ -366,7 +361,7 @@ static Entity makeCube(Engine &ctx,
                        float cube_y,
                        float scale = 1.f)
 {
-    Entity cube = ctx.makeEntity<PhysicsEntity>();
+    Entity cube = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         cube,
@@ -623,7 +618,7 @@ static void makeWall(Engine &ctx,
     // Wall with no door.
     if (!makeDoor)
     {
-        Entity wall = ctx.makeEntity<PhysicsEntity>();
+        Entity wall = ctx.makeRenderableEntity<PhysicsEntity>();
         setupRigidBodyEntity(
             ctx,
             wall,
@@ -657,7 +652,7 @@ static void makeWall(Engine &ctx,
 
 
     float left_len = door_center - 0.5f * consts::doorWidth;
-    Entity left_wall = ctx.makeEntity<PhysicsEntity>();
+    Entity left_wall = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         left_wall,
@@ -679,7 +674,7 @@ static void makeWall(Engine &ctx,
 
     float right_len =
         consts::worldWidth - door_center - 0.5f * consts::doorWidth;
-    Entity right_wall = ctx.makeEntity<PhysicsEntity>();
+    Entity right_wall = ctx.makeRenderableEntity<PhysicsEntity>();
     setupRigidBodyEntity(
         ctx,
         right_wall,
@@ -723,7 +718,7 @@ static void makeWall(Engine &ctx,
         default: assert(false);
     }
 
-    Entity door = ctx.makeEntity<DoorEntity>();
+    Entity door = ctx.makeRenderableEntity<DoorEntity>();
     setupRigidBodyEntity(
         ctx,
         door,

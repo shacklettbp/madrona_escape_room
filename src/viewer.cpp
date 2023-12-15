@@ -65,109 +65,6 @@ int main(int argc, char *argv[])
         num_replay_steps = replay_log->size() / (num_worlds * num_views * 4);
     }
 
-    std::array<std::string, (size_t)SimObject::NumObjects> render_asset_paths;
-    render_asset_paths[(size_t)SimObject::Cube] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Wall] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Door] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::PurpleDoor] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::BlueDoor] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::CyanDoor] =
-        (std::filesystem::path(DATA_DIR) / "wall_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Agent] =
-        (std::filesystem::path(DATA_DIR) / "agent_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Button] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::Plane] =
-        (std::filesystem::path(DATA_DIR) / "plane.obj").string();
-    render_asset_paths[(size_t)SimObject::Key] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::PurpleKey] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::BlueKey] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-    render_asset_paths[(size_t)SimObject::CyanKey] =
-        (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
-
-    std::array<const char *, (size_t)SimObject::NumObjects> render_asset_cstrs;
-    for (size_t i = 0; i < render_asset_paths.size(); i++) {
-        render_asset_cstrs[i] = render_asset_paths[i].c_str();
-    }
-
-    std::array<char, 1024> import_err;
-    auto render_assets = imp::ImportedAssets::importFromDisk(
-        render_asset_cstrs, Span<char>(import_err.data(), import_err.size()));
-
-    if (!render_assets.has_value()) {
-        FATAL("Failed to load render assets: %s", import_err);
-    }
-
-    auto materials = std::to_array<imp::SourceMaterial>({
-        { rgb8ToFloat(191, 108, 10), -1, 0.8f, 0.2f },
-        { math::Vector4{0.4f, 0.4f, 0.4f, 0.0f}, -1, 0.8f, 0.2f,},
-        { math::Vector4{1.f, 1.f, 1.f, 0.0f}, 1, 0.5f, 1.0f,},
-        { rgb8ToFloat(230, 230, 230),   -1, 0.8f, 1.0f },
-        { math::Vector4{0.5f, 0.3f, 0.3f, 0.0f},  0, 0.8f, 0.2f,},
-        { rgb8ToFloat(230, 20, 20),   -1, 0.8f, 1.0f }, // Red
-        { rgb8ToFloat(230, 230, 20),   -1, 0.8f, 1.0f }, // Yellow
-        { rgb8ToFloat(20, 20, 230),   -1, 0.8f, 1.0f }, // blue
-        { rgb8ToFloat(230, 20, 230),   -1, 0.8f, 1.0f }, // purple
-        { rgb8ToFloat(20, 230, 230),   -1, 0.8f, 1.0f }, // cyan
-    });
-
-    math::Quat initial_camera_rotation =
-        (math::Quat::angleAxis(-math::pi / 2.f, math::up) *
-        math::Quat::angleAxis(-math::pi / 2.f, math::right)).normalize();
-
-    Viewer viewer({
-        .gpuID = 0,
-        .renderWidth = 2730,
-        .renderHeight = 1536,
-        .numWorlds = num_worlds,
-        .maxViewsPerWorld = num_views,
-        .maxInstancesPerWorld = 1000,
-        .defaultSimTickRate = 20,
-        .cameraMoveSpeed = 10.f,
-        .cameraPosition = { 0, consts::maxRooms / 2.f, 60 },
-        .cameraRotation = initial_camera_rotation,
-        .execMode = exec_mode,
-    });
-
-    // Override materials
-    render_assets->objects[(CountT)SimObject::Cube].meshes[0].materialIDX = 0;
-    render_assets->objects[(CountT)SimObject::Wall].meshes[0].materialIDX = 1;
-
-    render_assets->objects[(CountT)SimObject::Door].meshes[0].materialIDX = 5;
-    render_assets->objects[(CountT)SimObject::PurpleDoor].meshes[0].materialIDX = 8;
-    render_assets->objects[(CountT)SimObject::BlueDoor].meshes[0].materialIDX = 7;
-    render_assets->objects[(CountT)SimObject::CyanDoor].meshes[0].materialIDX = 9;
-
-    render_assets->objects[(CountT)SimObject::Key].meshes[0].materialIDX = 5;
-    render_assets->objects[(CountT)SimObject::PurpleKey].meshes[0].materialIDX = 8;
-    render_assets->objects[(CountT)SimObject::BlueKey].meshes[0].materialIDX = 7;
-    render_assets->objects[(CountT)SimObject::CyanKey].meshes[0].materialIDX = 9;
-
-    render_assets->objects[(CountT)SimObject::Agent].meshes[0].materialIDX = 2;
-    render_assets->objects[(CountT)SimObject::Agent].meshes[1].materialIDX = 3;
-    render_assets->objects[(CountT)SimObject::Agent].meshes[2].materialIDX = 3;
-    render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
-
-    render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
-
-    viewer.loadObjects(render_assets->objects, materials, {
-        { (std::filesystem::path(DATA_DIR) /
-           "green_grid.png").string().c_str() },
-        { (std::filesystem::path(DATA_DIR) /
-           "smile.png").string().c_str() },
-    });
-
-    viewer.configureLighting({
-        { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
-    });
     bool enable_batch_renderer =
 #ifdef MADRONA_MACOS
         false;
@@ -190,11 +87,11 @@ int main(int argc, char *argv[])
         .enableBatchRenderer = enable_batch_renderer,
         .extRenderAPI = wm.gpuAPIManager().backend(),
         .extRenderDev = render_gpu.device(),
-    }, viewer.rendererBridge());
+    });
 
     float camera_move_speed = 10.f;
 
-    math::Vector3 initial_camera_position = { 0, consts::worldLength / 2.f, 30 };
+    math::Vector3 initial_camera_position = { 0, consts::worldWidth / 2.f, 30 };
 
     math::Quat initial_camera_rotation =
         (math::Quat::angleAxis(-math::pi / 2.f, math::up) *
