@@ -47,6 +47,8 @@ arg_parser.add_argument('--no-advantage-norm', action='store_true')
 arg_parser.add_argument('--no-advantages', action='store_true')
 arg_parser.add_argument('--value-normalizer-decay', type=float, default=0.999)
 arg_parser.add_argument('--restore', type=int)
+arg_parser.add_argument('--use-complex-level', action='store_true')
+
 
 # Architecture args
 arg_parser.add_argument('--num-channels', type=int, default=256)
@@ -162,9 +164,12 @@ if args.use_fixed_world:
     sim_flags |= SimFlags.UseFixedWorld
 if args.start_in_discovered_rooms:
     sim_flags |= SimFlags.StartInDiscoveredRooms
+if args.use_complex_level:
+    sim_flags |= SimFlags.UseComplexLevel
 print(sim_flags)
 
 reward_mode = getattr(RewardMode, args.reward_mode)
+
 
 
 sim = madrona_escape_room.SimManager(
@@ -175,6 +180,8 @@ sim = madrona_escape_room.SimManager(
     sim_flags = sim_flags,
     reward_mode = reward_mode,
 )
+
+
 
 use_warm_up = True
 if use_warm_up:
@@ -194,7 +201,11 @@ if use_warm_up:
         sim.step()
         steps_so_far += warm_up
 
+
+
 ckpt_dir = Path(args.ckpt_dir)
+
+
 
 learning_cb = LearningCallback(ckpt_dir, args.profile_report)
 
@@ -203,7 +214,10 @@ if torch.cuda.is_available():
 else:
     dev = torch.device('cpu')
 
+
+
 ckpt_dir.mkdir(exist_ok=True, parents=True)
+
 
 obs, num_obs_features = setup_obs(sim)
 policy = make_policy(num_obs_features, args.num_channels, args.separate_value)

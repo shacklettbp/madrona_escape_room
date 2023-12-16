@@ -20,6 +20,7 @@ NB_MODULE(madrona_escape_room, m) {
         .value("Default", SimFlags::Default)
         .value("UseFixedWorld", SimFlags::UseFixedWorld)
         .value("StartInDiscoveredRooms", SimFlags::StartInDiscoveredRooms)
+        .value("UseComplexLevel", SimFlags::UseComplexLevel)
     ;
 
     nb::enum_<RewardMode>(m, "RewardMode")
