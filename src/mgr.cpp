@@ -574,7 +574,7 @@ Manager::Impl * Manager::Impl::init(
         float *progress_ptr = (float *)cu::allocGPU(sizeof(float));
         REQ_CUDA(cudaMemset(progress_ptr, 0, sizeof(float)));
 
-        PhysicsLoader phys_loader(ExecMode::CUDA, 10);
+        PhysicsLoader phys_loader(ExecMode::CUDA, 20);
         loadPhysicsObjects(phys_loader);
 
         Optional<RenderGPUState> render_gpu_state =
@@ -651,7 +651,6 @@ Manager::Impl * Manager::Impl::init(
         // Allocate what I want here on heap
         float *progress_ptr = new float(0.f);
 
-        // TODO: restore, 10.
         PhysicsLoader phys_loader(ExecMode::CPU, 20);
         loadPhysicsObjects(phys_loader);
 

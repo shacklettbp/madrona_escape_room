@@ -46,15 +46,17 @@ int main(int argc, char *argv[])
             exec_mode = ExecMode::CPU;
         } else if (!strcmp("--cuda", argv[2])) {
             exec_mode = ExecMode::CUDA;
-        } else if (!strcmp("--complex", argv[2])) {
-            flags = SimFlags::UseComplexLevel;
-        } 
+        }
     }
 
     // Setup replay log
     const char *replay_log_path = nullptr;
     if (argc >= 4) {
-        replay_log_path = argv[3];
+        if (!strcmp("--complex", argv[3])) {
+            flags = SimFlags::UseComplexLevel;
+        } else {
+            replay_log_path = argv[3];
+        }
     }
 
     auto replay_log = Optional<HeapArray<int32_t>>::none();

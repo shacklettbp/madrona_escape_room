@@ -1543,7 +1543,6 @@ Sim::Sim(Engine &ctx,
     // createPersistentEntities must know the RoomCount
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
-            // TODO: restore
             ctx.singleton<RoomCount>().count = 8;
         } else {
             ctx.singleton<RoomCount>().count = 3;
@@ -1576,8 +1575,7 @@ Sim::Sim(Engine &ctx,
     ctx.data().ckptKeyQuery = ctx.query<Position, Rotation, KeyState>();
 
     ctx.singleton<CheckpointReset>().reset = 0;
-    // TODO: Restore
-    ctx.singleton<CheckpointSave>().save = 0;
+    ctx.singleton<CheckpointSave>().save = 1;
 }
 
 // This declaration is needed for the GPU backend in order to generate the
