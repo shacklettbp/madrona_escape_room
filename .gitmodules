@@ -1,6 +1,3 @@
 [submodule "external/madrona"]
 	path = external/madrona
 	url = https://github.com/zowithdafro/ZLMadrona.git
-[submodule "external/ZLMadrona"]
-	path = external/ZLMadrona
-	url = https://github.com/zowithdafro/ZLMadrona.git
