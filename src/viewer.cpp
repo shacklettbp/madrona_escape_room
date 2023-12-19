@@ -168,18 +168,23 @@ int main(int argc, char *argv[])
 
 
     // Main loop for the viewer viewer
-    viewer.loop([&mgr](CountT world_idx, CountT agent_idx,
-                           const Viewer::UserInput &input) {
+    viewer.loop(
+    [&mgr](CountT world_idx, const Viewer::UserInput &input)
+    {
+        using Key = Viewer::KeyboardKey;
+        if (input.keyHit(Key::R)) {
+            mgr.triggerReset(world_idx);
+        }
+    },
+    [&mgr](CountT world_idx, CountT agent_idx,
+           const Viewer::UserInput &input)
+    {
         using Key = Viewer::KeyboardKey;
 
         int32_t x = 0;
         int32_t y = 0;
         int32_t r = 2;
         int32_t g = 0;
-
-        if (input.keyPressed(Key::R)) {
-            mgr.triggerReset(world_idx);
-        }
 
         bool shift_pressed = input.keyPressed(Key::Shift);
 
@@ -204,7 +209,7 @@ int main(int argc, char *argv[])
             r -= shift_pressed ? 2 : 1;
         }
 
-        if (input.keyPressed(Key::G)) {
+        if (input.keyHit(Key::G)) {
             g = 1;
         }
 
