@@ -194,8 +194,13 @@ struct LevelState {
     Room rooms[consts::numRooms];
 };
 
+struct LogID {
+    int32_t id;
+};
+
 struct PositionUpdate {
-    Vector3 pos;
+    madrona::math::Vector3 pos;
+    LogID id;
 };
 
 /* ECS Archetypes for the game */
