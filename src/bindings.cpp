@@ -30,6 +30,7 @@ NB_MODULE(madrona_escape_room, m) {
         .value("Dense3", RewardMode::Dense3)
         .value("Sparse1", RewardMode::Sparse1)
         .value("Sparse2", RewardMode::Sparse2)
+        .value("Complex", RewardMode::Complex)
     ;
 
     auto mgr_class = nb::class_<Manager> (m, "SimManager")

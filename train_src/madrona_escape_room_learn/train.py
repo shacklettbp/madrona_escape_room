@@ -490,9 +490,9 @@ def _update_loop(update_iter_fn : Callable,
             # Print steps_remaining
             sim.obs[5][:8000] = 200
 
-        print("Update", update_idx)
-        print("Steps remaining", sim.obs[5][:8000])
-        print("Shape", sim.obs[5].shape, sim.checkpoints.shape)
+        #print("Update", update_idx)
+        #print("Steps remaining", sim.obs[5][:8000])
+        #print("Shape", sim.obs[5].shape, sim.checkpoints.shape)
 
         if useCKPT and update_idx > 0:
             # Run the minisim here to set state and initialize observations,

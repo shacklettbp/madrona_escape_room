@@ -853,7 +853,7 @@ Tensor Manager::roomDoorObservationsTensor() const
                                Tensor::ElementType::Float32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   4,
+                                   1, // TODO:restore 4.
                                    3
                                });
 }

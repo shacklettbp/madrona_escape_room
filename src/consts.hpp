@@ -7,18 +7,18 @@ namespace madEscape {
 namespace consts {
 // Each random world is composed of a fixed number of rooms that the agents
 // must solve in order to maximize their reward.
-inline constexpr madrona::CountT maxRooms = 8;
+inline constexpr madrona::CountT maxRooms = 3;
 
 // Generated levels assume 2 agents
 inline constexpr madrona::CountT numAgents = 2;
 
 // Maximum number of interactive objects per challenge room. This is needed
 // in order to setup the fixed-size learning tensors appropriately.
-inline constexpr madrona::CountT maxEntitiesPerRoom = 20;
+inline constexpr madrona::CountT maxEntitiesPerRoom = 6; // TODO: restore 20
 
 // Give the agents more observation space than the number of room
 // entities in case they push cubes into other rooms.
-inline constexpr madrona::CountT maxObservationsPerAgent = 20;
+inline constexpr madrona::CountT maxObservationsPerAgent = 9; // TODO: restore 20
 
 // Various world / entity size parameters
 inline constexpr float worldWidth = 20.f;

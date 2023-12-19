@@ -29,8 +29,15 @@ arg_parser.add_argument('--separate-value', action='store_true')
 arg_parser.add_argument('--fp16', action='store_true')
 
 arg_parser.add_argument('--gpu-sim', action='store_true')
+arg_parser.add_argument('--use-complex-level', action='store_true')
+
 
 args = arg_parser.parse_args()
+
+sim_flags = madrona_escape_room.SimFlags.Default
+if args.use_complex_level:
+    sim_flags |= madrona_escape_room.SimFlags.UseComplexLevel
+print(sim_flags)
 
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,

@@ -122,7 +122,7 @@ class RolloutManager:
         rnn_states_cur_out = self.rnn_alt_states
 
         curr_returns = torch.clone(self.returns[0,0]) # Last bptt chunk, last step
-        print("Starting returns", curr_returns.mean())
+        #print("Starting returns", curr_returns.mean())
 
         for bptt_chunk in range(0, self.num_bptt_chunks):
             with profile("Cache RNN state"):
