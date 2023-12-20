@@ -118,8 +118,7 @@ struct DoorObservation {
 };
 
 struct RoomDoorObservations {
-    // TODO: Restore 4.
-    DoorObservation obs[1];
+    DoorObservation obs[4];
 };
 
 struct LidarSample {
@@ -217,10 +216,10 @@ struct Room {
     Entity entities[consts::maxEntitiesPerRoom];
 
     // The walls that separate this room from the next
-    Entity walls[2];
+    Entity walls[8];
 
     // The door the agents need to figure out how to lower
-    Entity door[1];
+    Entity door[4];
 };
 
 // A singleton component storing the state of all the rooms in the current

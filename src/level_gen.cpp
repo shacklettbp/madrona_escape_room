@@ -1188,12 +1188,10 @@ static void makeRoom(Engine &ctx,
         room.entities[i] = Entity::none();
     }
     // These limits are independent of the number of rooms.
-    // TODO: Restore
-    for (CountT i = 0; i < 2; i++) {
+    for (CountT i = 0; i < 8; i++) {
         room.walls[i] = Entity::none();
     }
-    // TODO: restore
-    for (CountT i = 0; i < 1; i++) {
+    for (CountT i = 0; i < 4; i++) {
         room.door[i] = Entity::none();
     }
 

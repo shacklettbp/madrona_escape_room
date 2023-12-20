@@ -13,19 +13,27 @@ namespace RenderingSystem = madrona::render::RenderingSystem;
 namespace madEscape {
 
 // Helper function for determining room membership.
-static inline CountT proxyRoomIndex(const Position &p)
-{
-    int32_t x = round(p.x / consts::roomLength) + consts::maxRooms;
-    int32_t y = round(p.y / consts::roomLength) + consts::maxRooms;
-
-    return x + y * consts::maxRooms;
-}
-
-// Helper function for determining room membership.
 static inline CountT roomIndex(const Position &p, CountT numRooms)
 {
     return std::max(CountT(0),
     std::min(numRooms - 1, CountT(p.y / consts::roomLength)));
+}
+
+// Helper function for determining room membership.
+static inline CountT proxyRoomIndex(Engine &ctx, const Position &p)
+{
+    if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
+        SimFlags::UseComplexLevel)
+    {
+        int32_t x = round(p.x / consts::roomLength) + consts::maxRooms;
+        int32_t y = round(p.y / consts::roomLength) + consts::maxRooms;
+
+        return x + y * consts::maxRooms;
+    }
+    else
+    {
+        return roomIndex(p, CountT(ctx.singleton<RoomCount>().count));
+    }
 }
 
 static inline float computeZAngle(Quat q)
@@ -128,14 +136,12 @@ static inline void cleanupWorld(Engine &ctx)
                 ctx.destroyRenderableEntity(room.entities[j]);
             }
         }
-        // TODO: restore
-        for (int32_t j = 0; j < 2; ++j) {
+        for (int32_t j = 0; j < 8; ++j) {
             if (room.walls[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.walls[j]);
             }
         }
-        // TODO: restore
-        for (int32_t j = 0; j < 1; ++j) {
+        for (int32_t j = 0; j < 4; ++j) {
             if (room.door[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.door[j]);
             }
@@ -771,10 +777,12 @@ inline void collectObservationsSystem(Engine &ctx,
 
     const int32_t numRooms = ctx.singleton<RoomCount>().count;
 
-
-    // TODO: restore
-    const CountT cur_room_idx = roomIndex(pos, numRooms);
-    //proxyRoomIndex(pos);
+    // Calls old roomIndex if not using the complexRoom.
+    // Note that for the complex room this roomIndex does NOT
+    // correspond to the actual room index in terms of placement.
+    // It is just an index that is consistent for every point in 
+    // any given room, so can be used to check for membership.
+    const CountT cur_room_idx = proxyRoomIndex(ctx, pos);
 
     self_obs.roomX = pos.x / (consts::worldWidth / 2.f);
     self_obs.roomY = (pos.y - cur_room_idx * consts::roomLength) /
@@ -835,8 +843,7 @@ inline void collectObservationsSystem(Engine &ctx,
        int idx = 0;
         ctx.iterateQuery(ctx.data().roomEntityQuery, [&](Position &p, EntityType &e) {
             // We want information on cubes and buttons in the current room.
-            // TODO: Restore, proxyRoomIndex
-            if (roomIndex(p, numRooms) != cur_room_idx ||
+            if (proxyRoomIndex(ctx, p) != cur_room_idx ||
                 (e != EntityType::Cube && e != EntityType::Button && e != EntityType::Key)) {
                 return;
             }
@@ -856,8 +863,7 @@ inline void collectObservationsSystem(Engine &ctx,
         DoorObservation door_ob;
         door_ob.polar = {0.f, 1.f};
         door_ob.isOpen = -1.0f;
-        // TODO: restore 4
-        for (int i = 0; i < 1; ++i)
+        for (int i = 0; i < 4; ++i)
         {
             room_door_obs.obs[i] = door_ob;
         }
@@ -865,18 +871,25 @@ inline void collectObservationsSystem(Engine &ctx,
         // Context.query() version.
         int doorIdx = 0;
         ctx.iterateQuery(ctx.data().doorQuery, [&](Position &p, OpenState &os)
-        {
-            CountT firstIdx = roomIndex(p, numRooms);
-            //proxyRoomIndex(p + Vector3(0.5, 0.5, 0.0f));
-            CountT secondIdx = roomIndex(p, numRooms);
-            //proxyRoomIndex(p - Vector3(0.5, 0.5, 0.0f));
+                         {
+            CountT firstIdx = proxyRoomIndex(ctx, p);
+            CountT secondIdx = proxyRoomIndex(ctx, p);
+
+            if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
+                SimFlags::UseComplexLevel)
+            {
+                // For complex room, slight offset from door because membership
+                // is not easily determined by y position.
+                firstIdx = proxyRoomIndex(ctx, p + Vector3(0.5, 0.5, 0.0f));
+                secondIdx = proxyRoomIndex(ctx, p - Vector3(0.5, 0.5, 0.0f));
+            }
             if (firstIdx != cur_room_idx && secondIdx != cur_room_idx) {
                 return;
             }
             room_door_obs.obs[doorIdx].polar = xyToPolar(to_view.rotateVec(p - pos), numRooms);
             room_door_obs.obs[doorIdx].isOpen = os.isOpen ? 1.f : 0.f;
             doorIdx++; 
-        });
+            });
     }
 }
 
@@ -1135,21 +1148,31 @@ inline void sparseRewardSystem2(Engine &ctx,
 
 
 // Provides a reward for all open doors.
-inline void complexRewardSystem(Engine &ctx,
+inline void complexSparseRewardSystem(Engine &ctx,
                                 Position pos,
                                 Progress &progress,
                                 Reward &out_reward)
 {
-    float old_max_y = progress.maxY;
 
-    float new_progress = pos.length() - old_max_y;
+    (void)progress;
 
-    float reward;
-    if (new_progress > 0) {
-        reward = new_progress * consts::rewardPerDist;
-        progress.maxY = pos.length();
-    } else {
-        reward = consts::slackReward;
+    float reward = consts::slackReward;
+
+
+    LevelState &level = ctx.singleton<LevelState>();
+    int32_t numRooms = ctx.singleton<RoomCount>().count;
+    for (int32_t i = 0; i < numRooms; i++) {
+        Room &room = level.rooms[i];
+        for (int32_t j = 0; j < 4; ++j) {
+            if (room.door[j] != Entity::none()) {
+                DoorProperties &props = ctx.get<DoorProperties>(room.door[j]);
+                OpenState &open = ctx.get<OpenState>(room.door[j]);
+                if (props.isExit && open.isOpen) {
+                    // Reward of 1 for any open exit door.
+                    reward = 1.0f;
+                }
+            }
+        }
     }
 
     out_reward.v = reward;
@@ -1421,7 +1444,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             >>({door_open_sys});
     } else if (cfg.rewardMode == RewardMode::Complex) {
         reward_sys = builder.addToGraph<ParallelForNode<Engine,
-             complexRewardSystem,
+             complexSparseRewardSystem,
                 Position,
                 Progress,
                 Reward
@@ -1589,8 +1612,7 @@ Sim::Sim(Engine &ctx,
     // createPersistentEntities must know the RoomCount
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
-            // TODO: restore
-            ctx.singleton<RoomCount>().count = 1;
+            ctx.singleton<RoomCount>().count = 8;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }
