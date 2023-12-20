@@ -178,6 +178,7 @@ struct DoorProperties {
     Entity  buttons[consts::maxEntitiesPerRoom];
     int32_t numButtons;
     bool    isPersistent;
+    bool    isExit;
 };
 
 // Similar to OpenState, true during frames where a button is pressed

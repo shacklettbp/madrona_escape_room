@@ -329,6 +329,7 @@ static void setupDoor(Engine &ctx,
     }
     props.numButtons = (int32_t)buttons.size();
     props.isPersistent = is_persistent;
+    props.isExit = true; // This will be changed when new rooms are generated.
 
     ctx.get<KeyCode>(door).code = code;
 }
@@ -1292,6 +1293,8 @@ static void generateComplexLevel(Engine &ctx)
             const RoomRep &doorRoom = roomList[doorList[chosenDoor].roomIdx];
             // This is the door we choose
             Vector3 pos = ctx.get<Position>(doorList[chosenDoor].door);
+            // This door is no longer an exit because there's another room after it.
+            ctx.get<DoorProperties>(doorList[chosenDoor].door).isExit = false;
             float doorXHalfRoom = pos.x / (consts::roomLength * 0.5f);
             float doorYHalfRoom = pos.y / (consts::roomLength * 0.5f);
 
