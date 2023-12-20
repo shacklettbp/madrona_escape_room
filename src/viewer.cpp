@@ -49,14 +49,17 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Setup replay log
-    const char *replay_log_path = nullptr;
+    // Simple or complex level
     if (argc >= 4) {
         if (!strcmp("--complex", argv[3])) {
             flags = SimFlags::UseComplexLevel;
-        } else {
-            replay_log_path = argv[3];
         }
+    }
+
+        // Setup replay log
+    const char *replay_log_path = nullptr;
+    if (argc >= 5) {
+        replay_log_path = argv[4];
     }
 
     auto replay_log = Optional<HeapArray<int32_t>>::none();

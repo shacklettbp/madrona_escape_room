@@ -114,11 +114,12 @@ static_assert(sizeof(RoomEntityObservations) == sizeof(float) *
 // whether or not it is ope
 struct DoorObservation {
     PolarObservation polar;
-    float isOpen; // 1.0 when open, 0.0 when closed.
+    float isOpen; // 1.0 when open, 0.0 when closed, -1.0 when nonexistent.
 };
 
 struct RoomDoorObservations {
-    DoorObservation obs[4];
+    // TODO: Restore 4.
+    DoorObservation obs[1];
 };
 
 struct LidarSample {
@@ -216,10 +217,10 @@ struct Room {
     Entity entities[consts::maxEntitiesPerRoom];
 
     // The walls that separate this room from the next
-    Entity walls[8];
+    Entity walls[2];
 
     // The door the agents need to figure out how to lower
-    Entity door[4];
+    Entity door[1];
 };
 
 // A singleton component storing the state of all the rooms in the current
