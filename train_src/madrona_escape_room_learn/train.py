@@ -117,7 +117,7 @@ def _compute_advantages(cfg : TrainConfig,
     seq_advantages_out = advantages_out.view(T, N, 1)
 
     next_advantage = 0.0
-    next_values = value_normalizer.invert(amp, rollouts.bootstrap_values)
+    next_values = rollouts.bootstrap_values
     for i in reversed(range(cfg.steps_per_update)):
         cur_dones = seq_dones[i].to(dtype=amp.compute_dtype)
         cur_rewards = seq_rewards[i].to(dtype=amp.compute_dtype)
@@ -243,7 +243,7 @@ def _update_iter(cfg : TrainConfig,
         value_normalizer.eval()
 
         with profile('Collect Rollouts'):
-            rollouts = rollout_mgr.collect(amp, sim, actor_critic)
+            rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
     
         # Engstrom et al suggest recomputing advantages after every epoch
         # but that's pretty annoying for a recurrent policy since values
