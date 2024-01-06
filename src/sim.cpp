@@ -90,10 +90,8 @@ static inline void initWorld(Engine &ctx)
     phys::RigidBodyPhysicsSystem::reset(ctx);
 
     // Assign a new episode ID
-    EpisodeManager &episode_mgr = *ctx.data().episodeMgr;
-    int32_t episode_idx = episode_mgr.curEpisode.fetch_add<sync::relaxed>(1);
-    ctx.data().rng = RNG::make(episode_idx);
-    ctx.data().curEpisodeIdx = episode_idx;
+    ctx.data().rng = RNG(rand::split_i(ctx.data().initRandKey,
+        ctx.data().curWorldEpisode++, (uint32_t)ctx.worldID().idx));
 
     // Defined in src/level_gen.hpp / src/level_gen.cpp
     generateWorld(ctx);
@@ -736,9 +734,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
 
 Sim::Sim(Engine &ctx,
          const Config &cfg,
-         const WorldInit &init)
-    : WorldBase(ctx),
-      episodeMgr(init.episodeMgr)
+         const WorldInit &)
+    : WorldBase(ctx)
 {
     // Currently the physics system needs an upper bound on the number of
     // entities that will be stored in the BVH. We plan to fix this in
@@ -747,10 +744,13 @@ Sim::Sim(Engine &ctx,
         consts::numRooms * (consts::maxEntitiesPerRoom + 3) +
         4; // side walls + floor
 
-    phys::RigidBodyPhysicsSystem::init(ctx, init.rigidBodyObjMgr,
+    phys::RigidBodyPhysicsSystem::init(ctx, cfg.rigidBodyObjMgr,
         consts::deltaT, consts::numPhysicsSubsteps, -9.8f * math::up,
         max_total_entities, max_total_entities * max_total_entities / 2,
         consts::numAgents);
+
+    initRandKey = cfg.initRandKey;
+    autoReset = cfg.autoReset;
 
     enableRender = cfg.renderBridge != nullptr;
 
@@ -758,7 +758,7 @@ Sim::Sim(Engine &ctx,
         RenderingSystem::init(ctx, cfg.renderBridge);
     }
 
-    autoReset = cfg.autoReset;
+    curWorldEpisode = 0;
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);
@@ -771,6 +771,6 @@ Sim::Sim(Engine &ctx,
 // CUDA kernel for world initialization, which needs to be specialized to the
 // application's world data type (Sim) and config and initialization types.
 // On the CPU it is a no-op.
-MADRONA_BUILD_MWGPU_ENTRY(Engine, Sim, Sim::Config, WorldInit);
+MADRONA_BUILD_MWGPU_ENTRY(Engine, Sim, Sim::Config, Sim::WorldInit);
 
 }

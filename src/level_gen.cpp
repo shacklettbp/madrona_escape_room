@@ -22,12 +22,12 @@ enum class RoomType : uint32_t {
 
 static inline float randInRangeCentered(Engine &ctx, float range)
 {
-    return ctx.data().rng.rand() * range - range / 2.f;
+    return ctx.data().rng.sampleUniform() * range - range / 2.f;
 }
 
 static inline float randBetween(Engine &ctx, float min, float max)
 {
-    return ctx.data().rng.rand() * (max - min) + min;
+    return ctx.data().rng.sampleUniform() * (max - min) + min;
 }
 
 // Initialize the basic components needed for physics rigid body entities
@@ -618,7 +618,7 @@ static void generateLevel(Engine &ctx)
     // room rather than a fixed progression of challenge difficulty
     for (CountT i = 0; i < consts::numRooms; i++) {
         RoomType room_type = (RoomType)(
-            ctx.data().rng.rand() * (uint32_t)RoomType::NumTypes);
+            ctx.data().rng.sampleI32(0, (uint32_t)RoomType::NumTypes));
 
         makeRoom(ctx, level, i, room_type);
     }

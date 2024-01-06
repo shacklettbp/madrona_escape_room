@@ -86,7 +86,6 @@ static inline Optional<render::RenderManager> initRenderManager(
 struct Manager::Impl {
     Config cfg;
     PhysicsLoader physicsLoader;
-    EpisodeManager *episodeMgr;
     WorldReset *worldResetBuffer;
     Action *agentActionsBuffer;
     Optional<RenderGPUState> renderGPUState;
@@ -94,14 +93,12 @@ struct Manager::Impl {
 
     inline Impl(const Manager::Config &mgr_cfg,
                 PhysicsLoader &&phys_loader,
-                EpisodeManager *ep_mgr,
                 WorldReset *reset_buffer,
                 Action *action_buffer,
                 Optional<RenderGPUState> &&render_gpu_state,
                 Optional<render::RenderManager> &&render_mgr)
         : cfg(mgr_cfg),
           physicsLoader(std::move(phys_loader)),
-          episodeMgr(ep_mgr),
           worldResetBuffer(reset_buffer),
           agentActionsBuffer(action_buffer),
           renderGPUState(std::move(render_gpu_state)),
@@ -121,28 +118,24 @@ struct Manager::Impl {
 
 struct Manager::CPUImpl final : Manager::Impl {
     using TaskGraphT =
-        TaskGraphExecutor<Engine, Sim, Sim::Config, WorldInit>;
+        TaskGraphExecutor<Engine, Sim, Sim::Config, Sim::WorldInit>;
 
     TaskGraphT cpuExec;
 
     inline CPUImpl(const Manager::Config &mgr_cfg,
                    PhysicsLoader &&phys_loader,
-                   EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
                    Action *action_buffer,
                    Optional<RenderGPUState> &&render_gpu_state,
                    Optional<render::RenderManager> &&render_mgr,
                    TaskGraphT &&cpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer,
+               reset_buffer, action_buffer,
                std::move(render_gpu_state), std::move(render_mgr)),
           cpuExec(std::move(cpu_exec))
     {}
 
-    inline virtual ~CPUImpl() final
-    {
-        delete episodeMgr;
-    }
+    inline virtual ~CPUImpl() final {}
 
     inline virtual void run()
     {
@@ -164,22 +157,18 @@ struct Manager::CUDAImpl final : Manager::Impl {
 
     inline CUDAImpl(const Manager::Config &mgr_cfg,
                    PhysicsLoader &&phys_loader,
-                   EpisodeManager *ep_mgr,
                    WorldReset *reset_buffer,
                    Action *action_buffer,
                    Optional<RenderGPUState> &&render_gpu_state,
                    Optional<render::RenderManager> &&render_mgr,
                    MWCudaExecutor &&gpu_exec)
         : Impl(mgr_cfg, std::move(phys_loader),
-               ep_mgr, reset_buffer, action_buffer,
+               reset_buffer, action_buffer,
                std::move(render_gpu_state), std::move(render_mgr)),
           gpuExec(std::move(gpu_exec))
     {}
 
-    inline virtual ~CUDAImpl() final
-    {
-        REQ_CUDA(cudaFree(episodeMgr));
-    }
+    inline virtual ~CUDAImpl() final {}
 
     inline virtual void run()
     {
@@ -384,22 +373,20 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
 Manager::Impl * Manager::Impl::init(
     const Manager::Config &mgr_cfg)
 {
-    Sim::Config sim_cfg {
-        mgr_cfg.autoReset,
-        nullptr,
-    };
+    Sim::Config sim_cfg;
+    sim_cfg.autoReset = mgr_cfg.autoReset;
+    sim_cfg.initRandKey = rand::initKey(mgr_cfg.randSeed);
 
     switch (mgr_cfg.execMode) {
     case ExecMode::CUDA: {
 #ifdef MADRONA_CUDA_SUPPORT
         CUcontext cu_ctx = MWCudaExecutor::initCUDA(mgr_cfg.gpuID);
 
-        EpisodeManager *episode_mgr = 
-            (EpisodeManager *)cu::allocGPU(sizeof(EpisodeManager));
-        REQ_CUDA(cudaMemset(episode_mgr, 0, sizeof(EpisodeManager)));
-
         PhysicsLoader phys_loader(ExecMode::CUDA, 10);
         loadPhysicsObjects(phys_loader);
+
+        ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
+        sim_cfg.rigidBodyObjMgr = phys_obj_mgr;
 
         Optional<RenderGPUState> render_gpu_state =
             initRenderGPUState(mgr_cfg);
@@ -414,20 +401,11 @@ Manager::Impl * Manager::Impl::init(
             sim_cfg.renderBridge = nullptr;
         }
 
-        ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
-
-        HeapArray<WorldInit> world_inits(mgr_cfg.numWorlds);
-
-        for (int64_t i = 0; i < (int64_t)mgr_cfg.numWorlds; i++) {
-            world_inits[i] = WorldInit {
-                episode_mgr,
-                phys_obj_mgr,
-            };
-        }
+        HeapArray<Sim::WorldInit> world_inits(mgr_cfg.numWorlds);
 
         MWCudaExecutor gpu_exec({
             .worldInitPtr = world_inits.data(),
-            .numWorldInitBytes = sizeof(WorldInit),
+            .numWorldInitBytes = sizeof(Sim::WorldInit),
             .userConfigPtr = (void *)&sim_cfg,
             .numUserConfigBytes = sizeof(Sim::Config),
             .numWorldDataBytes = sizeof(Sim),
@@ -449,7 +427,6 @@ Manager::Impl * Manager::Impl::init(
         return new CUDAImpl {
             mgr_cfg,
             std::move(phys_loader),
-            episode_mgr,
             world_reset_buffer,
             agent_actions_buffer,
             std::move(render_gpu_state),
@@ -461,10 +438,11 @@ Manager::Impl * Manager::Impl::init(
 #endif
     } break;
     case ExecMode::CPU: {
-        EpisodeManager *episode_mgr = new EpisodeManager { 0 };
-
         PhysicsLoader phys_loader(ExecMode::CPU, 10);
         loadPhysicsObjects(phys_loader);
+
+        ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
+        sim_cfg.rigidBodyObjMgr = phys_obj_mgr;
 
         Optional<RenderGPUState> render_gpu_state =
             initRenderGPUState(mgr_cfg);
@@ -479,16 +457,7 @@ Manager::Impl * Manager::Impl::init(
             sim_cfg.renderBridge = nullptr;
         }
 
-        ObjectManager *phys_obj_mgr = &phys_loader.getObjectManager();
-
-        HeapArray<WorldInit> world_inits(mgr_cfg.numWorlds);
-
-        for (int64_t i = 0; i < (int64_t)mgr_cfg.numWorlds; i++) {
-            world_inits[i] = WorldInit {
-                episode_mgr,
-                phys_obj_mgr,
-            };
-        }
+        HeapArray<Sim::WorldInit> world_inits(mgr_cfg.numWorlds);
 
         CPUImpl::TaskGraphT cpu_exec {
             ThreadPoolExecutor::Config {
@@ -508,7 +477,6 @@ Manager::Impl * Manager::Impl::init(
         auto cpu_impl = new CPUImpl {
             mgr_cfg,
             std::move(phys_loader),
-            episode_mgr,
             world_reset_buffer,
             agent_actions_buffer,
             std::move(render_gpu_state),
