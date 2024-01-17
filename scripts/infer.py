@@ -35,12 +35,14 @@ args = arg_parser.parse_args()
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
+    rand_seed = torch.randint(0, 2**32, (1,)).item(),
     num_worlds = args.num_worlds,
     auto_reset = True,
     enable_batch_renderer = True if args.rawPixels else False,
 )
 
 obs, dim_info = setup_obs(sim, args.rawPixels) # if rawPixels, dim_info = 4 (# of channels, rgbd), else dim_info = 94 (# of features)
+obs.to(torch.float16 if args.fp16 else torch.float32)
 
 policy = make_policy(dim_info, args.num_channels, args.separate_value, args.rawPixels)
 

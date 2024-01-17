@@ -101,6 +101,7 @@ args = arg_parser.parse_args()
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
+    rand_seed = torch.randint(0, 2**32, (1,)).item(),
     num_worlds = args.num_worlds,
     auto_reset = True,
     enable_batch_renderer = True if args.rawPixels else False,

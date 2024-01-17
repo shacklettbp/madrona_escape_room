@@ -62,8 +62,8 @@ def setup_obs(sim, raw_pixels=False):
     else:
         # raw pixels
         obs_tensors = [
-            rgb_tensor,             # size = torch.Size([16384, 64, 64, 4]) = B (16384), W (64), H (64), C (4)
-            depth_tensor,           # size = torch.Size([16384, 64, 64, 1]) = B (16384), W (64), H (64), C (1)
+            rgb_tensor,             # size = torch.Size([16384, 2, 64, 64, 4]) = B (16384), NumAgents (2), W (64), H (64), C (4)
+            depth_tensor,           # size = torch.Size([16384, 2, 64, 64, 1]) = B (16384), NumAgents (2), W (64), H (64), C (1)
         ]
 
         num_channels = 4
@@ -108,17 +108,35 @@ def process_pixels(rgb, depth):
     assert(not torch.isnan(depth).any())
     assert(not torch.isinf(depth).any())
 
-    # cast to half precision
-    rgb = rgb.to(torch.float16)
-    depth = depth.to(torch.float16)
+    a1_rgb = rgb[:, 0, :, :, 0:3].squeeze(1)
+    a1_depth = depth[:, 0, :, :, :].squeeze(1)
 
-    obs = torch.cat([
-        rgb[..., 0:3],
-        depth,
-    ], dim=-1).to(torch.float16)
+    a2_rgb = rgb[:, 1, :, :, 0:3].squeeze(1)
+    a2_depth = depth[:, 1, :, :, :].squeeze(1)
 
-    CNN_net = CNN(in_channels = obs.shape[-1]).to(obs.device).to(torch.float16)
-    return CNN_net(obs).to(torch.float16)
+    a1_obs = torch.cat([
+        a1_rgb,
+        a1_depth,
+    ], dim=-1)
+
+    a2_obs = torch.cat([
+        a2_rgb,
+        a2_depth,
+    ], dim=-1)
+    
+    CNN_net_a1 = CNN(in_channels = a1_obs.shape[-1]).to(a1_obs.device)
+    CNN_a1_out = CNN_net_a1(a1_obs)
+
+    CNN_net_a2 = CNN(in_channels = a2_obs.shape[-1]).to(a2_obs.device)
+    CNN_a2_out = CNN_net_a2(a2_obs)
+
+    CNN_out = torch.cat([CNN_a1_out, CNN_a2_out], dim=-1)
+
+    MLP_combine_obs = MLP(input_dim = CNN_out.shape[-1],
+                          num_channels = CNN_out.shape[0],
+                          num_layers = 1).to(a1_obs.device)
+    
+    return MLP_combine_obs(CNN_out).to(torch.float16)
 
 def make_policy(dim_info, num_channels, separate_value, raw_pixels=False):
     if raw_pixels:
