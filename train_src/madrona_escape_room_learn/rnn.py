@@ -25,7 +25,7 @@ class LSTM(nn.Module):
         self.hidden_shape = (2, self.num_layers, hidden_channels)
 
     def forward(self, in_features, cur_hidden):
-        in_features = in_features.view(1, *in_features.shape)
+        in_features = in_features.view(1, *in_features.shape).half()
 
         out, (new_h, new_c) = self.lstm(in_features,
                                         (cur_hidden[0], cur_hidden[1]))
