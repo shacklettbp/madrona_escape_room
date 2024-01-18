@@ -101,7 +101,7 @@ args = arg_parser.parse_args()
 sim = madrona_escape_room.SimManager(
     exec_mode = madrona_escape_room.madrona.ExecMode.CUDA if args.gpu_sim else madrona_escape_room.madrona.ExecMode.CPU,
     gpu_id = args.gpu_id,
-    rand_seed = torch.randint(0, 2**32, (1,)).item(),
+    rand_seed = 0, 
     num_worlds = args.num_worlds,
     auto_reset = True,
     enable_batch_renderer = True if args.rawPixels else False,
@@ -111,8 +111,8 @@ ckpt_dir = Path(args.ckpt_dir)
 
 learning_cb = LearningCallback(ckpt_dir, args.profile_report)
 
-# mikey: temporarily disabling gpu usage so i can run code without interfering with tmux run
-if False and torch.cuda.is_available():
+
+if torch.cuda.is_available():
     dev = torch.device(f'cuda:{args.gpu_id}')
 else:
     dev = torch.device('cpu')
@@ -125,6 +125,11 @@ policy = make_policy(dim_info, args.num_channels, args.separate_value, args.rawP
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
+
+# reshape each - multiply first two dimensions together
+actions = actions.view(-1, *actions.shape[2:])
+dones = dones.view(-1, *dones.shape[2:])
+rewards = rewards.view(-1, *rewards.shape[2:])
 
 if args.restore:
     restore_ckpt = ckpt_dir / f"{args.restore}.pth"

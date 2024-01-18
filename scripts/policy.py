@@ -27,11 +27,11 @@ def setup_obs(sim, raw_pixels=False):
     steps_remaining_tensor = sim.steps_remaining_tensor().to_torch()
 
     if raw_pixels:
-        rgb_tensor = sim.rgb_tensor().to_torch()     # tensor shape = B (16384), W (64), H (64), C (4)
-        depth_tensor = sim.depth_tensor().to_torch() # tensor shape = B (16384), W (64), H (64), C (1)
-
-    A = 2
-    N = self_obs_tensor.shape[0] // A
+        rgb_tensor = sim.rgb_tensor().to_torch()   
+        depth_tensor = sim.depth_tensor().to_torch()
+    
+    N, A = self_obs_tensor.shape[0:2]
+    batch_size = N * A
 
     # Add in an agent ID tensor
     id_tensor = torch.arange(A).float()
@@ -39,34 +39,35 @@ def setup_obs(sim, raw_pixels=False):
         id_tensor = id_tensor / (A - 1)
 
     id_tensor = id_tensor.to(device=self_obs_tensor.device)
-    id_tensor = id_tensor.view(1, 2).expand(N, 2).reshape(N * A, 1)
+    id_tensor = id_tensor.view(1, 2).expand(N, 2).reshape(batch_size, 1)
 
     if not raw_pixels:
         obs_tensors = [
-            self_obs_tensor,        # size = torch.Size([16384, 8])    = B (16384), # of attributes in self ob (8)
-            partner_obs_tensor,     # size = torch.Size([16384, 1, 3]) = B (16384), # of partners (1), # of attributes in partner ob (3)
-            room_ent_obs_tensor,    # size = torch.Size([16384, 6, 3]) = B (16384), # of room entities (6), # of attributes in room ent ob (3)
-            door_obs_tensor,        # size = torch.Size([16384, 1, 3]) = B (16384), # of doors (1), # of attributes in door ob (3)
-            lidar_tensor,           # size = torch.Size([16384, 30, 2])= B (16384), # of lidar rays (30), # of attributes in lidar ray (2 = depth, intensity)
-            steps_remaining_tensor, # size = torch.Size([16384, 1])    = B (16384), # of attributes in steps remaining (1)
-            id_tensor,              # size = torch.Size([16384, 1])    = B (16384), # of attributes in agent ID (1)
+            self_obs_tensor.view(batch_size, *self_obs_tensor.shape[2:]),
+            partner_obs_tensor.view(batch_size, *partner_obs_tensor.shape[2:]),
+            room_ent_obs_tensor.view(batch_size, *room_ent_obs_tensor.shape[2:]),
+            door_obs_tensor.view(batch_size, *door_obs_tensor.shape[2:]),
+            lidar_tensor.view(batch_size, *lidar_tensor.shape[2:]),
+            steps_remaining_tensor.view(batch_size, *steps_remaining_tensor.shape[2:]),
+            id_tensor,
         ]
 
         num_obs_features = 0
         for tensor in obs_tensors:
             num_obs_features += math.prod(tensor.shape[1:])
-        # num_obs_features = 8 + 3 + 18 + 3 + 60 + 1 + 1 = 94
-            
+
         return obs_tensors, num_obs_features
         
     else:
+        rgb_tensor = rgb_tensor[:, :, :, :, 0:3]
+
         # raw pixels
         obs_tensors = [
-            rgb_tensor,             # size = torch.Size([16384, 2, 64, 64, 4]) = B (16384), NumAgents (2), W (64), H (64), C (4)
-            depth_tensor,           # size = torch.Size([16384, 2, 64, 64, 1]) = B (16384), NumAgents (2), W (64), H (64), C (1)
+            rgb_tensor.view(batch_size, *rgb_tensor.shape[2:]),         
+            depth_tensor.view(batch_size, *depth_tensor.shape[2:]),    
         ]
 
-        num_channels = 4
+        num_channels = rgb_tensor.shape[-1] + depth_tensor.shape[-1]
         
         return obs_tensors, num_channels
 
@@ -108,35 +109,10 @@ def process_pixels(rgb, depth):
     assert(not torch.isnan(depth).any())
     assert(not torch.isinf(depth).any())
 
-    a1_rgb = rgb[:, 0, :, :, 0:3].squeeze(1)
-    a1_depth = depth[:, 0, :, :, :].squeeze(1)
+    CNN_input = torch.cat([rgb, depth], dim=-1) # shape = B (N * A), W, H, C
+    CNN_process_net = CNN(in_channels = CNN_input.shape[-1]).to(CNN_input.device)
 
-    a2_rgb = rgb[:, 1, :, :, 0:3].squeeze(1)
-    a2_depth = depth[:, 1, :, :, :].squeeze(1)
-
-    a1_obs = torch.cat([
-        a1_rgb,
-        a1_depth,
-    ], dim=-1)
-
-    a2_obs = torch.cat([
-        a2_rgb,
-        a2_depth,
-    ], dim=-1)
-    
-    CNN_net_a1 = CNN(in_channels = a1_obs.shape[-1]).to(a1_obs.device)
-    CNN_a1_out = CNN_net_a1(a1_obs)
-
-    CNN_net_a2 = CNN(in_channels = a2_obs.shape[-1]).to(a2_obs.device)
-    CNN_a2_out = CNN_net_a2(a2_obs)
-
-    CNN_out = torch.cat([CNN_a1_out, CNN_a2_out], dim=-1)
-
-    MLP_combine_obs = MLP(input_dim = CNN_out.shape[-1],
-                          num_channels = CNN_out.shape[0],
-                          num_layers = 1).to(a1_obs.device)
-    
-    return MLP_combine_obs(CNN_out).to(torch.float16)
+    return CNN_process_net(CNN_input).to(torch.float16)
 
 def make_policy(dim_info, num_channels, separate_value, raw_pixels=False):
     if raw_pixels:

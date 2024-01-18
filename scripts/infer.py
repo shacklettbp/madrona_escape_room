@@ -42,7 +42,6 @@ sim = madrona_escape_room.SimManager(
 )
 
 obs, dim_info = setup_obs(sim, args.rawPixels) # if rawPixels, dim_info = 4 (# of channels, rgbd), else dim_info = 94 (# of features)
-obs.to(torch.float16 if args.fp16 else torch.float32)
 
 policy = make_policy(dim_info, args.num_channels, args.separate_value, args.rawPixels)
 
@@ -54,6 +53,10 @@ policy = policy.to(torch.device(f"cuda:{args.gpu_id}")).to(torch.float16 if args
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
 rewards = sim.reward_tensor().to_torch()
+
+actions = actions.view(-1, *actions.shape[2:])
+dones = dones.view(-1, *dones.shape[2:])
+rewards = rewards.view(-1, *rewards.shape[2:])
 
 cur_rnn_states = []
 

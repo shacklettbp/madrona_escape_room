@@ -26,9 +26,8 @@ class LSTM(nn.Module):
 
     def forward(self, in_features, cur_hidden):
         in_features = in_features.view(1, *in_features.shape).half()
-
-        out, (new_h, new_c) = self.lstm(in_features,
-                                        (cur_hidden[0], cur_hidden[1]))
+        
+        out, (new_h, new_c) = self.lstm(in_features, (cur_hidden[0], cur_hidden[1]))
 
         new_hidden = torch.stack([new_h, new_c], dim=0)
 

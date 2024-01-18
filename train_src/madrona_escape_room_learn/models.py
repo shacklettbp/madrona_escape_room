@@ -52,6 +52,7 @@ class MLP(nn.Module):
 
     def forward(self, inputs):
         # convert inputs to half precision
+        # print("Input shape: ", inputs.shape)
         # print("MLP forward output shape: ", self.net(inputs).shape)
         inputs = inputs.half()
         return self.net(inputs)
