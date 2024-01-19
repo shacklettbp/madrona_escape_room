@@ -495,14 +495,14 @@ inline void rewardSystem(Engine &,
                          Reward &out_reward)
 {
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    // float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
-    // compute progress made in y direction
-    float old_max_y = progress.maxY;
-    float new_progress = reward_pos - old_max_y;
+    // // compute progress made in y direction
+    // float old_max_y = progress.maxY;
+    // float new_progress = reward_pos - old_max_y;
 
-    // give reward if progress is made
-    float reward;
+    // // give reward if progress is made
+    // float reward;
     // if (new_progress > 0) {
     //     reward = new_progress * consts::rewardPerDist;
     //     progress.maxY = reward_pos;
@@ -511,6 +511,7 @@ inline void rewardSystem(Engine &,
     // }
 
     // give bonus reward if button is pressed
+    float reward = 0.f;
     if (button_state.isPressed) {
         reward += consts::buttonReward;
     }
