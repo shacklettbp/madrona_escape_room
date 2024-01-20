@@ -291,6 +291,7 @@ inline void doorOpenSystem(Engine &ctx,
     } else if (!props.isPersistent) {
         open_state.isOpen = false;
     }
+
 }
 
 // Make the agents easier to control by zeroing out their velocity
@@ -491,32 +492,48 @@ inline void lidarSystem(Engine &ctx,
 inline void rewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
-                         ButtonState &button_state,
                          Reward &out_reward)
 {
     // Just in case agents do something crazy, clamp total reward
-    // float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
-    // // compute progress made in y direction
-    // float old_max_y = progress.maxY;
-    // float new_progress = reward_pos - old_max_y;
+    // compute progress made in y direction
+    float old_max_y = progress.maxY;
+    float new_progress = reward_pos - old_max_y;
 
-    // // give reward if progress is made
-    // float reward;
-    // if (new_progress > 0) {
-    //     reward = new_progress * consts::rewardPerDist;
-    //     progress.maxY = reward_pos;
-    // } else {
-    //     reward = consts::slackReward;
-    // }
-
-    // give bonus reward if button is pressed
+    // give reward if progress is made
     float reward = 0.f;
-    if (button_state.isPressed) {
-        reward += consts::buttonReward;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.maxY = reward_pos;
+    } else {
+        reward = consts::slackReward;
     }
 
     out_reward.v = reward;
+}
+
+inline void doorRewardSystem(Engine &ctx,
+                            const DoorProperties &props,
+                            Reward &reward)
+{
+    // count how many buttons are pressed
+    int32_t num_pressed = 0;
+    for (int32_t i = 0; i < props.numButtons; i++) {
+        Entity button = props.buttons[i];
+        ButtonState button_state = ctx.get<ButtonState>(button);
+        if (button_state.isPressed) {
+            num_pressed++;
+        }
+    }
+
+    // give reward per button pressed
+    reward.v += num_pressed * consts::buttonReward;
+
+    // give reward if all buttons are pressed
+    if (num_pressed == props.numButtons) {
+        reward.v += consts::rewardPerAllButtons;
+    }
 }
 
 // Each agent gets a small bonus to it's reward if the other agent has
@@ -649,9 +666,14 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
          rewardSystem,
             Position,
             Progress,
-            ButtonState,
             Reward
         >>({door_open_sys});
+    
+    auto door_reward_sys = builder.addToGraph<ParallelForNode<Engine,
+         doorRewardSystem,
+            DoorProperties,
+            Reward
+        >>({reward_sys});
 
     // Assign partner's reward
     auto bonus_reward_sys = builder.addToGraph<ParallelForNode<Engine,
@@ -659,7 +681,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             OtherAgents,
             Progress,
             Reward
-        >>({reward_sys});
+        >>({door_reward_sys});
 
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
