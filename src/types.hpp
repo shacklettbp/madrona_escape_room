@@ -131,6 +131,10 @@ struct StepsRemaining {
 // Tracks progress the agent has made through the challenge, used to add
 // reward when more progress has been made
 struct Progress {
+    // buffer of last 50 x positions
+    float x[50];
+    // buffer of last 50 y positions
+    float y[50];
     float maxY;
 };
 

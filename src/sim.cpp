@@ -495,20 +495,45 @@ inline void rewardSystem(Engine &,
                          Reward &out_reward)
 {
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
-
-    // compute progress made in y direction
-    float old_max_y = progress.maxY;
-    float new_progress = reward_pos - old_max_y;
-
-    // give reward if progress is made
-    float reward = 0.f;
-    if (new_progress > 0) {
-        reward = new_progress * consts::rewardPerDist;
-        progress.maxY = reward_pos;
-    } else {
-        reward = consts::slackReward;
+    float reward_pos_y = fminf(pos.y, consts::worldLength * 2);
+    float reward_pos_x; 
+    if (pos.x < 0) {
+        reward_pos_x = fmaxf(pos.x, -consts::worldWidth);
     }
+    else {
+        reward_pos_x = fminf(pos.x, consts::worldWidth);
+    }
+
+    float reward = 0.f;
+
+    // encourage movement to different x, y locations
+    float new_progress;
+    if (progress.x.size() == 0) {
+        new_progress = 0; 
+    }
+    else {
+        float old_x = progress.x[progress.x.size() - 1];
+        float old_y = progress.y[progress.y.size() - 1];
+        new_progress = sqrt(pow(reward_pos_x - old_x, 2) + pow(reward_pos_y - old_y, 2));
+
+        if (progress.x.size() == 50) {
+            // delete the oldest x and y values
+            progress.x.erase(progress.x.begin());
+            progress.y.erase(progress.y.begin());
+            
+            // shift the x and y values to the left
+            for (int i = 0; i < progress.x.size() - 1; i++) {
+                progress.x[i] = progress.x[i + 1]
+                progress.y[i] = progress.y[i + 1]
+            }
+        }
+    }
+    
+    progress.x.push_back(reward_pos_x);
+    progress.y.push_back(reward_pos_y);
+
+    // give reward based on new progress
+    reward = new_progress * consts::rewardPerDist;
 
     out_reward.v = reward;
 }
@@ -534,6 +559,9 @@ inline void doorRewardSystem(Engine &ctx,
     if (num_pressed == props.numButtons) {
         reward.v += consts::rewardPerAllButtons;
     }
+
+    // if agent's y position is above the door, give reward
+    // TODO from here
 }
 
 // Each agent gets a small bonus to it's reward if the other agent has
