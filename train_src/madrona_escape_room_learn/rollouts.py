@@ -85,6 +85,8 @@ class RolloutManager:
         self.rnn_start_states = []
         for rnn_state_shape in recurrent_cfg.shapes:
             # expand shape to batch size
+
+            # comback
             batched_state_shape = (*rnn_state_shape[0:2],
                 sim.actions.shape[0], rnn_state_shape[2])
 

@@ -610,8 +610,8 @@ static void generateLevel(Engine &ctx)
 
     // For training simplicity, define a fixed sequence of levels.
     makeRoom(ctx, level, 0, RoomType::DoubleButton);
-    makeRoom(ctx, level, 1, RoomType::CubeBlocking);
-    makeRoom(ctx, level, 2, RoomType::CubeButtons);
+    // makeRoom(ctx, level, 1, RoomType::CubeBlocking);
+    // makeRoom(ctx, level, 2, RoomType::CubeButtons);
 
 #if 0
     // An alternative implementation could randomly select the type for each

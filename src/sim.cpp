@@ -491,21 +491,29 @@ inline void lidarSystem(Engine &ctx,
 inline void rewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
+                         ButtonState &button_state,
                          Reward &out_reward)
 {
     // Just in case agents do something crazy, clamp total reward
-    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+    // float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
-    float old_max_y = progress.maxY;
+    // // compute progress made in y direction
+    // float old_max_y = progress.maxY;
+    // float new_progress = reward_pos - old_max_y;
 
-    float new_progress = reward_pos - old_max_y;
+    // // give reward if progress is made
+    // float reward;
+    // if (new_progress > 0) {
+    //     reward = new_progress * consts::rewardPerDist;
+    //     progress.maxY = reward_pos;
+    // } else {
+    //     reward = consts::slackReward;
+    // }
 
-    float reward;
-    if (new_progress > 0) {
-        reward = new_progress * consts::rewardPerDist;
-        progress.maxY = reward_pos;
-    } else {
-        reward = consts::slackReward;
+    // give bonus reward if button is pressed
+    float reward = 0.f;
+    if (button_state.isPressed) {
+        reward += consts::buttonReward;
     }
 
     out_reward.v = reward;
@@ -520,6 +528,8 @@ inline void bonusRewardSystem(Engine &ctx,
                               Progress &progress,
                               Reward &reward)
 {
+    // determining if partners are close to each other
+    // or not
     bool partners_close = true;
     for (CountT i = 0; i < consts::numAgents - 1; i++) {
         Entity other = others.e[i];
@@ -530,6 +540,7 @@ inline void bonusRewardSystem(Engine &ctx,
         }
     }
 
+    // if yes, then give a bonus reward
     if (partners_close && reward.v > 0.f) {
         reward.v *= 1.25f;
     }
@@ -638,6 +649,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
          rewardSystem,
             Position,
             Progress,
+            ButtonState,
             Reward
         >>({door_open_sys});
 

@@ -19,6 +19,8 @@ from .actor_critic import ActorCritic
 from .moving_avg import EMANormalizer
 from .learning_state import LearningState
 
+from tqdm import tqdm
+
 @dataclass(frozen = True)
 class MiniBatch:
     obs: List[torch.Tensor]
@@ -311,7 +313,7 @@ def _update_loop(update_iter_fn : Callable,
     assert(num_train_seqs % cfg.ppo.num_mini_batches == 0)
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
-
+    # breakpoint()
     for update_idx in range(start_update_idx, cfg.num_updates):
         update_start_time  = time()
 
