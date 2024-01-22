@@ -135,6 +135,9 @@ struct Progress {
     float x[50];
     // buffer of last 50 y positions
     float y[50];
+    
+    int idx = 0; 
+
     float maxY;
 };
 
