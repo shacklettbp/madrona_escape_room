@@ -507,33 +507,28 @@ inline void rewardSystem(Engine &,
     float reward = 0.f;
 
     // encourage movement to different x, y locations
-    float new_progress;
-    if (progress.x.size() == 0) {
-        new_progress = 0; 
+    if (progress.idx == 0) {
+        memset(progress.x, 0, sizeof(progress.x));
+        memset(progress.y, 0, sizeof(progress.y));
     }
-    else {
-        float old_x = progress.x[progress.x.size() - 1];
-        float old_y = progress.y[progress.y.size() - 1];
-        new_progress = sqrt(pow(reward_pos_x - old_x, 2) + pow(reward_pos_y - old_y, 2));
 
-        if (progress.x.size() == 50) {
-            // delete the oldest x and y values
-            progress.x.erase(progress.x.begin());
-            progress.y.erase(progress.y.begin());
-            
-            // shift the x and y values to the left
-            for (int i = 0; i < progress.x.size() - 1; i++) {
-                progress.x[i] = progress.x[i + 1]
-                progress.y[i] = progress.y[i + 1]
-            }
-        }
+    progress.x[progress.idx % 50] = reward_pos_x;
+    progress.y[progress.idx % 50] = reward_pos_y;
+
+    // calculate L2 distance between progress.x, progress.y
+    // and all other x, y coordinates in the buffer
+    float total_l2_dist = 0.f;
+    for (int32_t i = 0; i < 50; i++) {
+        float dx = progress.x[i] - reward_pos_x;
+        float dy = progress.y[i] - reward_pos_y;
+        float dist = sqrtf(dx * dx + dy * dy);
+        total_l2_dist += dist;
     }
+    total_l2_dist /= 50.f;
     
-    progress.x.push_back(reward_pos_x);
-    progress.y.push_back(reward_pos_y);
-
+    progress.idx++;
     // give reward based on new progress
-    reward = new_progress * consts::rewardPerDist;
+    reward = total_l2_dist * consts::rewardPerDist;
 
     out_reward.v = reward;
 }
