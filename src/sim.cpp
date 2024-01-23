@@ -504,6 +504,9 @@ inline void rewardSystem(Engine &,
         reward_pos_x = fminf(pos.x, consts::worldWidth);
     }
 
+    // print reward_pos_x
+    printf("reward_pos_x: %f\n", reward_pos_x);
+
     float reward = 0.f;
 
     // encourage movement to different x, y locations
@@ -699,19 +702,19 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({reward_sys});
 
     // Assign partner's reward
-    auto bonus_reward_sys = builder.addToGraph<ParallelForNode<Engine,
-         bonusRewardSystem,
-            OtherAgents,
-            Progress,
-            Reward
-        >>({door_reward_sys});
+    // auto bonus_reward_sys = builder.addToGraph<ParallelForNode<Engine,
+    //      bonusRewardSystem,
+    //         OtherAgents,
+    //         Progress,
+    //         Reward
+    //     >>({door_reward_sys});
 
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({bonus_reward_sys});
+        >>({door_reward_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
