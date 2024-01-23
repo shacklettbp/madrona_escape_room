@@ -110,19 +110,26 @@ def process_pixels(rgb, depth):
     assert(not torch.isinf(depth).any())
 
     CNN_input = torch.cat([rgb, depth], dim=-1) # shape = B (N * A), W, H, C
-    CNN_process_net = CNN(in_channels = CNN_input.shape[-1]).to(CNN_input.device)
-
-    return CNN_process_net(CNN_input).to(torch.float16)
+    # CNN_process_net = CNN(in_channels = CNN_input.shape[-1]).to(CNN_input.device)
+    # return CNN_process_net(CNN_input).to(torch.float16)
+    return CNN_input.to(torch.float16)
 
 def make_policy(dim_info, num_channels, separate_value, raw_pixels=False):
     if raw_pixels:
+        # encoder = RecurrentBackboneEncoder(
+        #     net = MLP(input_dim = num_channels * dim_info,
+        #               num_channels = num_channels,
+        #               num_layers = 1),
+        #     rnn = LSTM(in_channels = num_channels,
+        #                hidden_channels = num_channels,
+        #                num_layers = 1),
+        # )
+        
         encoder = RecurrentBackboneEncoder(
-            net = MLP(input_dim = num_channels * dim_info,
-                      num_channels = num_channels,
-                      num_layers = 1),
+            net = CNN(in_channels = dim_info),
             rnn = LSTM(in_channels = num_channels,
                        hidden_channels = num_channels,
-                       num_layers = 1),
+                       num_layers = 1)
         )
 
         backbone = BackboneShared(
