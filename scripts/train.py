@@ -78,8 +78,11 @@ arg_parser.add_argument('--restore', type=int)
 
 arg_parser.add_argument('--num-worlds', type=int, required=True)
 arg_parser.add_argument('--num-updates', type=int, required=True)
-arg_parser.add_argument('--steps-per-update', type=int, default=40)
+arg_parser.add_argument('--steps-per-update', type=int, default=32)
 arg_parser.add_argument('--num-bptt-chunks', type=int, default=8)
+
+# num updaates = 40, reserved = 28, use = 22
+# num updates = 24, reserved = 16, use = 13
 
 arg_parser.add_argument('--lr', type=float, default=1e-4)
 arg_parser.add_argument('--gamma', type=float, default=0.998)
@@ -153,7 +156,7 @@ train(
         gamma = args.gamma,
         gae_lambda = 0.95,
         ppo = PPOConfig(
-            num_mini_batches=1,
+            num_mini_batches=8,
             clip_coef=0.2,
             value_loss_coef=args.value_loss_coef,
             entropy_coef=args.entropy_loss_coef,
