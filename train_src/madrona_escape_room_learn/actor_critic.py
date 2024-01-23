@@ -198,7 +198,6 @@ class BackboneShared(Backbone):
         return features, features, self.package_rnn_state(new_rnn_states)
 
     def _rollout_common(self, rnn_states_out, rnn_states_in, *obs_in):
-        # breakpoint()
         with torch.no_grad():
             processed_obs = self.process_obs(*obs_in)
 
