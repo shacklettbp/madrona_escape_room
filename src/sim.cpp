@@ -504,8 +504,9 @@ inline void rewardSystem(Engine &,
         reward_pos_x = fminf(pos.x, consts::worldWidth);
     }
 
-    // print reward_pos_x
-    printf("reward_pos_x: %f\n", reward_pos_x);
+    // calculate delta in x and y from most recent position
+    float delta_x = reward_pos_x - progress.x[progress.idx % 50];
+    float delta_y = reward_pos_y - progress.y[progress.idx % 50];
 
     float reward = 0.f;
 
@@ -530,8 +531,14 @@ inline void rewardSystem(Engine &,
     total_l2_dist /= 50.f;
     
     progress.idx++;
-    // give reward based on new progress
-    reward = total_l2_dist * consts::rewardPerDist;
+
+    if (delta_x == 0 && delta_y == 0) {
+        reward = consts::slackReward;
+    }
+    else {
+        // give reward based on new progress
+        reward = total_l2_dist * consts::rewardPerDist;
+    }
 
     out_reward.v = reward;
 }
