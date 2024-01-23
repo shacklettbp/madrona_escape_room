@@ -746,6 +746,7 @@ Tensor Manager::depthTensor() const
         impl_->cfg.batchRenderViewWidth,
         1,
     }, impl_->cfg.gpuID);
+}
 
 Tensor Manager::agentIDTensor() const
 {
