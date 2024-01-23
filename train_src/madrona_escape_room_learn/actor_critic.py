@@ -190,6 +190,7 @@ class BackboneShared(Backbone):
 
     def forward(self, rnn_states_in, *obs_in):
         with torch.no_grad():
+            # here we want to augment the inputs that are being passed to self.process_obs
             processed_obs = self.process_obs(*obs_in)
 
         features, new_rnn_states = self.encoder(
