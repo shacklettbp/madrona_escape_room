@@ -534,8 +534,8 @@ inline void rewardSystem(Engine &,
     progress.y[progress.idx % 50] = reward_pos_y;
 
     // calculate delta in x and y from most recent position
-    float delta_x = reward_pos_x - progress.x[(progress.idx % 50) - 1];
-    float delta_y = reward_pos_y - progress.y[(progress.idx % 50) - 1];
+    float delta_x = reward_pos_x - progress.x[(progress.idx - 1) % 50];
+    float delta_y = reward_pos_y - progress.y[(progress.idx -1) % 50];
 
     // calculate L2 distance between progress.x, progress.y
     // and all other x, y coordinates in the buffer
