@@ -494,25 +494,6 @@ inline void rewardSystem(Engine &,
                          Progress &progress,
                          Reward &out_reward)
 {
-    // OLD
-    // float reward_pos = fminf(pos.y, consts::worldLength * 2);
-
-    // float old_max_y = progress.maxY;
-
-    // float new_progress = reward_pos - old_max_y;
-
-    // float reward;
-    // if (new_progress > 0) {
-    //     reward = new_progress * consts::rewardPerDist;
-    //     progress.maxY = reward_pos;
-    // } else {
-    //     reward = consts::slackReward;
-    // }
-
-    // out_reward.v = reward;
-    
-    // BELOW = new implementation we are deving
-    // Just in case agents do something crazy, clamp total reward
     float reward_pos_y = fminf(pos.y, consts::worldLength * 2);
     float reward_pos_x; 
     if (pos.x < 0) {
@@ -522,40 +503,17 @@ inline void rewardSystem(Engine &,
         reward_pos_x = fminf(pos.x, consts::worldWidth);
     }
 
-    float reward = 0.f;
+    float dx = reward_pos_x - progress.buttonAX;
+    float dy = reward_pos_y - progress.buttonAY;
+    float cur_dist = sqrtf(dx * dx + dy * dy);
+    float new_progress = progress.bestDistance - cur_dist;
 
-    // encourage movement to different x, y locations
-    if (progress.idx == 0) {
-        memset(progress.x, 0, sizeof(progress.x));
-        memset(progress.y, 0, sizeof(progress.y));
-    }
-
-    progress.x[progress.idx % 50] = reward_pos_x;
-    progress.y[progress.idx % 50] = reward_pos_y;
-
-    // calculate delta in x and y from most recent position
-    // float delta_x = reward_pos_x - progress.x[(progress.idx - 1) % 50];
-    // float delta_y = reward_pos_y - progress.y[(progress.idx -1) % 50];
-
-    // calculate L2 distance between progress.x, progress.y
-    // and all other x, y coordinates in the buffer
-    float total_l2_dist = 0.f;
-    for (int32_t i = 0; i < 50; i++) {
-        float dx = progress.x[i] - reward_pos_x;
-        float dy = progress.y[i] - reward_pos_y;
-        float dist = sqrtf(dx * dx + dy * dy);
-        total_l2_dist += dist;
-    }
-    total_l2_dist /= 50.f;
-    
-    progress.idx++;
-
-    if (total_l2_dist < 0.1f) {
+    float reward;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.bestDistance = cur_dist;
+    } else {
         reward = consts::slackReward;
-    }
-    else {
-        // give reward based on new progress
-        reward = total_l2_dist * consts::rewardPerDist;
     }
 
     out_reward.v = reward;
