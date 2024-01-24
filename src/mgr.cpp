@@ -459,13 +459,20 @@ Manager::Impl * Manager::Impl::init(
 
         HeapArray<Sim::WorldInit> world_inits(mgr_cfg.numWorlds);
 
+        ThreadPoolExecutor::Config cpu_exec_cfg;
+        cpu_exec_cfg.numWorlds = mgr_cfg.numWorlds;
+        cpu_exec_cfg.numExportedBuffers = (uint32_t)ExportID::NumExports;
+
+        if (!mgr_cfg.replayStateLog && mgr_cfg.stateLogDir != nullptr) {
+            cpu_exec_cfg.stateLogRecordConfig = {
+                .logDir = mgr_cfg.stateLogDir,
+                .numBufferedSteps = 10,
+                .maxNumStepsSaved = 0,
+            };
+        }
+
         CPUImpl::TaskGraphT cpu_exec {
-            ThreadPoolExecutor::Config {
-                .numWorlds = mgr_cfg.numWorlds,
-                .numExportedBuffers = (uint32_t)ExportID::NumExports,
-                .stateLogRecordDirectory = mgr_cfg.replayStateLog ? nullptr :
-                    mgr_cfg.stateLogDir,
-            },
+            cpu_exec_cfg,
             sim_cfg,
             world_inits.data(),
         };

@@ -19,6 +19,7 @@ sim = madrona_escape_room.SimManager(
     num_worlds = args.num_worlds,
     auto_reset = True,
     enable_batch_renderer = False,
+    rand_seed = 5,
     state_log_dir = "/tmp/test_log",
 )
 
