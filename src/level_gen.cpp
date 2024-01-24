@@ -230,7 +230,6 @@ static void resetPersistentEntities(Engine &ctx)
 
         //  ctx.get<Progress>(agent_entity).maxY = pos.y;
          // for now we set a very large distance to beat
-         ctx.get<Progress>(agent_entity).bestDistance = (float) 10000000;
 
          ctx.get<Velocity>(agent_entity) = {
              Vector3::zero(),
@@ -455,15 +454,20 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
         ctx.get<Progress>(agent_entity).buttonAX = a_x;
         ctx.get<Progress>(agent_entity).buttonAY = a_y;
 
+        ctx.get<Progress>(agent_entity).buttonBX = b_x;
+        ctx.get<Progress>(agent_entity).buttonBY = b_y;
         // for now we try to get closer to exactly one of the buttons
         // ctx.get<Progress>(agent_entity).buttonBX = b_x;
         // ctx.get<Progress>(agent_entity).buttonBY = b_y;
         // agent x, y
         float pos_x = ctx.get<Position>(agent_entity).x;
         float pos_y = ctx.get<Position>(agent_entity).y;
-        float dx = pos_x - a_x;
-        float dy = pos_y - a_y;
-        ctx.get<Progress>(agent_entity).bestDistance = sqrtf(dx * dx + dy * dy);
+        float dx_a = pos_x - a_x;
+        float dy_a = pos_y - a_y;
+        float dx_b = pos_x - b_x;
+        float dy_b = pos_y - b_y;
+        ctx.get<Progress>(agent_entity).bestDistanceA = sqrtf(dx_a * dx_a + dy_a * dy_a);
+        ctx.get<Progress>(agent_entity).bestDistanceB = sqrtf(dx_b * dx_b + dy_b * dy_b);
     }
 
     return 2;

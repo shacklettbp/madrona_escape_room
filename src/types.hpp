@@ -132,7 +132,8 @@ struct StepsRemaining {
 // reward when more progress has been made
 struct Progress {
     int idx = 0; 
-    float bestDistance;
+    float bestDistanceA;
+    float bestDistanceB;
     float maxY;
     float buttonAX;
     float buttonAY;
