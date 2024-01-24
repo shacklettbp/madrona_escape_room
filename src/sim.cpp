@@ -504,31 +504,19 @@ inline void rewardSystem(Engine &,
     }
 
     // NEW: reward progress made on any of the button
+    float dx = reward_pos_x - progress.buttonX;
+    float dy = reward_pos_y - progress.buttonY;
+    float cur_dist = sqrtf(dx * dx + dy * dy);
+    float new_progress = progress.bestDistance - cur_dist;
 
-    float dx_a = reward_pos_x - progress.buttonAX;
-    float dy_a = reward_pos_y - progress.buttonAY;
-    float dx_b = reward_pos_x - progress.buttonBX;
-    float dy_b = reward_pos_y - progress.buttonBY;
-    float cur_dist_a = sqrtf(dx_a * dx_a + dy_a * dy_a);
-    float cur_dist_b = sqrtf(dx_b * dx_b + dy_b * dy_b);
-    float new_progress_a = progress.bestDistanceA - cur_dist_a;
-    float new_progress_b = progress.bestDistanceB - cur_dist_b;
-
-    float reward_a, reward_b;
-    if (new_progress_a > 0) {
-        reward_a = new_progress_a * consts::rewardPerDist;
-        progress.bestDistanceA = cur_dist_a;
+    float reward;
+    if (new_progress > 0) {
+        reward = new_progress * consts::rewardPerDist;
+        progress.bestDistance = cur_dist;
     } else {
-        reward_a = consts::slackReward;
+        reward = consts::slackReward;
     }
-    if (new_progress_b > 0) {
-        reward_b = new_progress_b * consts::rewardPerDist;
-        progress.bestDistanceB = cur_dist_b;
-    } else {
-        reward_b = consts::slackReward;
-    }
-
-    out_reward.v = fmax(reward_a, reward_b);
+    out_reward.v = reward;
 }
 
 inline void doorRewardSystem(Engine &ctx,

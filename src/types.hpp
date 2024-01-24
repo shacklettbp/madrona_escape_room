@@ -131,14 +131,11 @@ struct StepsRemaining {
 // Tracks progress the agent has made through the challenge, used to add
 // reward when more progress has been made
 struct Progress {
-    int idx = 0; 
-    float bestDistanceA;
-    float bestDistanceB;
+    float bestDistance;
     float maxY;
-    float buttonAX;
-    float buttonAY;
-    float buttonBX;
-    float buttonBY;
+    float buttonX;
+    float buttonY;
+    int agent_id;
 };
 
 // Per-agent component storing Entity IDs of the other agents. Used to
