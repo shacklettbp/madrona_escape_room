@@ -95,6 +95,7 @@ arg_parser.add_argument('--gpu-sim', action='store_true')
 arg_parser.add_argument('--profile-report', action='store_true')
 
 arg_parser.add_argument('--rawPixels', action='store_true')
+arg_parser.add_argument("--cpu", action="store_true")
 
 args = arg_parser.parse_args()
 
@@ -112,7 +113,7 @@ ckpt_dir = Path(args.ckpt_dir)
 learning_cb = LearningCallback(ckpt_dir, args.profile_report)
 
 
-if torch.cuda.is_available():
+if not args.cpu and torch.cuda.is_available():
     dev = torch.device(f'cuda:{args.gpu_id}')
 else:
     dev = torch.device('cpu')

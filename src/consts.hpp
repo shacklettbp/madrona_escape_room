@@ -8,7 +8,7 @@ namespace consts {
 // Each random world is composed of a fixed number of rooms that the agents
 // must solve in order to maximize their reward.
 // inline constexpr madrona::CountT numRooms = 3;
-inline constexpr madrona::CountT numRooms = 1; 
+inline constexpr madrona::CountT numRooms = 3; 
 
 // Generated levels assume 2 agents
 inline constexpr madrona::CountT numAgents = 2;
