@@ -516,6 +516,10 @@ inline void rewardSystem(Engine &,
         float dx = reward_pos_x - progress.buttonX;
         float dy = reward_pos_y - progress.buttonY;
 
+        // abs value of dx and dy
+        dx = (dx < 0) ? -dx : dx;
+        dy = (dy < 0) ? -dy : dy;
+
         // unless the button is now pressed
         if (dx <= 0.25f && dy <= 0.25f) {
             reward = consts::buttonReward;
@@ -537,7 +541,7 @@ inline void rewardSystem(Engine &,
             }
         }
     }
-    
+
     out_reward.v = reward;
 }
 
@@ -701,19 +705,19 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({reward_sys});
 
     // Assign partner's reward
-    // auto bonus_reward_sys = builder.addToGraph<ParallelForNode<Engine,
-    //      bonusRewardSystem,
-    //         OtherAgents,
-    //         Progress,
-    //         Reward
-    //     >>({door_reward_sys});
+    auto bonus_reward_sys = builder.addToGraph<ParallelForNode<Engine,
+         bonusRewardSystem,
+            OtherAgents,
+            Progress,
+            Reward
+        >>({door_reward_sys});
 
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
             StepsRemaining,
             Done
-        >>({door_reward_sys});
+        >>({bonus_reward_sys});
 
     // Conditionally reset the world if the episode is over
     auto reset_sys = builder.addToGraph<ParallelForNode<Engine,
