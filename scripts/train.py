@@ -157,7 +157,7 @@ train(
         gamma = args.gamma,
         gae_lambda = 0.95,
         ppo = PPOConfig(
-            num_mini_batches=8,
+            num_mini_batches=1,
             clip_coef=0.2,
             value_loss_coef=args.value_loss_coef,
             entropy_coef=args.entropy_loss_coef,
