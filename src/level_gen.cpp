@@ -343,6 +343,7 @@ static Entity makeButton(Engine &ctx,
         consts::buttonWidth,
         0.2f,
     };
+
     ctx.get<ObjectID>(button) = ObjectID { (int32_t)SimObject::Button };
     ctx.get<ButtonState>(button).isPressed = false;
     ctx.get<EntityType>(button) = EntityType::Button;
@@ -443,7 +444,23 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     room.entities[0] = a;
     room.entities[1] = b;
+
+    float left_button_x; 
+    float left_button_y;
+    float right_button_x;
+    float right_button_y;
     
+    if (a_x < b_x) {
+        left_button_x = a_x;
+        left_button_y = a_y;
+        right_button_x = b_x;
+        right_button_y = b_y;
+    } else {
+        left_button_x = b_x;
+        left_button_y = b_y;
+        right_button_x = a_x;
+        right_button_y = a_y;
+    }
 
     // add coords of these buttons to progres component of agents
     for (CountT i = 0; i < consts::numAgents; i++) {
@@ -455,16 +472,16 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
         float pos_y = ctx.get<Position>(agent_entity).y;
         float dx, dy;
 
-        if (agent_id == 0) {
-            ctx.get<Progress>(agent_entity).buttonX = a_x;
-            ctx.get<Progress>(agent_entity).buttonY = a_y;
-            dx = pos_x - a_x;
-            dy = pos_y - a_y;
+        if (pos_x < 0) {
+            ctx.get<Progress>(agent_entity).buttonX = left_button_x;
+            ctx.get<Progress>(agent_entity).buttonY = left_button_y;
+            dx = pos_x - left_button_x;
+            dy = pos_y - left_button_y;
         } else {
-            ctx.get<Progress>(agent_entity).buttonX = b_x;
-            ctx.get<Progress>(agent_entity).buttonY = b_y;
-            dx = pos_x - b_x;
-            dy = pos_y - b_y;
+            ctx.get<Progress>(agent_entity).buttonX = right_button_x;
+            ctx.get<Progress>(agent_entity).buttonY = right_button_y;
+            dx = pos_x - right_button_x;
+            dy = pos_y - right_button_y;
         }
         ctx.get<Progress>(agent_entity).bestDistance = sqrtf(dx * dx + dy * dy);
     }
