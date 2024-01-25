@@ -228,7 +228,9 @@ static void resetPersistentEntities(Engine &ctx)
              grab_state.constraintEntity = Entity::none();
          }
 
-         ctx.get<Progress>(agent_entity).maxY = pos.y;
+        //  ctx.get<Progress>(agent_entity).maxY = pos.y;
+         // for now we set a very large distance to beat
+         ctx.get<Progress>(agent_entity).bestDistance = (float) 10000000;
 
          ctx.get<Velocity>(agent_entity) = {
              Vector3::zero(),
@@ -444,6 +446,25 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     room.entities[0] = a;
     room.entities[1] = b;
+    
+
+    // add coords of these buttons to progres component of agents
+    for (CountT i = 0; i < consts::numAgents; i++) {
+        Entity agent_entity = ctx.data().agents[i];
+        ctx.get<Progress>(agent_entity);
+        ctx.get<Progress>(agent_entity).buttonAX = a_x;
+        ctx.get<Progress>(agent_entity).buttonAY = a_y;
+
+        // for now we try to get closer to exactly one of the buttons
+        // ctx.get<Progress>(agent_entity).buttonBX = b_x;
+        // ctx.get<Progress>(agent_entity).buttonBY = b_y;
+        // agent x, y
+        float pos_x = ctx.get<Position>(agent_entity).x;
+        float pos_y = ctx.get<Position>(agent_entity).y;
+        float dx = pos_x - a_x;
+        float dy = pos_y - a_y;
+        ctx.get<Progress>(agent_entity).bestDistance = sqrtf(dx * dx + dy * dy);
+    }
 
     return 2;
 }
@@ -610,8 +631,8 @@ static void generateLevel(Engine &ctx)
 
     // For training simplicity, define a fixed sequence of levels.
     makeRoom(ctx, level, 0, RoomType::DoubleButton);
-    // makeRoom(ctx, level, 1, RoomType::CubeBlocking);
-    // makeRoom(ctx, level, 2, RoomType::CubeButtons);
+    makeRoom(ctx, level, 1, RoomType::DoubleButton);
+    makeRoom(ctx, level, 2, RoomType::DoubleButton);
 
 #if 0
     // An alternative implementation could randomly select the type for each
