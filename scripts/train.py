@@ -85,7 +85,7 @@ arg_parser.add_argument('--num-bptt-chunks', type=int, default=8)
 # num updates = 24, reserved = 16, use = 13
 
 arg_parser.add_argument('--lr', type=float, default=1e-4)
-arg_parser.add_argument('--gamma', type=float, default=0.985)
+arg_parser.add_argument('--gamma', type=float, default=0.998)
 arg_parser.add_argument('--entropy-loss-coef', type=float, default=0.01)
 arg_parser.add_argument('--value-loss-coef', type=float, default=0.5)
 arg_parser.add_argument('--clip-value-loss', action='store_true')
@@ -162,7 +162,7 @@ train(
             value_loss_coef=args.value_loss_coef,
             entropy_coef=args.entropy_loss_coef,
             max_grad_norm=0.5,
-            num_epochs=3,
+            num_epochs=1,
             clip_value_loss=args.clip_value_loss,
         ),
         value_normalizer_decay = 0.999,

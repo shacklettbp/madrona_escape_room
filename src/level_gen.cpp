@@ -452,16 +452,29 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     if (y_min == 0) {
         if (a_x < b_x) {
-        left_button_x = a_x;
-        left_button_y = a_y;
-        right_button_x = b_x;
-        right_button_y = b_y;
+            left_button_x = a_x;
+            left_button_y = a_y;
+            right_button_x = b_x;
+            right_button_y = b_y;
         } 
         else {
             left_button_x = b_x;
             left_button_y = b_y;
             right_button_x = a_x;
             right_button_y = a_y;
+        }
+    }
+    else {
+        float pos_x = ctx.get<Position>(agent_entity).x;
+        float pos_y = ctx.get<Position>(agent_entity).y;
+
+        if (pos_x < 0) {
+            left_button_x = ctx.get<Progress>(agent_entity).buttonX;
+            left_button_y = ctx.get<Progress>(agent_entity).buttonY;
+        } 
+        else {
+            right_button_x = ctx.get<Progress>(agent_entity).buttonX;
+            right_button_y = ctx.get<Progress>(agent_entity).buttonY;
         }
     }
 
@@ -480,7 +493,8 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
             ctx.get<Progress>(agent_entity).buttonY = left_button_y;
             dx = pos_x - left_button_x;
             dy = pos_y - left_button_y;
-        } else {
+        } 
+        else {
             ctx.get<Progress>(agent_entity).buttonX = right_button_x;
             ctx.get<Progress>(agent_entity).buttonY = right_button_y;
             dx = pos_x - right_button_x;
