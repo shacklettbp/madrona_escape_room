@@ -521,7 +521,7 @@ inline void rewardSystem(Engine &,
         dy = (dy < 0) ? -dy : dy;
 
         // unless the button is now pressed
-        if (dx <= 0.25f && dy <= 0.25f) {
+        if (dx <= 1.15f && dy <= 1.15f) {
             reward = consts::buttonReward;
             progress.buttonX = -1;
             progress.buttonY = -1;
