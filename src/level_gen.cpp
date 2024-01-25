@@ -465,17 +465,10 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
         }
     }
     else {
-        float pos_x = ctx.get<Position>(agent_entity).x;
-        float pos_y = ctx.get<Position>(agent_entity).y;
-
-        if (pos_x < 0) {
-            left_button_x = ctx.get<Progress>(agent_entity).buttonX;
-            left_button_y = ctx.get<Progress>(agent_entity).buttonY;
-        } 
-        else {
-            right_button_x = ctx.get<Progress>(agent_entity).buttonX;
-            right_button_y = ctx.get<Progress>(agent_entity).buttonY;
-        }
+        left_button_x = -1; 
+        left_button_y = -1;
+        right_button_x = -1;
+        right_button_y = -1;
     }
 
     // add coords of these buttons to progres component of agents
@@ -486,21 +479,28 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
         float pos_x = ctx.get<Position>(agent_entity).x;
         float pos_y = ctx.get<Position>(agent_entity).y;
-        float dx, dy;
+        float dx = -1; 
+        float dy = -1;
 
         if (pos_x < 0) {
-            ctx.get<Progress>(agent_entity).buttonX = left_button_x;
-            ctx.get<Progress>(agent_entity).buttonY = left_button_y;
-            dx = pos_x - left_button_x;
-            dy = pos_y - left_button_y;
+            if (left_button_x != -1 && left_button_y != -1) {
+                ctx.get<Progress>(agent_entity).buttonX = left_button_x;
+                ctx.get<Progress>(agent_entity).buttonY = left_button_y;
+                dx = pos_x - left_button_x;
+                dy = pos_y - left_button_y;
+            }
         } 
         else {
-            ctx.get<Progress>(agent_entity).buttonX = right_button_x;
-            ctx.get<Progress>(agent_entity).buttonY = right_button_y;
-            dx = pos_x - right_button_x;
-            dy = pos_y - right_button_y;
+            if (right_button_x != -1 && right_button_y != -1) {
+                ctx.get<Progress>(agent_entity).buttonX = right_button_x;
+                ctx.get<Progress>(agent_entity).buttonY = right_button_y;
+                dx = pos_x - right_button_x;
+                dy = pos_y - right_button_y;
+            }
         }
-        ctx.get<Progress>(agent_entity).bestDistance = sqrtf(dx * dx + dy * dy);
+        if (dx != -1 && dy != -1) {
+            ctx.get<Progress>(agent_entity).bestDistance = sqrtf(dx * dx + dy * dy);
+        }
     }
 
     return 2;
