@@ -13,18 +13,16 @@ class CNN(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 3, 2, 1)
         self.conv3 = nn.Conv2d(64, 64, 3, 2, 1)
         self.conv4 = nn.Conv2d(64, 64, 3, 2, 1)
-        self.mlp = MLP(input_dim = 1024, num_channels = 256, num_layers = 1)
+        self.mlp = MLP(input_dim = 256, num_channels = 256, num_layers = 1)
         self.flatten = nn.Flatten()
 
     def forward(self, inputs):
         x = inputs.permute(0, 3, 1, 2)
-
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         x = self.flatten(F.relu(self.conv4(x)))
         x = self.mlp(x)
-        # print("CNN forward output shape: ", x.shape)
         return x
 
 class MLP(nn.Module):
