@@ -227,10 +227,7 @@ static void resetPersistentEntities(Engine &ctx)
              ctx.destroyEntity(grab_state.constraintEntity);
              grab_state.constraintEntity = Entity::none();
          }
-
-        //  ctx.get<Progress>(agent_entity).maxY = pos.y;
-         // for now we set a very large distance to beat
-         ctx.get<Progress>(agent_entity).bestDistance = (float) 10000000;
+         ctx.get<Progress>(agent_entity).agent_id = i;
 
          ctx.get<Velocity>(agent_entity) = {
              Vector3::zero(),
@@ -346,6 +343,7 @@ static Entity makeButton(Engine &ctx,
         consts::buttonWidth,
         0.2f,
     };
+
     ctx.get<ObjectID>(button) = ObjectID { (int32_t)SimObject::Button };
     ctx.get<ButtonState>(button).isPressed = false;
     ctx.get<EntityType>(button) = EntityType::Button;
@@ -446,23 +444,45 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
 
     room.entities[0] = a;
     room.entities[1] = b;
+
+    float left_button_x; 
+    float left_button_y;
+    float right_button_x;
+    float right_button_y;
     
+    if (a_x < b_x) {
+        left_button_x = a_x;
+        left_button_y = a_y;
+        right_button_x = b_x;
+        right_button_y = b_y;
+    } else {
+        left_button_x = b_x;
+        left_button_y = b_y;
+        right_button_x = a_x;
+        right_button_y = a_y;
+    }
 
     // add coords of these buttons to progres component of agents
     for (CountT i = 0; i < consts::numAgents; i++) {
         Entity agent_entity = ctx.data().agents[i];
-        ctx.get<Progress>(agent_entity);
-        ctx.get<Progress>(agent_entity).buttonAX = a_x;
-        ctx.get<Progress>(agent_entity).buttonAY = a_y;
-
-        // for now we try to get closer to exactly one of the buttons
-        // ctx.get<Progress>(agent_entity).buttonBX = b_x;
-        // ctx.get<Progress>(agent_entity).buttonBY = b_y;
         // agent x, y
+        int agent_id = ctx.get<Progress>(agent_entity).agent_id;
+
         float pos_x = ctx.get<Position>(agent_entity).x;
         float pos_y = ctx.get<Position>(agent_entity).y;
-        float dx = pos_x - a_x;
-        float dy = pos_y - a_y;
+        float dx, dy;
+
+        if (pos_x < 0) {
+            ctx.get<Progress>(agent_entity).buttonX = left_button_x;
+            ctx.get<Progress>(agent_entity).buttonY = left_button_y;
+            dx = pos_x - left_button_x;
+            dy = pos_y - left_button_y;
+        } else {
+            ctx.get<Progress>(agent_entity).buttonX = right_button_x;
+            ctx.get<Progress>(agent_entity).buttonY = right_button_y;
+            dx = pos_x - right_button_x;
+            dy = pos_y - right_button_y;
+        }
         ctx.get<Progress>(agent_entity).bestDistance = sqrtf(dx * dx + dy * dy);
     }
 

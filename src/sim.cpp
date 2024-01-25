@@ -503,19 +503,41 @@ inline void rewardSystem(Engine &,
         reward_pos_x = fminf(pos.x, consts::worldWidth);
     }
 
-    float dx = reward_pos_x - progress.buttonAX;
-    float dy = reward_pos_y - progress.buttonAY;
-    float cur_dist = sqrtf(dx * dx + dy * dy);
-    float new_progress = progress.bestDistance - cur_dist;
+    float reward; 
+    if (progress.buttonX < 0 && progress.buttonY < 0) {
+        // get reward for maximizing y
+        float old_max_y = progress.maxY;
+        float new_progress = reward_pos_y - old_max_y;
 
-    float reward;
-    if (new_progress > 0) {
-        reward = new_progress * consts::rewardPerDist;
-        progress.bestDistance = cur_dist;
-    } else {
-        reward = consts::slackReward;
+        reward = (new_progress > 0) ? new_progress * consts::rewardPerDist : consts::slackReward;
     }
+    else {
+        // get reward for minimizing distance to button
+        float dx = reward_pos_x - progress.buttonX;
+        float dy = reward_pos_y - progress.buttonY;
 
+        // unless the button is now pressed
+        if (dx <= 0.25f && dy <= 0.25f) {
+            reward = consts::buttonReward;
+            progress.buttonX = -1;
+            progress.buttonY = -1;
+        }
+
+        // otherwise, just get reward for minimizing distance
+        else {
+            float cur_dist = sqrtf(dx * dx + dy * dy);
+            float new_progress = progress.bestDistance - cur_dist;
+
+            if (new_progress > 0) {
+                reward = new_progress * consts::rewardPerDist;
+                progress.bestDistance = cur_dist;
+            } 
+            else {
+                reward = consts::slackReward;
+            }
+        }
+    }
+    
     out_reward.v = reward;
 }
 
@@ -532,9 +554,6 @@ inline void doorRewardSystem(Engine &ctx,
             num_pressed++;
         }
     }
-
-    // give reward per button pressed
-    reward.v += num_pressed * consts::buttonReward;
 
     // give reward if all buttons are pressed
     if (num_pressed == props.numButtons) {
