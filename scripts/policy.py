@@ -109,9 +109,15 @@ def process_pixels(rgb, depth):
     assert(not torch.isnan(depth).any())
     assert(not torch.isinf(depth).any())
 
+    # get width and height
+    width = rgb.shape[1]
+    height = rgb.shape[2]
+
     CNN_input = torch.cat([rgb, depth], dim=-1) # shape = B (N * A), W, H, C
-    # CNN_process_net = CNN(in_channels = CNN_input.shape[-1]).to(CNN_input.device)
-    # return CNN_process_net(CNN_input).to(torch.float16)
+    CNN_input = CNN_input.reshape(rgb.shape[0], width//2, 2, height//2, 2, rgb.shape[-1] + depth.shape[-1])
+    CNN_input = CNN_input.permute(0, 1, 3, 2, 4, 5)
+    CNN_input = CNN_input.reshape(rgb.shape[0], width//2, height//2, 2 * 2 * (rgb.shape[-1] + depth.shape[-1]))
+
     return CNN_input.to(torch.float16)
 
 def make_policy(dim_info, num_channels, separate_value, raw_pixels=False):
@@ -126,7 +132,7 @@ def make_policy(dim_info, num_channels, separate_value, raw_pixels=False):
         # )
         
         encoder = RecurrentBackboneEncoder(
-            net = CNN(in_channels = dim_info),
+            net = CNN(in_channels = dim_info * 4),
             rnn = LSTM(in_channels = num_channels,
                        hidden_channels = num_channels,
                        num_layers = 1)

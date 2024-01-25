@@ -449,17 +449,20 @@ static CountT makeDoubleButtonRoom(Engine &ctx,
     float left_button_y;
     float right_button_x;
     float right_button_y;
-    
-    if (a_x < b_x) {
+
+    if (y_min == 0) {
+        if (a_x < b_x) {
         left_button_x = a_x;
         left_button_y = a_y;
         right_button_x = b_x;
         right_button_y = b_y;
-    } else {
-        left_button_x = b_x;
-        left_button_y = b_y;
-        right_button_x = a_x;
-        right_button_y = a_y;
+        } 
+        else {
+            left_button_x = b_x;
+            left_button_y = b_y;
+            right_button_x = a_x;
+            right_button_y = a_y;
+        }
     }
 
     // add coords of these buttons to progres component of agents
