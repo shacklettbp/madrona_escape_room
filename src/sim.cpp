@@ -509,7 +509,8 @@ inline void rewardSystem(Engine &,
         float old_max_y = progress.maxY;
         float new_progress = reward_pos_y - old_max_y;
 
-        reward = (new_progress > 0) ? new_progress * consts::rewardPerDist : consts::slackReward;
+        // reward = (new_progress > 0) ? new_progress * consts::rewardPerDist : consts::slackReward;
+        reward = (new_progress > 0) ? new_progress * consts::rewardPerDist : 0;
     }
     else {
         // get reward for minimizing distance to button
