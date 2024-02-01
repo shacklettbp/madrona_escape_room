@@ -365,6 +365,8 @@ Manager::Impl * Manager::Impl::init(
         mgr_cfg.autoReset,
         mgr_cfg.simFlags,
         mgr_cfg.rewardMode,
+        mgr_cfg.buttonWidth,
+        mgr_cfg.doorWidth,
     };
 
     switch (mgr_cfg.execMode) {

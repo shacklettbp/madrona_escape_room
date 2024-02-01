@@ -59,6 +59,8 @@ struct Sim : public madrona::WorldBase {
         bool autoReset;
         SimFlags simFlags;
         RewardMode rewardMode;
+        float buttonWidth;
+        float doorWidth;
     };
 
     // Sim::registerTypes is called during initialization

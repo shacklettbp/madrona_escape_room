@@ -24,9 +24,9 @@ inline constexpr madrona::CountT maxObservationsPerAgent = 9;
 // Various world / entity size parameters
 inline constexpr float worldLength = 40.0f; //15.0f * numRooms;
 inline constexpr float worldWidth = 20.f;
-inline constexpr float doorWidth = worldWidth / 3.f;
+inline float doorWidth = worldWidth / 3.f; // Maybe should keep inline and remove extern...
 inline constexpr float wallWidth = 1.f;
-inline constexpr float buttonWidth = 1.3f;
+inline float buttonWidth = 1.3f;
 inline constexpr float keyWidth = 0.5f;
 inline constexpr float agentRadius = 1.f;
 inline constexpr float roomLength = worldLength / numRooms;

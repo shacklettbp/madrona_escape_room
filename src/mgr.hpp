@@ -31,6 +31,8 @@ public:
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
         SimFlags simFlags;
+        float buttonWidth;
+        float doorWidth;
         RewardMode rewardMode;
     };
 

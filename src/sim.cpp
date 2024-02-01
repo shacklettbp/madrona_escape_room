@@ -1581,7 +1581,11 @@ Sim::Sim(Engine &ctx,
 
     autoReset = cfg.autoReset;
 
-    simFlags = cfg.simFlags;
+    simFlags = cfg.simFlags; // VISHNU: remove this? seems like no-op
+
+    // Set the door and button width
+    consts::doorWidth = cfg.doorWidth;
+    consts::buttonWidth = cfg.buttonWidth;
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);
