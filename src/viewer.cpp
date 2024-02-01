@@ -161,9 +161,11 @@ int main(int argc, char *argv[])
         .numWorlds = num_worlds,
         .autoReset = replay_log.has_value(),
         .simFlags = SimFlags::Default,
+        .rewardMode = RewardMode::OG,
         .buttonWidth = 1.2f,
         .doorWidth = 20.0f/3.0f,
-        .rewardMode = RewardMode::OG,
+        .rewardPerDist = 0.05f,
+        .slackReward = -0.005f,
     }, viewer.rendererBridge());
 
     auto replayStep = [&]() {

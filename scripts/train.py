@@ -175,6 +175,8 @@ sim = madrona_escape_room.SimManager(
     reward_mode = reward_mode,
     button_width = 1.2,
     door_width = 20.0 / 3.,
+    reward_per_dist = 0.05,
+    slack_reward = -0.005,
 )
 
 use_warm_up = True

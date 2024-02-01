@@ -40,16 +40,20 @@ NB_MODULE(madrona_escape_room, m) {
                             uint32_t sim_flags,
                             RewardMode reward_mode,
                             float button_width,
-                            float door_width) {
+                            float door_width,
+                            float reward_per_dist,
+                            float slack_reward) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
                 .numWorlds = (uint32_t)num_worlds,
                 .autoReset = auto_reset,
                 .simFlags = SimFlags(sim_flags),
+                .rewardMode = reward_mode,
                 .buttonWidth = button_width,
                 .doorWidth = door_width,
-                .rewardMode = reward_mode,
+                .rewardPerDist = reward_per_dist,
+                .slackReward = slack_reward
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
@@ -58,7 +62,9 @@ NB_MODULE(madrona_escape_room, m) {
            nb::arg("sim_flags"),
            nb::arg("reward_mode"),
            nb::arg("button_width"),
-           nb::arg("door_width"))
+           nb::arg("door_width"),
+           nb::arg("reward_per_dist"),
+           nb::arg("slack_reward"))
         .def("step", &Manager::step)
         .def("checkpoint_reset_tensor", &Manager::checkpointResetTensor)
         .def("checkpoint_tensor", &Manager::checkpointTensor)

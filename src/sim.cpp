@@ -1586,6 +1586,8 @@ Sim::Sim(Engine &ctx,
     // Set the door and button width
     consts::doorWidth = cfg.doorWidth;
     consts::buttonWidth = cfg.buttonWidth;
+    consts::rewardPerDist = cfg.rewardPerDist;
+    consts::slackReward = cfg.slackReward;
 
     // Creates agents, walls, etc.
     createPersistentEntities(ctx);

@@ -367,6 +367,8 @@ Manager::Impl * Manager::Impl::init(
         mgr_cfg.rewardMode,
         mgr_cfg.buttonWidth,
         mgr_cfg.doorWidth,
+        mgr_cfg.rewardPerDist,
+        mgr_cfg.slackReward,
     };
 
     switch (mgr_cfg.execMode) {

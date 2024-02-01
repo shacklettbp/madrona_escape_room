@@ -31,9 +31,11 @@ public:
         uint32_t numWorlds; // Simulation batch size
         bool autoReset; // Immediately generate new world on episode end
         SimFlags simFlags;
+        RewardMode rewardMode;
         float buttonWidth;
         float doorWidth;
-        RewardMode rewardMode;
+        float rewardPerDist;
+        float slackReward;
     };
 
     MGR_EXPORT Manager(
