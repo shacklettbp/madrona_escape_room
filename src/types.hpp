@@ -118,7 +118,7 @@ struct DoorObservation {
 };
 
 struct RoomDoorObservations {
-    DoorObservation obs[4];
+    DoorObservation obs[consts::doorsPerRoom];
 };
 
 struct LidarSample {

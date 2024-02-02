@@ -240,9 +240,13 @@ static void resetPersistentEntities(Engine &ctx)
         }
 
          if (i % 2 == 0) {
-             pos.x += 2.f;
+            // TODO: restore
+            pos.x += consts::worldWidth / 4.f;
+            //pos.x += 2.f;
          } else {
-             pos.x -= 2.f;
+            // TODO: restore
+            pos.x -= consts::worldWidth / 4.f;
+            //pos.x -= 2.f;
          }
 
          ctx.get<Position>(agent_entity) = pos;

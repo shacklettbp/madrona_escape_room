@@ -21,13 +21,14 @@ inline constexpr madrona::CountT maxEntitiesPerRoom = 6; //20;
 inline constexpr madrona::CountT maxObservationsPerAgent = 9; //20;
 
 // Various world / entity size parameters
+inline constexpr float worldLength = 40.0f;
 inline constexpr float worldWidth = 20.f;
 inline constexpr float doorWidth = worldWidth / 3.f;
 inline constexpr float wallWidth = 1.f;
 inline constexpr float buttonWidth = 1.3f;
 inline constexpr float keyWidth = 0.5f;
 inline constexpr float agentRadius = 1.f;
-inline constexpr float roomLength = worldWidth;
+inline constexpr float roomLength = worldLength / maxRooms;
 
 inline constexpr int doorsPerRoom = 1; // TODO:restore 4
 inline constexpr int wallsPerRoom = 2; // TODO:restore 8

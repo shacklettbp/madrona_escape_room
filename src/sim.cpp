@@ -1455,8 +1455,9 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
-        exitRoomSystem,
-            Position,
+        stepTrackerSystem,
+        //exitRoomSystem,
+            StepsRemaining,
             Done
     //    >>({bonus_reward_sys});
         >>({reward_sys});
