@@ -14,7 +14,6 @@ import math
 from pathlib import Path
 import warnings
 warnings.filterwarnings("error")
-from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import time
 
@@ -140,7 +139,31 @@ class GoExplore:
             auto_reset = True,
             sim_flags = sim_flags,
             reward_mode = reward_mode,
+            button_width = 1.3,
+            door_width = 20.0 / 3.,
+            reward_per_dist = 0.05,
+            slack_reward = -0.005,
         )
+
+        # Do the warm up
+        use_warm_up = True
+        if use_warm_up:
+            steps_so_far = 0
+            warm_up = 32
+            while steps_so_far < 200:
+                for i in range(warm_up - 1):
+                    self.worlds.step()
+                resets = self.worlds.reset_tensor().to_torch().view(-1)
+                total_envs = resets.shape[0]
+                reset_min = (steps_so_far / 200)*(1. - args.new_frac) + args.new_frac # Added the last bit to compensate for resets
+                reset_max = ((steps_so_far + warm_up) / 200)*(1. - args.new_frac) + args.new_frac # Added the last bit to compensate for resets
+                resets[(int)(reset_min * total_envs):(int)(reset_max * total_envs)] = 1
+                print("Steps so far", steps_so_far)
+                print("Max length", 200)
+                print("Resetting", (int)(reset_min * total_envs), (int)(reset_max * total_envs))
+                self.worlds.step()
+                steps_so_far += warm_up
+
         self.num_worlds = num_worlds
         self.num_agents = 2
         self.curr_returns = torch.zeros(num_worlds, device = device) # For tracking cumulative return of each state/bin
@@ -164,7 +187,12 @@ class GoExplore:
         self.resets = self.worlds.reset_tensor().to_torch()
         self.bin_checkpoints = torch.zeros((self.num_bins, self.num_checkpoints, self.checkpoints.shape[-1]), device=device, dtype=torch.uint8)
         self.bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
+        self.start_bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
         self.world_steps = torch.zeros(self.num_worlds, device=device).int() + 200
+
+        # Start bin
+        start_bins = self.map_states_to_bins(self.obs)[0,:]
+        self.start_bin_steps[start_bins] = 0
 
         self.actions_num_buckets = [4, 8, 5, 2]
         self.action_space = Box(-float('inf'),float('inf'),(sum(self.actions_num_buckets),))
@@ -194,13 +222,22 @@ class GoExplore:
     # Step 1: Select state from archive
     # Uses: self.archive
     # Output: states
-    def select_state(self):
+    def select_state(self, update_id):
         #print("About to select state")
         # First select from visited bins with go-explore weighting function
         valid_bins = torch.nonzero(self.bin_count > 0).flatten()
-        weights = 1./(torch.sqrt(self.bin_count[valid_bins]) + 1)
+        weights = 1./(torch.sqrt(self.bin_count[valid_bins])*0 + 1)
+        '''
+        if self.max_progress > 1.01 and update_id > 1000:
+            # Dist from exit
+            exit_dist = (int)(20*(update_id / 5000))
+            # Pick bins that are relatively close to the exit...
+            #weights = torch.exp(-(self.bin_steps[valid_bins].float())*0.1*(5000/update_id))
+            #weights = (self.bin_steps[valid_bins] <= exit_dist).float()
+            weights = torch.exp(-(self.bin_steps[valid_bins].float() + self.start_bin_steps[valid_bins].float())*0.1)
+        '''
         # Sample bins
-        desired_samples = int(self.num_worlds*args.new_frac)
+        desired_samples = int(self.num_worlds*args.new_frac)#*((10001 - update_id) / 10000))
         sampled_bins = valid_bins[torch.multinomial(weights, num_samples=desired_samples, replacement=True).type(torch.int)]
         # Sample states from bins: either sample first occurrence in each bin (what's in the paper), or something better...
         # Need the last checkpoint for each bin
@@ -217,15 +254,22 @@ class GoExplore:
     # Input: states, worlds
     # Logic: For each state, set world to state
     # Output: None
-    def go_to_state(self, states):
+    def go_to_state(self, states, leave_rest, update_id):
         # Run checkpoint-restoration here
         print("Before go-to-state")
         print(self.obs[5][:])
-        desired_samples = int(self.num_worlds*args.new_frac) # Only set state for some worlds
+        desired_samples = int(self.num_worlds*args.new_frac) # *((10001 - update_id) / 10000)) # Only set state for some worlds
         self.checkpoint_resets[:, 0] = 1
         self.checkpoints[:desired_samples] = states
+        # Reset everything
+        '''
+        if not leave_rest:
+            print("Resetting non-checkpoint worlds")
+            goExplore.resets[desired_samples:, 0] = 1
+            goExplore.checkpoint_resets[desired_samples:, 0] = 0
+        '''
         self.worlds.step()
-        #self.obs[5][:desired_samples, 0] = 40*torch.randint(1, 6, size=(desired_samples,), dtype=torch.int, device=dev) # Maybe set this to random 40 to 200? # 200
+        self.obs[5][:desired_samples, 0] = 40 + torch.randint(0, 160, size=(desired_samples,), dtype=torch.int, device=dev) # Maybe set this to random 40 to 200? # 200
         print("After go-to-state")
         print(self.obs[5][:])
         return None
@@ -271,23 +315,23 @@ class GoExplore:
             # Bin according to the y position of each agent
             granularity = torch.sqrt(torch.tensor(self.num_bins) / 4).int().item()
             increment = 1.11/granularity
-            self_obs = states[0].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            self_obs = states[0].view(-1, self.num_worlds, self.num_agents, 9)
             y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
-            door_obs = states[3].view(args.steps_per_update, self.num_worlds, self.num_agents, -1)
+            door_obs = states[3].view(-1, self.num_worlds, self.num_agents, 3)
             door_status = door_obs[..., 0, 2] + 2*door_obs[..., 1, 2]
             #print(door_status)
             return (y_0 + granularity*y_1 + granularity*granularity*door_status).int()
         elif self.binning == "x_y_pos_door":
             # Bin according to the y position of each agent
             granularity = torch.sqrt(torch.tensor(self.num_bins) / 64).int().item()
-            increment = 1.33/granularity
+            increment = 1.11/granularity
             print("States 0 shape", states[0].shape)
             self_obs = states[0].view(-1, self.num_worlds, self.num_agents, 9)
-            y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.3) // increment # Granularity of 0.01 on the y
-            y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.3) // increment # Granularity of 0.01 on the y
+            y_0 = torch.clamp(self_obs[..., 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
+            y_1 = torch.clamp(self_obs[..., 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             x_0 = (torch.clamp(self_obs[..., 0, 2], -0.2, 0.2) + 0.2) // 0.101 #
             x_1 = (torch.clamp(self_obs[..., 1, 2], -0.2, 0.2) + 0.2) // 0.101 #
             #print("Max y progress", self_obs[:, 0, 3].max())
@@ -333,6 +377,7 @@ class GoExplore:
         #self.bin_steps[bins] = torch.minimum(self.bin_steps[bins], self.bin_steps[prev_bins] + 1)
         for i in range(1, args.steps_per_update):
             self.bin_steps[prev_bins[-i]] = torch.minimum(self.bin_steps[prev_bins[-i]], self.bin_steps[bins[-i]] + 1)
+            self.start_bin_steps[bins[i - 1]] = torch.minimum(self.start_bin_steps[bins[i - 1]], self.start_bin_steps[prev_bins[i - 1]] + 1)
 
     # Step 5: Update archive
     def update_archive(self, bins, scores):
@@ -367,7 +412,7 @@ class GoExplore:
 
         if not skip_log:
             # Only log stuff from the worlds where we're not setting state
-            desired_samples = int(self.num_worlds*args.new_frac)*self.num_agents
+            desired_samples = int(self.num_worlds*args.new_frac)#*((10001 - update_id) / 10000))*self.num_agents
             print("Desired samples", desired_samples)
             with torch.no_grad():
                 print(update_results.rewards.shape)
@@ -388,12 +433,12 @@ class GoExplore:
                 print("Update results shape", update_results.obs[0].shape, update_results.obs[3].shape)
                 second_room_count = (update_results.obs[0][...,3] > 0.34)[:,:,desired_samples:].float().mean()
                 third_room_count = (update_results.obs[0][...,3] > 0.67)[:,:,desired_samples:].float().mean()
-                exit_count = (update_results.obs[0][...,3] > 1.01)[:,:,desired_samples:].float().mean()
+                exit_count = (update_results.obs[0][...,3] > 1.00)[:,:,desired_samples:].float().mean()
                 door_count = (update_results.obs[3][...,2] > 0.5)[:,:,desired_samples:].float().mean()
 
                 second_room_count_unfiltered = (update_results.obs[0][...,3] > 0.34).float().mean()
                 third_room_count_unfiltered = (update_results.obs[0][...,3] > 0.67).float().mean()
-                exit_count_unfiltered = (update_results.obs[0][...,3] > 1.01).float().mean()
+                exit_count_unfiltered = (update_results.obs[0][...,3] > 1.00).float().mean()
                 door_count_unfiltered = (update_results.obs[3][...,2] > 0.5).float().mean()
 
                 value_mean = update_results.values[:,desired_samples:].mean().cpu().item()
@@ -485,8 +530,8 @@ class GoExplore:
         #print("Max return", torch.max(self.curr_returns), self.worlds.obs[torch.argmax(self.curr_returns)])
         self.update_archive(new_bins, self.curr_returns)
         # Set new state, go to state
-        states = self.select_state()
-        self.go_to_state(states)
+        states = self.select_state(update_id)
+        self.go_to_state(states, leave_rest = (update_id % 5 != 0), update_id = update_id)
 
 # Maybe we can just write Go-Explore as a callback
 
