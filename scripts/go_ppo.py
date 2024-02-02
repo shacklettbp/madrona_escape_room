@@ -383,6 +383,8 @@ class GoExplore:
     def update_archive(self, bins, scores):
         # For each unique bin, update count in archive and update best score
         # At most can increase bin count by 1 in a single step...
+        desired_samples = int(self.num_worlds*args.new_frac) # Only store checkpoints from "fresh" worlds
+        bins = bins[desired_samples:]
         new_bin_counts = (torch.bincount(bins, minlength=self.num_bins) > 0).int()
         # Set the checkpoint for each bin to the latest
         #print(self.checkpoints)
@@ -390,7 +392,7 @@ class GoExplore:
         self.bin_count += new_bin_counts
         #print(chosen_checkpoints)
         #print(bins)
-        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints # Will this have double-writes? Yes, shouldn't matter
+        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints[desired_samples:] # Will this have double-writes? Yes, shouldn't matter
         #self.bin_score[bins] = torch.maximum(self.bin_score[bins], scores)
         return None
 

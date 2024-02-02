@@ -470,16 +470,16 @@ def _update_loop(update_iter_fn : Callable,
         if False:
             if total_second_room_ckpts > 0:
                 # Set the first 2000 worlds to randomly-selected second room checkpoints
-                checkpoint_indices = torch.randint(0, total_second_room_ckpts, (2000,))
+                checkpoint_indices = torch.randint(0, total_second_room_ckpts, (1000,))
                 print("Checkpoint indices", checkpoint_indices.shape, checkpoint_indices[:10])
                 print(second_room_ckpts[0])
                 #print("Before setting checkpoints", sim.checkpoints[:2000])
-                sim.checkpoints[:2000] = second_room_ckpts[checkpoint_indices]
+                sim.checkpoints[:1000] = second_room_ckpts[checkpoint_indices]
                 #print("After setting checkpoints", sim.checkpoints[:2000])
             if total_third_room_ckpts > 0:
                 # Set the next 2000 worlds to randomly-selected third room checkpoints
-                checkpoint_indices = torch.randint(0, total_third_room_ckpts, (2000,))
-                sim.checkpoints[2000:4000] = third_room_ckpts[checkpoint_indices]
+                checkpoint_indices = torch.randint(0, total_third_room_ckpts, (3000,))
+                sim.checkpoints[1000:4000] = third_room_ckpts[checkpoint_indices]
             # After reset, step to collect observations for the next rollout.
             if total_second_room_ckpts > 0:
                 sim.resets[:, 0] = 1
@@ -488,7 +488,7 @@ def _update_loop(update_iter_fn : Callable,
                 print("Just ran a reset")
 
             # Print steps_remaining
-            sim.obs[5][:8000] = 200
+            sim.obs[5][:8000] = 40 + torch.randint(0, 160, size=(8000,1), dtype=torch.int, device=sim.obs[5].device)
 
         print("Update", update_idx)
         print("Steps remaining", sim.obs[5][:8000])
@@ -533,11 +533,13 @@ def _update_loop(update_iter_fn : Callable,
         # We can also start introducing the binning function here
         if False:
             print("Tensor shape", sim.obs[0].shape)
-            per_world_tensor = sim.obs[0].reshape(-1, 2, 8) # 8 features, 2 agents
+            per_world_tensor = sim.obs[0].reshape(-1, 2, 9) # 9 features, 2 agents
             third_room_flag = (per_world_tensor[...,3] > 0.67)
             second_room_flag = (per_world_tensor[...,3] > 0.34) ^ third_room_flag
             third_room_flag = third_room_flag.sum(dim=1) > 0
             second_room_flag = second_room_flag.sum(dim=1) > 0
+            second_room_flag[:4000] = 0 # Only add instances from fresh worlds
+            third_room_flag[:4000] = 0 # Only add instances from fresh worlds
             num_second_room = second_room_flag.sum()
             num_third_room = third_room_flag.sum()
             print(num_second_room, "agents in second room")
