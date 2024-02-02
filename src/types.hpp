@@ -216,10 +216,10 @@ struct Room {
     Entity entities[consts::maxEntitiesPerRoom];
 
     // The walls that separate this room from the next
-    Entity walls[8];
+    Entity walls[consts::wallsPerRoom];
 
     // The door the agents need to figure out how to lower
-    Entity door[4];
+    Entity door[consts::doorsPerRoom];
 };
 
 // A singleton component storing the state of all the rooms in the current

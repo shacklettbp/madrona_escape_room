@@ -136,12 +136,12 @@ static inline void cleanupWorld(Engine &ctx)
                 ctx.destroyRenderableEntity(room.entities[j]);
             }
         }
-        for (int32_t j = 0; j < 8; ++j) {
+        for (int32_t j = 0; j < consts::wallsPerRoom; ++j) {
             if (room.walls[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.walls[j]);
             }
         }
-        for (int32_t j = 0; j < 4; ++j) {
+        for (int32_t j = 0; j < consts::doorsPerRoom; ++j) {
             if (room.door[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.door[j]);
             }
@@ -863,7 +863,7 @@ inline void collectObservationsSystem(Engine &ctx,
         DoorObservation door_ob;
         door_ob.polar = {0.f, 1.f};
         door_ob.isOpen = -1.0f;
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < consts::doorsPerRoom; ++i)
         {
             room_door_obs.obs[i] = door_ob;
         }
@@ -1163,7 +1163,7 @@ inline void complexSparseRewardSystem(Engine &ctx,
     int32_t numRooms = ctx.singleton<RoomCount>().count;
     for (int32_t i = 0; i < numRooms; i++) {
         Room &room = level.rooms[i];
-        for (int32_t j = 0; j < 4; ++j) {
+        for (int32_t j = 0; j < consts::doorsPerRoom; ++j) {
             if (room.door[j] != Entity::none()) {
                 DoorProperties &props = ctx.get<DoorProperties>(room.door[j]);
                 OpenState &open = ctx.get<OpenState>(room.door[j]);
@@ -1612,7 +1612,7 @@ Sim::Sim(Engine &ctx,
     // createPersistentEntities must know the RoomCount
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
-            ctx.singleton<RoomCount>().count = 8;
+            ctx.singleton<RoomCount>().count = 3; // TODO: restore
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }

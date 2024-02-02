@@ -874,6 +874,7 @@ static CountT makeSingleButtonRoom(Engine &ctx,
     for (int i = 0; i < consts::maxEntitiesPerRoom; ++i) {
         if (room.entities[i] == Entity::none()) {
             room.entities[i] = button;
+            break;
         }
     }
 
@@ -1081,10 +1082,10 @@ static int32_t makeComplexRoom(Engine &ctx,
         room.entities[i] = Entity::none();
     }
     // These limits are independent of the number of rooms.
-    for (CountT i = 0; i < 8; i++) {
+    for (CountT i = 0; i < consts::wallsPerRoom; i++) {
         room.walls[i] = Entity::none();
     }
-    for (CountT i = 0; i < 4; i++) {
+    for (CountT i = 0; i < consts::doorsPerRoom; i++) {
         room.door[i] = Entity::none();
     }
 
@@ -1188,10 +1189,10 @@ static void makeRoom(Engine &ctx,
         room.entities[i] = Entity::none();
     }
     // These limits are independent of the number of rooms.
-    for (CountT i = 0; i < 8; i++) {
+    for (CountT i = 0; i < consts::wallsPerRoom; i++) {
         room.walls[i] = Entity::none();
     }
-    for (CountT i = 0; i < 4; i++) {
+    for (CountT i = 0; i < consts::doorsPerRoom; i++) {
         room.door[i] = Entity::none();
     }
 
@@ -1251,9 +1252,9 @@ static void generateComplexLevel(Engine &ctx)
 {
     LevelState &level = ctx.singleton<LevelState>();
 
-    DoorRep doorList[consts::maxRooms * 4];
+    DoorRep doorList[consts::maxRooms * consts::doorsPerRoom];
     int32_t doorIdx = 0;
-    for (int i = 0; i < consts::maxRooms * 4; ++i) {
+    for (int i = 0; i < consts::maxRooms * consts::doorsPerRoom; ++i) {
         doorList[i].roomIdx = -1;
         doorList[i].code = 0;
         doorList[i].exit = false;
@@ -1332,7 +1333,7 @@ static void generateComplexLevel(Engine &ctx)
     auto removeBlockedDoors = [&](int32_t newRoomIdx){
         int32_t newRoomX = roomList[newRoomIdx].x;
         int32_t newRoomY = roomList[newRoomIdx].y;
-        for (int i = 0; i < consts::maxRooms * 4; ++i) {
+        for (int i = 0; i < consts::maxRooms * consts::doorsPerRoom; ++i) {
             Entity d = doorList[i].door;
             if (d != Entity::none()) {
                 const RoomRep &doorRoom = roomList[doorList[i].roomIdx];
@@ -1370,7 +1371,7 @@ static void generateComplexLevel(Engine &ctx)
         doorIdx += makeComplexRoom(ctx, level, i, roomList, &doorList[doorIdx]);
     }
 
-    for (int i = 0; i < consts::maxRooms * 4; ++i) {
+    for (int i = 0; i < consts::maxRooms * consts::doorsPerRoom; ++i) {
         if (doorList[i].door == Entity::none() || doorList[i].code == 0) {
             continue;
         }
