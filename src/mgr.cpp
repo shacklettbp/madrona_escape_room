@@ -767,7 +767,7 @@ Tensor Manager::checkpointResetTensor() const {
                                Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
-                                   1
+                                   sizeof(CheckpointReset) / sizeof(int32_t)
                                });
 }
 
@@ -786,7 +786,7 @@ Tensor Manager::resetTensor() const
                                Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
-                                   1,
+                                   sizeof(WorldReset) / sizeof(int32_t)
                                });
 }
 
@@ -795,7 +795,7 @@ Tensor Manager::actionTensor() const
     return impl_->exportTensor(ExportID::Action, Tensor::ElementType::Int32,
         {
             impl_->cfg.numWorlds * consts::numAgents,
-            4,
+            sizeof(Action) / sizeof(int32_t),
         });
 }
 
@@ -804,7 +804,7 @@ Tensor Manager::rewardTensor() const
     return impl_->exportTensor(ExportID::Reward, Tensor::ElementType::Float32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   1,
+                                   sizeof(Reward) / sizeof(float),
                                });
 }
 
@@ -813,7 +813,7 @@ Tensor Manager::doneTensor() const
     return impl_->exportTensor(ExportID::Done, Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   1,
+                                   sizeof(Done) / sizeof(int32_t),
                                });
 }
 
@@ -834,7 +834,7 @@ Tensor Manager::partnerObservationsTensor() const
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
                                    consts::numAgents - 1,
-                                   3,
+                                   sizeof(PartnerObservation) / sizeof(float),
                                });
 }
 
@@ -845,7 +845,7 @@ Tensor Manager::roomEntityObservationsTensor() const
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
                                    consts::maxObservationsPerAgent,
-                                   3,
+                                   sizeof(EntityObservation) / sizeof(float),
                                });
 }
 
@@ -856,7 +856,7 @@ Tensor Manager::roomDoorObservationsTensor() const
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
                                    consts::doorsPerRoom,
-                                   3
+                                   sizeof(DoorObservation) / sizeof(float)
                                });
 }
 
@@ -866,7 +866,7 @@ Tensor Manager::lidarTensor() const
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
                                    consts::numLidarSamples,
-                                   2,
+                                   sizeof(LidarSample) / sizeof(float),
                                });
 }
 
@@ -876,7 +876,7 @@ Tensor Manager::stepsRemainingTensor() const
                                Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   1,
+                                   sizeof(StepsRemaining) / sizeof(int32_t),
                                });
 }
 
@@ -886,7 +886,7 @@ Tensor Manager::agentIDTensor() const
                                Tensor::ElementType::Int32,
                                {
                                    impl_->cfg.numWorlds * consts::numAgents,
-                                   1,
+                                   sizeof(AgentID) / sizeof(int32_t),
                                });
 }
 

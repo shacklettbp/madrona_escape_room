@@ -1613,7 +1613,7 @@ Sim::Sim(Engine &ctx,
     // createPersistentEntities must know the RoomCount
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==
             SimFlags::UseComplexLevel) {
-            ctx.singleton<RoomCount>().count = 3; // TODO: restore
+            ctx.singleton<RoomCount>().count = consts::maxRooms;
         } else {
             ctx.singleton<RoomCount>().count = 3;
         }
