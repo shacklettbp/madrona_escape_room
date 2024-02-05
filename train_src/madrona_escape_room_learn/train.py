@@ -357,6 +357,7 @@ def _update_iter(cfg : TrainConfig,
                  scheduler : torch.optim.lr_scheduler.LRScheduler,
                  value_normalizer : EMANormalizer,
                  replay_buffer: NStepReplay,
+                 user_cb,
             ):
     with torch.no_grad():
         actor_critic.eval()
@@ -370,6 +371,24 @@ def _update_iter(cfg : TrainConfig,
             #rollouts = replay_buffer.get_last(rollouts)
             #print("Testing: load multiple from buffer")
             #rollouts = replay_buffer.get_multiple(rollouts)
+            
+            # Now modify the rewards in the rollouts by adding reward when closer to "exit"
+            if type(user_cb).__name__ == "GoExplore":
+                # Compute change in exit dist
+                all_bins = user_cb.map_states_to_bins(rollouts.obs) # num_timesteps * num_worlds
+                #if user_cb.max_progress < 1.01:
+                reward_bonus_1 = user_cb.start_bin_steps[all_bins]
+                #print(reward_bonus_1.sum(axis=0))
+                rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] *= 0
+                rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_1[...,None].repeat(1,1,2).view(reward_bonus_1.shape[0],-1,1) * user_cb.bin_reward_boost * 0.5
+                max_bin_steps = 200
+                if user_cb.bin_steps[user_cb.bin_steps < 200].size(dim=0) > 0:
+                    max_bin_steps = user_cb.bin_steps[user_cb.bin_steps < 200].max()
+                reward_bonus_2 = max_bin_steps - user_cb.bin_steps[all_bins]
+                reward_bonus_2[reward_bonus_2 < 0] = 0
+                #reward_bonus = (user_cb.bin_steps[all_bins[1:]] < user_cb.bin_steps[all_bins[:-1]]).float() - (user_cb.bin_steps[all_bins[1:]] > user_cb.bin_steps[all_bins[:-1]]).float()
+                #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:-1] += reward_bonus[...,None].repeat(1,1,2).view(reward_bonus.shape[0],-1,1) * user_cb.bin_reward_boost
+                rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_2[...,None].repeat(1,1,2).view(reward_bonus_2.shape[0],-1,1) * user_cb.bin_reward_boost
 
         # Dump the rollout
         '''
@@ -516,6 +535,7 @@ def _update_loop(update_iter_fn : Callable,
                 learning_state.scheduler,
                 learning_state.value_normalizer,
                 replay_buffer,
+                user_cb,
             )
 
             gpu_sync_fn()

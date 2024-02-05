@@ -189,6 +189,7 @@ class GoExplore:
         self.bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
         self.start_bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
         self.world_steps = torch.zeros(self.num_worlds, device=device).int() + 200
+        self.bin_reward_boost = 0.01
 
         # Start bin
         start_bins = self.map_states_to_bins(self.obs)[0,:]

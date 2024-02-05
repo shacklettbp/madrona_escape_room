@@ -1105,11 +1105,11 @@ inline void sparseRewardSystem(Engine &,
     float reward = 0.0f;
     if (reward_pos > 14.0f && old_max_y < 14.0f) {
         // Passed the first room
-        reward = 1.0f;
+        reward += 1.0f;
     } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
-        reward = 1.0f;
+        reward += 1.0f;
     } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
-        reward = 1.0f;
+        reward += 1.0f;
     }
 
     // Update maxY
@@ -1134,32 +1134,20 @@ inline void sparseRewardSystem2(Engine &ctx,
     float reward_pos = fminf(pos.y, consts::worldLength * 2);
 
     float reward = 0.0f;
-    /*
-    if (reward_pos > 14.0f) {
-        // Passed the first room
-        reward += 0.01f;
-    }
-    if (reward_pos > 28.0f) {
-        reward += 0.01f;
-    }
-    */
     CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    if (cur_room_idx == 3) {
-        reward += 0.01f;
-    }
+    reward += cur_room_idx*0.02f;
 
-    /*
     // Provide reward for open doors
-    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    const LevelState &level = ctx.singleton<LevelState>();
-    const Room &room = level.rooms[cur_room_idx];
-    Entity cur_door = room.door;
-    //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
-    OpenState door_open_state = ctx.get<OpenState>(cur_door);
-    //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
-    float isOpen = door_open_state.isOpen ? 1.f : 0.f;
-    reward += isOpen*0.01f; // Maybe add scaling to this
-    */
+    if (cur_room_idx < 3) {
+        const LevelState &level = ctx.singleton<LevelState>();
+        const Room &room = level.rooms[cur_room_idx];
+        Entity cur_door = room.door;
+        //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
+        OpenState door_open_state = ctx.get<OpenState>(cur_door);
+        //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
+        float isOpen = door_open_state.isOpen ? 1.f : 0.f;
+        reward += isOpen*0.01f; // Maybe add scaling to this
+    }
     
     out_reward.v = reward;
 }
