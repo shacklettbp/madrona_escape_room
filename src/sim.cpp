@@ -986,7 +986,8 @@ inline void lidarSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void denseRewardSystem(Engine &,
+/*
+inline void denseRewardSystem(Engine &e,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
@@ -1015,6 +1016,7 @@ inline void denseRewardSystem(Engine &,
 
     out_reward.v = reward;
 }
+*/
 
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
@@ -1155,6 +1157,32 @@ inline void sparseRewardSystem2(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
+inline void sparseRewardSystem3(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float reward = 0.0f;
+    if (reward_pos > 41.0f){// && old_max_y < 41.0f) {
+        reward += 0.1f;
+    }
+
+    // Update maxY
+    if (reward_pos > old_max_y) {
+        progress.maxY = reward_pos;
+    }
+
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
 inline void rewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
@@ -1181,7 +1209,7 @@ inline void rewardSystem(Engine &,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void rewardSystemFixed(Engine &,
+inline void denseRewardSystem(Engine &,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
@@ -1410,6 +1438,13 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     } else if (cfg.rewardMode == RewardMode::Sparse2) {
         reward_sys = builder.addToGraph<ParallelForNode<Engine,
              sparseRewardSystem2,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
+    } else if (cfg.rewardMode == RewardMode::Sparse3) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             sparseRewardSystem3,
                 Position,
                 Progress,
                 Reward

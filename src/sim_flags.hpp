@@ -17,6 +17,7 @@ enum class RewardMode : uint32_t {
     Dense3,
     Sparse1,
     Sparse2,
+    Sparse3,
 };
 
 inline SimFlags & operator|=(SimFlags &a, SimFlags b);

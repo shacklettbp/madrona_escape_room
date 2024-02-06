@@ -379,7 +379,7 @@ def _update_iter(cfg : TrainConfig,
                 #if user_cb.max_progress < 1.01:
                 reward_bonus_1 = user_cb.start_bin_steps[all_bins]
                 #print(reward_bonus_1.sum(axis=0))
-                rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] *= 0
+                #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] *= 0
                 rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_1[...,None].repeat(1,1,2).view(reward_bonus_1.shape[0],-1,1) * user_cb.bin_reward_boost * 0.5
                 max_bin_steps = 200
                 if user_cb.bin_steps[user_cb.bin_steps < 200].size(dim=0) > 0:
@@ -388,7 +388,7 @@ def _update_iter(cfg : TrainConfig,
                 reward_bonus_2[reward_bonus_2 < 0] = 0
                 #reward_bonus = (user_cb.bin_steps[all_bins[1:]] < user_cb.bin_steps[all_bins[:-1]]).float() - (user_cb.bin_steps[all_bins[1:]] > user_cb.bin_steps[all_bins[:-1]]).float()
                 #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:-1] += reward_bonus[...,None].repeat(1,1,2).view(reward_bonus.shape[0],-1,1) * user_cb.bin_reward_boost
-                rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_2[...,None].repeat(1,1,2).view(reward_bonus_2.shape[0],-1,1) * user_cb.bin_reward_boost
+                #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_2[...,None].repeat(1,1,2).view(reward_bonus_2.shape[0],-1,1) * user_cb.bin_reward_boost
 
         # Dump the rollout
         '''
