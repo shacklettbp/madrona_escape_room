@@ -415,7 +415,7 @@ class GoExplore:
 
         if not skip_log:
             # Only log stuff from the worlds where we're not setting state
-            desired_samples = int(self.num_worlds*args.new_frac)#*((10001 - update_id) / 10000))*self.num_agents
+            desired_samples = int(self.num_worlds*args.new_frac)*self.num_agents#*((10001 - update_id) / 10000))*self.num_agents
             print("Desired samples", desired_samples)
             with torch.no_grad():
                 print(update_results.rewards.shape)
@@ -424,13 +424,19 @@ class GoExplore:
                 reward_max = update_results.rewards[:,desired_samples:].max().cpu().item()
 
                 done_count = (update_results.dones[:,desired_samples:] == 1.0).sum()
-                return_mean, return_min, return_max = 0, 0, 0
+                return_mean, return_min, return_max, success_frac = 0, 0, 0, 0
                 print("Update results shape", update_results.returns.shape)
                 if done_count > 0:
                     print("Update results shape", update_results.returns[update_results.dones == 1.0].shape)
                     return_mean = update_results.returns[:,desired_samples:][update_results.dones[:,desired_samples:] == 1.0].mean().cpu().item()
                     return_min = update_results.returns[:,desired_samples:][update_results.dones[:,desired_samples:] == 1.0].min().cpu().item()
                     return_max = update_results.returns[:,desired_samples:][update_results.dones[:,desired_samples:] == 1.0].max().cpu().item()
+                    #success_frac = update_results.obs[0][update_results.dones == 1.0, ..., 3].mean().cpu().item()
+                    #print((update_results.obs[0][...,3] > 1.00).shape)
+                    #print((update_results.obs[0][...,3] > 1.00)[:,:,desired_samples:].shape)
+                    success_filter = (update_results.dones[:,desired_samples:] == 1.0)[...,0]
+                    #print(success_filter.shape)
+                    success_frac = (update_results.obs[0][...,3] > 1.00)[:,:,desired_samples:].reshape(-1, success_filter.shape[-1])[success_filter].float().mean().cpu().item()
 
                 # compute visits to second and third room
                 print("Update results shape", update_results.obs[0].shape, update_results.obs[3].shape)
@@ -493,6 +499,7 @@ class GoExplore:
                 "vnorm_mu": vnorm_mu,
                 "steps_to_end": avg_steps,
                 "max_progress": self.max_progress,
+                "success_frac": success_frac,
                 }
             )
 

@@ -84,11 +84,14 @@ class LearningCallback:
             reward_max = update_results.rewards.max().cpu().item()
 
             done_count = (update_results.dones == 1.0).sum()
-            return_mean, return_min, return_max = 0, 0, 0
+            return_mean, return_min, return_max, success_frac = 0, 0, 0, 0
             if done_count > 0:
                 return_mean = update_results.returns[update_results.dones == 1.0].mean().cpu().item()
                 return_min = update_results.returns[update_results.dones == 1.0].min().cpu().item()
                 return_max = update_results.returns[update_results.dones == 1.0].max().cpu().item()
+                success_filter = (update_results.dones == 1.0)[...,0]
+                #print(success_filter.shape)
+                success_frac = (update_results.obs[0][...,3] > 1.00).reshape(-1, success_filter.shape[-1])[success_filter].float().mean().cpu().item()
 
             # compute visits to second and third room
             print("Update results shape", update_results.obs[0].shape, update_results.obs[3].shape)
@@ -142,6 +145,7 @@ class LearningCallback:
             "exit_count": exit_count,
             "door_count": door_count,
             "vnorm_mu": vnorm_mu,
+            "success_frac": success_frac,
             }
         )
 
