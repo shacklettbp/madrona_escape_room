@@ -286,7 +286,7 @@ class GoExplore:
             # Update archive
             #print(self.curr_returns.shape)
             #print(self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1).shape)
-            self.curr_returns += self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1)
+            self.curr_returns += self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1).to(self.curr_returns.device)
             self.max_return = max(self.max_return, torch.max(self.curr_returns).item())
             #print(self.dones.shape)
             #print(self.dones)
@@ -393,7 +393,7 @@ class GoExplore:
         self.bin_count += new_bin_counts
         #print(chosen_checkpoints)
         #print(bins)
-        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints[desired_samples:] # Will this have double-writes? Yes, shouldn't matter
+        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints[desired_samples:].to(dev) # Will this have double-writes? Yes, shouldn't matter
         #self.bin_score[bins] = torch.maximum(self.bin_score[bins], scores)
         return None
 
@@ -532,11 +532,11 @@ class GoExplore:
         # Update archive
         #print(self.curr_returns.shape)
         #print(self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1).shape)
-        self.curr_returns += self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1)
+        self.curr_returns += self.rewards.view(self.num_worlds,self.num_agents).sum(dim=1).to(self.curr_returns.device)
         self.max_return = max(self.max_return, torch.max(self.curr_returns).item())
         #print(self.dones.shape)
         #print(self.dones)
-        self.curr_returns *= (1 - 0.5*self.dones.view(self.num_worlds,self.num_agents).sum(dim=1)) # Account for dones, this is working!
+        self.curr_returns *= (1 - 0.5*self.dones.view(self.num_worlds,self.num_agents).sum(dim=1)).to(self.curr_returns.device) # Account for dones, this is working!
         #print("Max return", torch.max(self.curr_returns), self.worlds.obs[torch.argmax(self.curr_returns)])
         self.update_archive(new_bins, self.curr_returns)
         # Set new state, go to state
