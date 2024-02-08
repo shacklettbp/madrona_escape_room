@@ -134,16 +134,19 @@ static inline void cleanupWorld(Engine &ctx)
         for (CountT j = 0; j < consts::maxEntitiesPerRoom; j++) {
             if (room.entities[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.entities[j]);
+                room.entities[j] = Entity::none();
             }
         }
         for (int32_t j = 0; j < consts::wallsPerRoom; ++j) {
             if (room.walls[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.walls[j]);
+                room.walls[j] = Entity::none();
             }
         }
         for (int32_t j = 0; j < consts::doorsPerRoom; ++j) {
             if (room.door[j] != Entity::none()) {
                 ctx.destroyRenderableEntity(room.door[j]);
+                room.door[j] = Entity::none();
             }
         }
     }
