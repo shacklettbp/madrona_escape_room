@@ -1242,6 +1242,12 @@ static void generateLevel(Engine &ctx)
     for (CountT i = 0; i < consts::maxRooms; i++) {
         RoomType room_type = (RoomType)(
             ctx.data().rng.rand() * (uint32_t)RoomType::NumTypes);
+        
+        if (room_type == RoomType::Key) {
+            // For the simple room, exclude key rooms.
+            i -= 1;
+            continue;
+        }
 
         makeRoom(ctx, level, i, room_type);
     }
