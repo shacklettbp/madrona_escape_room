@@ -189,7 +189,7 @@ class RolloutManager:
                 returns_store = self.returns[bptt_chunk, slot]
                 returns_store.copy_(curr_returns)
                 curr_returns = curr_returns*(1 - self.dones[bptt_chunk, slot].float()) + self.rewards[bptt_chunk, slot]
-        self.returns[0, 0].copy_(curr_returns)
+        self.returns[0, 0].copy_(curr_returns) # For tracking the next rollout's returns
 
         if self.need_obs_copy:
             final_obs = self.final_obs

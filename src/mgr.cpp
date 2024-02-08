@@ -559,6 +559,10 @@ Manager::Impl * Manager::Impl::init(
         mgr_cfg.simFlags,
         mgr_cfg.rewardMode,
         nullptr,
+        mgr_cfg.buttonWidth,
+        mgr_cfg.doorWidth,
+        mgr_cfg.rewardPerDist,
+        mgr_cfg.slackReward,
     };
 
     switch (mgr_cfg.execMode) {

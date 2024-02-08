@@ -140,6 +140,10 @@ class GoExplore:
         self.bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
         self.world_steps = torch.zeros(self.num_worlds, device=device).int() + 200
 
+        # Need to only keep shortest path so far
+        self.checkpoint_steps = torch.zeros((self.num_bins, self.num_checkpoints), device=device).int() + 1000
+        self.curr_steps = torch.zeros(self.num_worlds, device=device).int()
+
         self.actions_num_buckets = [4, 8, 5, 2]
         self.action_space = Box(-float('inf'),float('inf'),(sum(self.actions_num_buckets),))
 
@@ -173,8 +177,11 @@ class GoExplore:
         sampled_bins = valid_bins[torch.multinomial(weights, num_samples=self.num_worlds, replacement=True).type(torch.int)]
         # Sample states from bins: either sample first occurrence in each bin (what's in the paper), or something better...
         # Need the last checkpoint for each bin
-        chosen_checkpoint = self.bin_count[sampled_bins] % self.num_checkpoints
+        chosen_checkpoint = (self.bin_count[sampled_bins] - 1) % self.num_checkpoints
         self.curr_returns[:] = self.checkpoint_score[[sampled_bins, chosen_checkpoint]]
+        self.curr_steps = self.checkpoint_steps[[sampled_bins, chosen_checkpoint]]
+        #print("Chosen checkpoints", chosen_checkpoint, self.bin_checkpoints[[sampled_bins, chosen_checkpoint]])
+        #print("Curr steps", self.curr_steps)
         return self.bin_checkpoints[[sampled_bins, chosen_checkpoint]]
 
     # Step 2: Go to state
@@ -197,6 +204,8 @@ class GoExplore:
             self.actions[:] = self.generate_random_actions()
             prev_bins = self.map_states_to_bins(self.obs)
             self.worlds.step()
+            # Increment steps
+            self.curr_steps += 1
             # Map states to bins
             new_bins = self.map_states_to_bins(self.obs)
             # Update archive
@@ -264,8 +273,8 @@ class GoExplore:
             self_obs = states[0].view(self.num_worlds, self.num_agents, -1)
             y_0 = torch.clamp(self_obs[:, 0, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
             y_1 = torch.clamp(self_obs[:, 1, 3], 0, 1.1) // increment # Granularity of 0.01 on the y
-            x_0 = (torch.clamp(self_obs[:, 0, 2], -0.2, 0.2) + 0.2) // 0.1 #
-            x_1 = (torch.clamp(self_obs[:, 1, 2], -0.2, 0.2) + 0.2) // 0.1 #
+            x_0 = (torch.clamp(self_obs[:, 0, 2], -0.2, 0.2) + 0.2) // 0.101 #
+            x_1 = (torch.clamp(self_obs[:, 1, 2], -0.2, 0.2) + 0.2) // 0.101 #
             #print("Max y progress", self_obs[:, 0, 3].max())
             # Now check if the door is open
             door_obs = states[3].view(self.num_worlds, self.num_agents, -1)
@@ -306,7 +315,6 @@ class GoExplore:
         # For each unique bin, update count in archive and update best score
         # At most can increase bin count by 1 in a single step...
         new_bin_counts = (torch.bincount(bins, minlength=self.num_bins) > 0).int()
-        self.bin_count += new_bin_counts
         # Only overwrite the checkpoints that offer a shorter path, after exit is achieved
         # Never mind, just track shortest path to bin
         if prev_bins is not None:
@@ -315,10 +323,19 @@ class GoExplore:
         # Set the checkpoint for each bin to the latest
         #print(self.checkpoints)
         chosen_checkpoints = self.bin_count[bins] % self.num_checkpoints
-        #print(chosen_checkpoints)
+        self.bin_count += new_bin_counts
+        # Set up checkpoint filter based on the num_steps
+        if self.max_progress > 1.01 or prev_bins is None:
+            checkpoint_filter = (self.checkpoint_steps[[bins, chosen_checkpoints]] >= self.curr_steps)
+        else:
+            checkpoint_filter = (self.checkpoint_steps[[bins, chosen_checkpoints]] > 0) # Don't overwrite the 0
         #print(bins)
-        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints # Will this have double-writes? Yes, shouldn't matter
+        if checkpoint_filter.shape[0] > 0:
+            self.bin_checkpoints[[bins[checkpoint_filter], chosen_checkpoints[checkpoint_filter]]] = self.checkpoints[checkpoint_filter] # Will this have double-writes? Yes, shouldn't matter
+            self.checkpoint_steps[[bins[checkpoint_filter], chosen_checkpoints[checkpoint_filter]]] = self.curr_steps[checkpoint_filter]
+        #self.bin_checkpoints[[bins, chosen_checkpoints]][bin_filter] = self.checkpoints[bin_filter] # Will this have double-writes? Yes, shouldn't matter
         #self.bin_score[bins] = torch.maximum(self.bin_score[bins], scores)
+        #print("Update archive", chosen_checkpoints, checkpoint_filter)
         return None
 
     # Compute best score from archive
@@ -353,6 +370,7 @@ def train(args):
     start_bin = goExplore.map_states_to_bins(goExplore.obs)
     # Set steps to 0 for start bins
     goExplore.bin_steps[start_bin] = 0
+    goExplore.checkpoint_steps[start_bin, 0] = 0
     goExplore.update_archive(start_bin, torch.zeros(args.num_worlds, device=dev))
     for i in range(args.num_steps):
         # Step 1: Select state from archive
@@ -388,7 +406,8 @@ def train(args):
             goExplore.max_progress = max(goExplore.max_progress, min(self_obs[:, 0, 3].max(), self_obs[:, 1, 3].max()))
             if goExplore.max_progress > 1.01:
                 exit_bins = goExplore.map_states_to_bins(goExplore.obs)[(goExplore.obs[0][...,3] > 1.01).view(goExplore.num_worlds, goExplore.num_agents)[:,0]]
-                writer.add_scalar("charts/exit_path_length", goExplore.bin_steps[exit_bins].float().mean(), global_step)
+                writer.add_scalar("charts/exit_path_length", goExplore.bin_steps[exit_bins].float().min(), global_step)
+                writer.add_scalar("charts/exit_num_steps", goExplore.checkpoint_steps[exit_bins].min(), global_step)
             if args.bin_diagnostic:
                 print("Hello there")
                 # Step 1: Select random states from archive that have all checkpoints filled. We want to run k parallel trials from each checkpoint

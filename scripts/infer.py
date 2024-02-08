@@ -45,7 +45,11 @@ sim = madrona_escape_room.SimManager(
     num_worlds = args.num_worlds,
     auto_reset = True,
     sim_flags = madrona_escape_room.SimFlags.Default,
-    reward_mode = madrona_escape_room.RewardMode.OG,
+    reward_mode = madrona_escape_room.RewardMode.Sparse3,
+    button_width = 1.3,
+    door_width = 20.0 / 3.,
+    reward_per_dist = 0.05,
+    slack_reward = -0.005,
 )
 
 obs, num_obs_features = setup_obs(sim)
@@ -74,13 +78,20 @@ else:
 for i in range(args.num_steps):
     with torch.no_grad():
         action_dists, values, cur_rnn_states = policy(cur_rnn_states, *obs)
-        action_dists.best(actions)
+        #action_dists.best(actions)
+        # Make placeholders for actions_out and log_probs_out
+        if False:
+            log_probs_out = torch.zeros_like(actions).float()
+            action_dists.sample(actions, log_probs_out)
+        else:
+            action_dists.best(actions)
 
         probs = action_dists.probs()
 
     if action_log:
         actions.cpu().numpy().tofile(action_log)
 
+    '''
     print()
     print("Self:", obs[0])
     print("Partners:", obs[1])
@@ -105,6 +116,7 @@ for i in range(args.num_steps):
 
     print("Actions:\n", actions.cpu().numpy())
     print("Values:\n", values.cpu().numpy())
+    '''
     sim.step()
     print("Rewards:\n", rewards)
 

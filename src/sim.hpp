@@ -65,6 +65,10 @@ struct Sim : public madrona::WorldBase {
         SimFlags simFlags;
         RewardMode rewardMode;
         const madrona::render::RenderECSBridge *renderBridge;
+        float buttonWidth;
+        float doorWidth;
+        float rewardPerDist;
+        float slackReward;
     };
 
     // Sim::registerTypes is called during initialization

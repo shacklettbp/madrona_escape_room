@@ -959,7 +959,8 @@ inline void lidarSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void denseRewardSystem(Engine &ctx,
+/*
+inline void denseRewardSystem(Engine &e,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
@@ -989,6 +990,7 @@ inline void denseRewardSystem(Engine &ctx,
 
     out_reward.v = reward;
 }
+*/
 
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
@@ -1086,11 +1088,11 @@ inline void sparseRewardSystem(Engine &ctx,
     float reward = 0.0f;
     if (reward_pos > 14.0f && old_max_y < 14.0f) {
         // Passed the first room
-        reward = 1.0f;
+        reward += 1.0f;
     } else if (reward_pos > 28.0f && old_max_y < 28.0f) {
-        reward = 1.0f;
+        reward += 1.0f;
     } else if (reward_pos > 41.0f && old_max_y < 41.0f) {
-        reward = 1.0f;
+        reward += 1.0f;
     }
 
     // Update maxY
@@ -1116,33 +1118,47 @@ inline void sparseRewardSystem2(Engine &ctx,
     float reward_pos = fminf(pos.y, (consts::roomLength * numRooms) * 2);
 
     float reward = 0.0f;
-    /*
-    if (reward_pos > 14.0f) {
-        // Passed the first room
-        reward += 0.01f;
-    }
-    if (reward_pos > 28.0f) {
-        reward += 0.01f;
-    }
-    */
     CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    if (cur_room_idx == 3) {
-        reward += 0.01f;
+    reward += cur_room_idx*0.02f;
+
+    // Provide reward for open doors
+    if (cur_room_idx < 3) {
+        const LevelState &level = ctx.singleton<LevelState>();
+        const Room &room = level.rooms[cur_room_idx];
+        Entity cur_door = room.door[0];
+        //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
+        OpenState door_open_state = ctx.get<OpenState>(cur_door);
+        //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
+        float isOpen = door_open_state.isOpen ? 1.f : 0.f;
+        reward += isOpen*0.01f; // Maybe add scaling to this
+    }
+    
+    out_reward.v = reward;
+}
+
+// Computes reward for each agent and keeps track of the max distance achieved
+// so far through the challenge. Continuous reward is provided for any new
+// distance achieved.
+inline void sparseRewardSystem3(Engine &,
+                         Position pos,
+                         Progress &progress,
+                         Reward &out_reward)
+{
+    // Just in case agents do something crazy, clamp total reward
+    float reward_pos = fminf(pos.y, consts::worldLength * 2);
+
+    float old_max_y = progress.maxY;
+
+    float reward = 0.0f;
+    if (reward_pos > 41.0f){// && old_max_y < 41.0f) {
+        reward += 0.1f;
     }
 
-    /*
-    // Provide reward for open doors
-    CountT cur_room_idx = CountT(pos.y / consts::roomLength);
-    const LevelState &level = ctx.singleton<LevelState>();
-    const Room &room = level.rooms[cur_room_idx];
-    Entity cur_door = room.door;
-    //Vector3 door_pos = ctx.get<Position>(cur_door); // Could provide reward for approaching open door
-    OpenState door_open_state = ctx.get<OpenState>(cur_door);
-    //door_obs.polar = xyToPolar(to_view.rotateVec(door_pos - pos));
-    float isOpen = door_open_state.isOpen ? 1.f : 0.f;
-    reward += isOpen*0.01f; // Maybe add scaling to this
-    */
-    
+    // Update maxY
+    if (reward_pos > old_max_y) {
+        progress.maxY = reward_pos;
+    }
+
     out_reward.v = reward;
 }
 
@@ -1208,7 +1224,7 @@ inline void rewardSystem(Engine &ctx,
 // Computes reward for each agent and keeps track of the max distance achieved
 // so far through the challenge. Continuous reward is provided for any new
 // distance achieved.
-inline void rewardSystemFixed(Engine &ctx,
+inline void denseRewardSystem(Engine &ctx,
                          Position pos,
                          Progress &progress,
                          Reward &out_reward)
@@ -1449,6 +1465,13 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
                 Progress,
                 Reward
             >>({door_open_sys});
+    } else if (cfg.rewardMode == RewardMode::Sparse3) {
+        reward_sys = builder.addToGraph<ParallelForNode<Engine,
+             sparseRewardSystem3,
+                Position,
+                Progress,
+                Reward
+            >>({door_open_sys});
     } else {
         assert(false);
     }
@@ -1456,10 +1479,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // Check if the episode is over
     auto done_sys = builder.addToGraph<ParallelForNode<Engine,
         stepTrackerSystem,
-        //exitRoomSystem,
             StepsRemaining,
             Done
-    //    >>({bonus_reward_sys});
         >>({reward_sys});
 
     // Conditionally reset the world if the episode is over
@@ -1608,7 +1629,13 @@ Sim::Sim(Engine &ctx,
 
     autoReset = cfg.autoReset;
 
-    simFlags = cfg.simFlags;
+    simFlags = cfg.simFlags; // VISHNU: remove this? seems like no-op
+
+    // Set the door and button width
+    consts::doorWidth = cfg.doorWidth;
+    consts::buttonWidth = cfg.buttonWidth;
+    consts::rewardPerDist = cfg.rewardPerDist;
+    consts::slackReward = cfg.slackReward;
 
     // createPersistentEntities must know the RoomCount
     if ((ctx.data().simFlags & SimFlags::UseComplexLevel) ==

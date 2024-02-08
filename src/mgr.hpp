@@ -29,6 +29,10 @@ public:
         uint32_t batchRenderViewHeight = 64;
         madrona::render::APIBackend *extRenderAPI = nullptr;
         madrona::render::GPUDevice *extRenderDev = nullptr;
+        float buttonWidth;
+        float doorWidth;
+        float rewardPerDist;
+        float slackReward;
     };
 
     Manager(const Config &cfg);

@@ -31,6 +31,7 @@ NB_MODULE(madrona_escape_room, m) {
         .value("Sparse1", RewardMode::Sparse1)
         .value("Sparse2", RewardMode::Sparse2)
         .value("Complex", RewardMode::Complex)
+        .value("Sparse3", RewardMode::Sparse3)
     ;
 
     auto mgr_class = nb::class_<Manager> (m, "SimManager")
@@ -41,7 +42,11 @@ NB_MODULE(madrona_escape_room, m) {
                             bool auto_reset,
                             uint32_t sim_flags,
                             RewardMode reward_mode,
-                            bool enable_batch_renderer) {
+                            bool enable_batch_renderer,
+                            float button_width,
+                            float door_width,
+                            float reward_per_dist,
+                            float slack_reward) {
             new (self) Manager(Manager::Config {
                 .execMode = exec_mode,
                 .gpuID = (int)gpu_id,
@@ -50,6 +55,10 @@ NB_MODULE(madrona_escape_room, m) {
                 .simFlags = SimFlags(sim_flags),
                 .rewardMode = reward_mode,
                 .enableBatchRenderer = enable_batch_renderer,
+                .buttonWidth = button_width,
+                .doorWidth = door_width,
+                .rewardPerDist = reward_per_dist,
+                .slackReward = slack_reward
             });
         }, nb::arg("exec_mode"),
            nb::arg("gpu_id"),
@@ -57,7 +66,11 @@ NB_MODULE(madrona_escape_room, m) {
            nb::arg("auto_reset"),
            nb::arg("sim_flags"),
            nb::arg("reward_mode"),
-           nb::arg("enable_batch_renderer") = false)
+           nb::arg("enable_batch_renderer") = false,
+           nb::arg("button_width"),
+           nb::arg("door_width"),
+           nb::arg("reward_per_dist"),
+           nb::arg("slack_reward"))
         .def("step", &Manager::step)
         .def("checkpoint_reset_tensor", &Manager::checkpointResetTensor)
         .def("checkpoint_tensor", &Manager::checkpointTensor)

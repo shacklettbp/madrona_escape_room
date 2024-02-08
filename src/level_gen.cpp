@@ -1239,7 +1239,7 @@ static void generateLevel(Engine &ctx)
 #if 0
     // An alternative implementation could randomly select the type for each
     // room rather than a fixed progression of challenge difficulty
-    for (CountT i = 0; i < consts::numRooms; i++) {
+    for (CountT i = 0; i < consts::maxRooms; i++) {
         RoomType room_type = (RoomType)(
             ctx.data().rng.rand() * (uint32_t)RoomType::NumTypes);
 

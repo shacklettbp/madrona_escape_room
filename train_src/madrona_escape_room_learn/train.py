@@ -357,6 +357,7 @@ def _update_iter(cfg : TrainConfig,
                  scheduler : torch.optim.lr_scheduler.LRScheduler,
                  value_normalizer : EMANormalizer,
                  replay_buffer: NStepReplay,
+                 user_cb,
             ):
     with torch.no_grad():
         actor_critic.eval()
@@ -370,6 +371,24 @@ def _update_iter(cfg : TrainConfig,
             #rollouts = replay_buffer.get_last(rollouts)
             #print("Testing: load multiple from buffer")
             #rollouts = replay_buffer.get_multiple(rollouts)
+            
+            # Now modify the rewards in the rollouts by adding reward when closer to "exit"
+            if type(user_cb).__name__ == "GoExplore":
+                # Compute change in exit dist
+                all_bins = user_cb.map_states_to_bins(rollouts.obs) # num_timesteps * num_worlds
+                #if user_cb.max_progress < 1.01:
+                reward_bonus_1 = user_cb.start_bin_steps[all_bins]
+                #print(reward_bonus_1.sum(axis=0))
+                #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] *= 0
+                rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_1[...,None].repeat(1,1,2).view(reward_bonus_1.shape[0],-1,1) * user_cb.bin_reward_boost * 0.5
+                max_bin_steps = 200
+                if user_cb.bin_steps[user_cb.bin_steps < 200].size(dim=0) > 0:
+                    max_bin_steps = user_cb.bin_steps[user_cb.bin_steps < 200].max()
+                reward_bonus_2 = max_bin_steps - user_cb.bin_steps[all_bins]
+                reward_bonus_2[reward_bonus_2 < 0] = 0
+                #reward_bonus = (user_cb.bin_steps[all_bins[1:]] < user_cb.bin_steps[all_bins[:-1]]).float() - (user_cb.bin_steps[all_bins[1:]] > user_cb.bin_steps[all_bins[:-1]]).float()
+                #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:-1] += reward_bonus[...,None].repeat(1,1,2).view(reward_bonus.shape[0],-1,1) * user_cb.bin_reward_boost
+                #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_2[...,None].repeat(1,1,2).view(reward_bonus_2.shape[0],-1,1) * user_cb.bin_reward_boost
 
         # Dump the rollout
         '''
@@ -470,16 +489,16 @@ def _update_loop(update_iter_fn : Callable,
         if False:
             if total_second_room_ckpts > 0:
                 # Set the first 2000 worlds to randomly-selected second room checkpoints
-                checkpoint_indices = torch.randint(0, total_second_room_ckpts, (2000,))
+                checkpoint_indices = torch.randint(0, total_second_room_ckpts, (1000,))
                 print("Checkpoint indices", checkpoint_indices.shape, checkpoint_indices[:10])
                 print(second_room_ckpts[0])
                 #print("Before setting checkpoints", sim.checkpoints[:2000])
-                sim.checkpoints[:2000] = second_room_ckpts[checkpoint_indices]
+                sim.checkpoints[:1000] = second_room_ckpts[checkpoint_indices]
                 #print("After setting checkpoints", sim.checkpoints[:2000])
             if total_third_room_ckpts > 0:
                 # Set the next 2000 worlds to randomly-selected third room checkpoints
-                checkpoint_indices = torch.randint(0, total_third_room_ckpts, (2000,))
-                sim.checkpoints[2000:4000] = third_room_ckpts[checkpoint_indices]
+                checkpoint_indices = torch.randint(0, total_third_room_ckpts, (3000,))
+                sim.checkpoints[1000:4000] = third_room_ckpts[checkpoint_indices]
             # After reset, step to collect observations for the next rollout.
             if total_second_room_ckpts > 0:
                 sim.resets[:, 0] = 1
@@ -488,7 +507,7 @@ def _update_loop(update_iter_fn : Callable,
                 print("Just ran a reset")
 
             # Print steps_remaining
-            sim.obs[5][:8000] = 200
+            sim.obs[5][:8000] = 40 + torch.randint(0, 160, size=(8000,1), dtype=torch.int, device=sim.obs[5].device)
 
         #print("Update", update_idx)
         #print("Steps remaining", sim.obs[5][:8000])
@@ -516,6 +535,7 @@ def _update_loop(update_iter_fn : Callable,
                 learning_state.scheduler,
                 learning_state.value_normalizer,
                 replay_buffer,
+                user_cb,
             )
 
             gpu_sync_fn()
@@ -533,11 +553,13 @@ def _update_loop(update_iter_fn : Callable,
         # We can also start introducing the binning function here
         if False:
             print("Tensor shape", sim.obs[0].shape)
-            per_world_tensor = sim.obs[0].reshape(-1, 2, 8) # 8 features, 2 agents
+            per_world_tensor = sim.obs[0].reshape(-1, 2, 9) # 9 features, 2 agents
             third_room_flag = (per_world_tensor[...,3] > 0.67)
             second_room_flag = (per_world_tensor[...,3] > 0.34) ^ third_room_flag
             third_room_flag = third_room_flag.sum(dim=1) > 0
             second_room_flag = second_room_flag.sum(dim=1) > 0
+            second_room_flag[:4000] = 0 # Only add instances from fresh worlds
+            third_room_flag[:4000] = 0 # Only add instances from fresh worlds
             num_second_room = second_room_flag.sum()
             num_third_room = third_room_flag.sum()
             print(num_second_room, "agents in second room")
