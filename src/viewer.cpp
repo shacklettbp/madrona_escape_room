@@ -183,37 +183,36 @@ int main(int argc, char *argv[])
 
 
     // Main loop for the viewer viewer
-    viewer.loop([&mgr](CountT world_idx, CountT agent_idx,
-                           const Viewer::UserInput &input) {
+    viewer.loop(
+        [&mgr](CountT world_idx,
+               const Viewer::UserInput &input) {
+            using Key = Viewer::KeyboardKey;
+
+            if (input.keyHit(Key::R)) {
+                mgr.triggerReset(world_idx);
+            }
+
+            // By default, checkpointing happens every frame,
+            // so disable that behavior here.
+            mgr.setSaveCheckpoint(world_idx, 0);
+            // Checkpointing
+            if (input.keyHit(Key::Z)) {
+                mgr.setSaveCheckpoint(world_idx, 1);
+            }
+
+            if (input.keyHit(Key::X)) {
+                // Triggers a world reset.
+                mgr.triggerLoadCheckpoint(world_idx);
+            }
+        },
+        [&mgr](CountT world_idx, CountT agent_idx,
+               const Viewer::UserInput &input) {
         using Key = Viewer::KeyboardKey;
 
         int32_t x = 0;
         int32_t y = 0;
         int32_t r = 2;
         int32_t interact = 0;
-
-        if (input.keyPressed(Key::R)) {
-            mgr.triggerReset(world_idx);
-        }
-
-        // By default, checkpointing happens every frame,
-        // so disable that behavior here.
-        mgr.setSaveCheckpoint(world_idx, 0);
-        // Checkpointing
-        if (input.keyHit(Key::Z)) {
-            mgr.setSaveCheckpoint(world_idx, 1);
-        }
-
-        if (input.keyHit(Key::X)) {
-            // Triggers a world reset.
-            mgr.triggerLoadCheckpoint(world_idx);
-        }
-
-
-        if (int32_t(agent_idx) == -1) {
-            // Allow reset and checkpointing from camera.
-            return;
-        }
 
         bool shift_pressed = input.keyPressed(Key::Shift);
 
