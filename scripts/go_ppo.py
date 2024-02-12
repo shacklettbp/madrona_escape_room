@@ -397,7 +397,15 @@ class GoExplore:
         self.bin_count += new_bin_counts
         #print(chosen_checkpoints)
         #print(bins)
-        self.bin_checkpoints[[bins, chosen_checkpoints]] = self.checkpoints[desired_samples:].to(dev) # Will this have double-writes? Yes, shouldn't matter
+        stacked_indices = torch.stack((bins, chosen_checkpoints), dim=1)
+        # https://stackoverflow.com/questions/72001505/how-to-get-unique-elements-and-their-firstly-appeared-indices-of-a-pytorch-tenso
+        unique, idx, counts = torch.unique(stacked_indices, dim=0, sorted=True, return_inverse=True, return_counts=True) 
+        _, ind_sorted = torch.sort(idx, stable=True)
+        cum_sum = counts.cumsum(0)
+        cum_sum = torch.cat((torch.tensor([0], device=dev), cum_sum[:-1]))
+        first_indicies = ind_sorted[cum_sum]
+        #print(unique, first_indicies)
+        self.bin_checkpoints[[unique[:,0], unique[:,1]]] = self.checkpoints[desired_samples:][first_indicies].to(dev)
         #self.bin_score[bins] = torch.maximum(self.bin_score[bins], scores)
         return None
 
