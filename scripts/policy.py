@@ -133,7 +133,7 @@ def make_policy(num_obs_features, num_channels, separate_value, intrinsic=False)
             predictor_net = MLP(
                 input_dim = num_obs_features,
                 num_channels = num_channels,
-                num_layers = 2, # VISHNU TODO: try options, original was convs + 3
+                num_layers = 1, # VISHNU TODO: try options, original was convs + 3
             ),
         )
     else:

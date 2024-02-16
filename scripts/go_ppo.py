@@ -61,6 +61,8 @@ arg_parser.add_argument('--num-steps', type=int, required=True)
 arg_parser.add_argument('--num-bins', type=int, required=True)
 arg_parser.add_argument('--num-checkpoints', type=int, default=1)
 arg_parser.add_argument('--new-frac', type=float, default=0.5)
+arg_parser.add_argument('--bin-reward-type', type=str, default="none")
+arg_parser.add_argument('--bin-reward-boost', type=float, default=0.01)
 
 # Binning diagnostic args
 arg_parser.add_argument('--bin-diagnostic', action='store_true')
@@ -194,6 +196,7 @@ class GoExplore:
         self.start_bin_steps = torch.zeros((self.num_bins,), device=device).int() + 200
         self.world_steps = torch.zeros(self.num_worlds, device=device).int() + 200
         self.bin_reward_boost = 0.01
+        self.reward_type = args.bin_reward_type
 
         # Start bin
         start_bins = self.map_states_to_bins(self.obs)[0,:]
