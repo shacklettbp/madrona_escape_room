@@ -48,6 +48,7 @@ arg_parser.add_argument('--no-advantages', action='store_true')
 arg_parser.add_argument('--value-normalizer-decay', type=float, default=0.999)
 arg_parser.add_argument('--restore', type=int)
 arg_parser.add_argument('--use-complex-level', action='store_true')
+arg_parser.add_argument('--use-intrinsic-loss', action='store_true')
 
 
 # Architecture args
@@ -152,6 +153,12 @@ class LearningCallback:
             "success_frac": success_frac,
             }
         )
+        if args.use_intrinsic_loss:
+            wandb.log({
+                "update_id": update_id,
+                "intrinsic_loss": ppo.intrinsic_loss,
+                "value_loss_intrinsic": ppo.value_loss_intrinsic,
+            })
 
         if self.profile_report:
             print()
@@ -229,7 +236,7 @@ ckpt_dir.mkdir(exist_ok=True, parents=True)
 
 
 obs, num_obs_features = setup_obs(sim)
-policy = make_policy(num_obs_features, args.num_channels, args.separate_value)
+policy = make_policy(num_obs_features, args.num_channels, args.separate_value, intrinsic=args.use_intrinsic_loss)
 
 actions = sim.action_tensor().to_torch()
 dones = sim.done_tensor().to_torch()
@@ -268,6 +275,9 @@ train(
             num_mini_batches=1,
             clip_coef=0.2,
             value_loss_coef=args.value_loss_coef,
+            use_intrinsic_loss=args.use_intrinsic_loss, 
+            value_loss_intrinsic_coef=0.5, # TODO: Need to set
+            intrinsic_loss_coef=0.5, # TODO: Need to set
             entropy_coef=args.entropy_loss_coef,
             max_grad_norm=0.5,
             num_epochs=2,

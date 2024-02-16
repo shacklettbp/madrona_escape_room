@@ -1,7 +1,7 @@
 from madrona_escape_room_learn import (
     ActorCritic, DiscreteActor, Critic, 
     BackboneShared, BackboneSeparate,
-    BackboneEncoder, RecurrentBackboneEncoder,
+    BackboneEncoder, RecurrentBackboneEncoder, RNDModel
 )
 
 from madrona_escape_room_learn.models import (
@@ -75,7 +75,7 @@ def process_obs(self_obs, partner_obs, room_ent_obs,
         ids,
     ], dim=1)
 
-def make_policy(num_obs_features, num_channels, separate_value):
+def make_policy(num_obs_features, num_channels, separate_value, intrinsic=False):
     #encoder = RecurrentBackboneEncoder(
     #    net = MLP(
     #        input_dim = num_obs_features,
@@ -120,6 +120,26 @@ def make_policy(num_obs_features, num_channels, separate_value):
             encoder = encoder,
         )
 
+    if intrinsic:
+        # Add the intrinsic reward module
+        critic_intrinsic = LinearLayerCritic(num_channels)
+        rnd_model = RNDModel(
+            process_obs = process_obs,
+            target_net = MLP(
+                input_dim = num_obs_features,
+                num_channels = num_channels,
+                num_layers = 4, # VISHNU TODO: try options, original was convs + 1
+            ),
+            predictor_net = MLP(
+                input_dim = num_obs_features,
+                num_channels = num_channels,
+                num_layers = 2, # VISHNU TODO: try options, original was convs + 3
+            ),
+        )
+    else:
+        critic_intrinsic = None
+        rnd_model = None
+
     return ActorCritic(
         backbone = backbone,
         actor = LinearLayerDiscreteActor(
@@ -127,4 +147,6 @@ def make_policy(num_obs_features, num_channels, separate_value):
             num_channels,
         ),
         critic = LinearLayerCritic(num_channels),
+        critic_intrinsic = critic_intrinsic,
+        rnd_model = rnd_model,
     )

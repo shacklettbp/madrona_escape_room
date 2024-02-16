@@ -1230,13 +1230,13 @@ static void makeRoom(Engine &ctx,
 static void generateLevel(Engine &ctx)
 {
     LevelState &level = ctx.singleton<LevelState>();
-#if 0
+
     // For training simplicity, define a fixed sequence of levels.
     makeRoom(ctx, level, 0, RoomType::DoubleButton);
     makeRoom(ctx, level, 1, RoomType::CubeBlocking);
     makeRoom(ctx, level, 2, RoomType::CubeButtons);
-#endif
 
+#if 0
     // An alternative implementation could randomly select the type for each
     // room rather than a fixed progression of challenge difficulty
     for (CountT i = 0; i < consts::maxRooms; i++) {
@@ -1251,7 +1251,7 @@ static void generateLevel(Engine &ctx)
 
         makeRoom(ctx, level, i, room_type);
     }
-
+#endif
 }
 
 static void generateComplexLevel(Engine &ctx)

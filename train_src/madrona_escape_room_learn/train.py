@@ -32,7 +32,9 @@ class MiniBatch:
     dones: torch.Tensor
     rewards: torch.Tensor
     values: torch.Tensor
+    values_intrinsic: torch.Tensor
     advantages: torch.Tensor
+    advantages_intrinsic: torch.Tensor
     rnn_start_states: tuple[torch.Tensor, ...]
 
 
@@ -41,6 +43,8 @@ class PPOStats:
     loss : float = 0
     action_loss : float = 0
     value_loss : float = 0
+    value_loss_intrinsic : float = 0
+    intrinsic_loss: float = 0
     entropy_loss : float = 0
     returns_mean : float = 0
     returns_stddev : float = 0
@@ -77,6 +81,7 @@ def _mb_slice_rnn(rnn_state, inds):
 
 def _gather_minibatch(rollouts : Rollouts,
                       advantages : torch.Tensor,
+                      advantages_intrinsic : torch.Tensor,
                       inds : torch.Tensor,
                       amp : AMPState):
     obs_slice = tuple(_mb_slice(obs, inds) for obs in rollouts.obs)
@@ -96,6 +101,14 @@ def _gather_minibatch(rollouts : Rollouts,
         dtype=amp.compute_dtype)
     advantages_slice = _mb_slice(advantages, inds).to(
         dtype=amp.compute_dtype)
+    if rollouts.values_intrinsic is not None:
+        values_intrinsic_slice = _mb_slice(rollouts.values_intrinsic, inds).to(
+            dtype=amp.compute_dtype)
+        advantages_intrinsic_slice = _mb_slice(advantages_intrinsic, inds).to(
+            dtype=amp.compute_dtype)
+    else:
+        values_intrinsic_slice = None
+        advantages_intrinsic_slice = None
 
     rnn_starts_slice = tuple(
         _mb_slice_rnn(state, inds) for state in rollouts.rnn_start_states)
@@ -107,13 +120,16 @@ def _gather_minibatch(rollouts : Rollouts,
         dones=dones_slice,
         rewards=rewards_slice,
         values=values_slice,
+        values_intrinsic=values_intrinsic_slice,
         advantages=advantages_slice,
+        advantages_intrinsic=advantages_intrinsic_slice,
         rnn_start_states=rnn_starts_slice,
     )
 
 def _compute_advantages(cfg : TrainConfig,
                         amp : AMPState,
                         advantages_out : torch.Tensor,
+                        advantages_intrinsic_out : torch.Tensor,
                         rollouts : Rollouts):
     # This function is going to be operating in fp16 mode completely
     # when mixed precision is enabled since amp.compute_dtype is fp16
@@ -154,6 +170,40 @@ def _compute_advantages(cfg : TrainConfig,
 
         next_advantage = cur_advantage
         next_values = cur_values
+    
+    # Repeat for intrinsic values and advantages if not None
+    if rollouts.values_intrinsic is not None and cfg.ppo.use_intrinsic_loss:
+        seq_values_intrinsic = rollouts.values_intrinsic.view(T, N, 1)
+        seq_advantages_intrinsic_out = advantages_intrinsic_out.view(T, N, 1)
+
+        next_advantage = 0.0
+        next_values = rollouts.bootstrap_values_intrinsic
+        for i in reversed(range(cfg.steps_per_update)):
+            cur_dones = seq_dones[i].to(dtype=amp.compute_dtype)
+            cur_rewards = seq_rewards[i].to(dtype=amp.compute_dtype)
+            cur_values = seq_values_intrinsic[i].to(dtype=amp.compute_dtype)
+
+            #next_valid = 1.0 - cur_dones
+
+            # delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)
+            if cfg.ppo.no_advantages:
+                td_err = (cur_rewards + 
+                    #cfg.gamma * next_valid * next_values)
+                    cfg.gamma * next_values)
+            else:
+                td_err = (cur_rewards + 
+                    #cfg.gamma * next_valid * next_values - cur_values)
+                    cfg.gamma * next_values - cur_values)
+            
+            # A_t = sum (gamma * lambda)^(l - 1) * delta_l (EQ 16 GAE)
+            #     = delta_t + gamma * lambda * A_t+1
+            cur_advantage = (td_err +
+                cfg.gamma * cfg.gae_lambda * next_valid * next_advantage)
+            
+            seq_advantages_intrinsic_out[i] = cur_advantage
+
+            next_advantage = cur_advantage
+            next_values = cur_values
 
 def _compute_action_scores(cfg, amp, advantages):
     if not cfg.normalize_advantages:
@@ -254,14 +304,19 @@ def _ppo_update(cfg : TrainConfig,
                 actor_critic : ActorCritic,
                 optimizer : torch.optim.Optimizer,
                 value_normalizer : EMANormalizer,
+                value_normalizer_intrinsic : EMANormalizer,
             ):
     with amp.enable():
         with profile('AC Forward', gpu=True):
-            new_log_probs, entropies, new_values = actor_critic.fwd_update(
+            new_log_probs, entropies, new_values, new_values_intrinsic, reward_intrinsic = actor_critic.fwd_update(
                 mb.rnn_start_states, mb.dones, mb.actions, *mb.obs)
 
+        #print("advantages", mb.advantages.shape, mb.advantages_intrinsic.shape)
         with torch.no_grad():
-            action_scores = _compute_action_scores(cfg, amp, mb.advantages)
+            if cfg.ppo.use_intrinsic_loss:
+                action_scores = _compute_action_scores(cfg, amp, mb.advantages + mb.advantages_intrinsic)
+            else:
+                action_scores = _compute_action_scores(cfg, amp, mb.advantages)
 
         #if mb.dones.sum() > 0: # VISHNU LOGGING
         #    print("We have a done!")
@@ -274,6 +329,10 @@ def _ppo_update(cfg : TrainConfig,
         action_obj = torch.min(surr1, surr2)
 
         returns = mb.advantages + mb.values
+        if cfg.ppo.use_intrinsic_loss:
+            intrinsic_returns = mb.advantages_intrinsic + mb.values_intrinsic
+        #else:
+        #    intrinsic_returns = torch.zeros_like(returns)
 
         if cfg.ppo.clip_value_loss:
             with torch.no_grad():
@@ -282,19 +341,45 @@ def _ppo_update(cfg : TrainConfig,
 
             new_values = torch.clamp(new_values, low, high)
 
+            # Might as well clip the intrinsic values too? 
+            if cfg.ppo.use_intrinsic_loss:
+                with torch.no_grad():
+                    low = mb.values_intrinsic - cfg.ppo.clip_coef
+                    high = mb.values_intrinsic + cfg.ppo.clip_coef
+
+                new_values_intrinsic = torch.clamp(new_values_intrinsic, low, high)
+
         normalized_returns = value_normalizer(amp, returns)
+        #print("Value shapes", new_values.shape, normalized_returns.shape, new_values_intrinsic.shape, normalized_returns_intrinsic.shape)
         value_loss = 0.5 * F.mse_loss(
             new_values, normalized_returns, reduction='none')
+        if cfg.ppo.use_intrinsic_loss:
+            normalized_returns_intrinsic = value_normalizer_intrinsic(amp, intrinsic_returns)
+            value_loss_intrinsic = 0.5 * F.mse_loss(
+                new_values_intrinsic, normalized_returns_intrinsic, reduction='none')
 
         action_obj = torch.mean(action_obj)
         value_loss = torch.mean(value_loss)
         entropies = torch.mean(entropies)
 
-        loss = (
-            - action_obj # Maximize the action objective function
-            + cfg.ppo.value_loss_coef * value_loss
-            - cfg.ppo.entropy_coef * entropies # Maximize entropy
-        )
+        if cfg.ppo.use_intrinsic_loss:
+            value_loss_intrinsic = torch.mean(value_loss_intrinsic)
+            intrinsic_loss = torch.mean(reward_intrinsic)
+            loss = (
+                - action_obj # Maximize the action objective function
+                + cfg.ppo.value_loss_coef * value_loss
+                + cfg.ppo.value_loss_intrinsic_coef * value_loss_intrinsic
+                + cfg.ppo.intrinsic_loss_coef * intrinsic_loss # Minimize intrinsic loss
+                - cfg.ppo.entropy_coef * entropies # Maximize entropy
+            )
+        else:
+            value_loss_intrinsic = torch.tensor(0.0)
+            intrinsic_loss = torch.tensor(0.0)
+            loss = (
+                - action_obj # Maximize the action objective function
+                + cfg.ppo.value_loss_coef * value_loss
+                - cfg.ppo.entropy_coef * entropies # Maximize entropy
+            )
 
     with profile('Optimize'):
         if amp.scaler is None:
@@ -339,6 +424,8 @@ def _ppo_update(cfg : TrainConfig,
             loss = loss.cpu().float().item(),
             action_loss = -(action_obj.cpu().float().item()),
             value_loss = (cfg.ppo.value_loss_coef * value_loss.cpu().float().item()),
+            value_loss_intrinsic = (cfg.ppo.value_loss_intrinsic_coef * value_loss_intrinsic.cpu().float().item()),
+            intrinsic_loss = (cfg.ppo.intrinsic_loss_coef * intrinsic_loss.cpu().float().item()),
             entropy_loss = -(cfg.ppo.entropy_coef * entropies.cpu().float().item()),
             returns_mean = returns_mean.cpu().float().item(),
             returns_stddev = returns_stddev.cpu().float().item(),
@@ -352,10 +439,12 @@ def _update_iter(cfg : TrainConfig,
                  sim : SimInterface,
                  rollout_mgr : RolloutManager,
                  advantages : torch.Tensor,
+                 advantages_intrinsic: torch.Tensor,
                  actor_critic : ActorCritic,
                  optimizer : torch.optim.Optimizer,
                  scheduler : torch.optim.lr_scheduler.LRScheduler,
                  value_normalizer : EMANormalizer,
+                 value_normalizer_intrinsic : EMANormalizer,
                  replay_buffer: NStepReplay,
                  user_cb,
             ):
@@ -364,7 +453,7 @@ def _update_iter(cfg : TrainConfig,
         value_normalizer.eval()
         # This is where the simulator loop happens that executes the TaskGraph.
         with profile('Collect Rollouts'):
-            rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer)
+            rollouts = rollout_mgr.collect(amp, sim, actor_critic, value_normalizer, value_normalizer_intrinsic)
             #print("Testing: adding to buffer")
             #replay_buffer.add_to_buffer(rollouts)
             #print("Testing: load oldest thing in buffer")
@@ -411,7 +500,9 @@ def _update_iter(cfg : TrainConfig,
             _compute_advantages(cfg,
                                 amp,
                                 advantages,
+                                advantages_intrinsic,
                                 rollouts)
+            #print("Advantages", advantages.shape, advantages_intrinsic.shape)
     
     actor_critic.train()
     value_normalizer.train()
@@ -425,13 +516,14 @@ def _update_iter(cfg : TrainConfig,
             for inds in torch.randperm(num_train_seqs).chunk(
                     cfg.ppo.num_mini_batches):
                 with torch.no_grad(), profile('Gather Minibatch', gpu=True):
-                    mb = _gather_minibatch(rollouts, advantages, inds, amp)
+                    mb = _gather_minibatch(rollouts, advantages, advantages_intrinsic, inds, amp)
                 cur_stats = _ppo_update(cfg,
                                         amp,
                                         mb,
                                         actor_critic,
                                         optimizer,
-                                        value_normalizer)
+                                        value_normalizer,
+                                        value_normalizer_intrinsic)
 
                 with torch.no_grad():
                     num_stats += 1
@@ -440,6 +532,10 @@ def _update_iter(cfg : TrainConfig,
                         cur_stats.action_loss - aggregate_stats.action_loss) / num_stats
                     aggregate_stats.value_loss += (
                         cur_stats.value_loss - aggregate_stats.value_loss) / num_stats
+                    aggregate_stats.value_loss_intrinsic += (
+                        cur_stats.value_loss_intrinsic - aggregate_stats.value_loss_intrinsic) / num_stats
+                    aggregate_stats.intrinsic_loss += (
+                        cur_stats.intrinsic_loss - aggregate_stats.intrinsic_loss) / num_stats
                     aggregate_stats.entropy_loss += (
                         cur_stats.entropy_loss - aggregate_stats.entropy_loss) / num_stats
                     aggregate_stats.returns_mean += (
@@ -474,6 +570,7 @@ def _update_loop(update_iter_fn : Callable,
     assert(num_train_seqs % cfg.ppo.num_mini_batches == 0)
 
     advantages = torch.zeros_like(rollout_mgr.rewards)
+    advantages_intrinsic = torch.zeros_like(rollout_mgr.rewards)
     second_room_ckpts = torch.zeros_like(sim.checkpoints) # Once this is full, rotate as FIFO
     total_second_room_ckpts = 0
     third_room_ckpts = torch.zeros_like(sim.checkpoints) # Once this is full, rotate as FIFO
@@ -530,10 +627,12 @@ def _update_loop(update_iter_fn : Callable,
                 sim,
                 rollout_mgr,
                 advantages,
+                advantages_intrinsic,
                 learning_state.policy,
                 learning_state.optimizer,
                 learning_state.scheduler,
                 learning_state.value_normalizer,
+                learning_state.value_normalizer_intrinsic,
                 replay_buffer,
                 user_cb,
             )
@@ -592,11 +691,16 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
                                      disable=not cfg.normalize_values)
     value_normalizer = value_normalizer.to(dev)
 
+    value_normalizer_intrinsic = EMANormalizer(cfg.value_normalizer_decay,
+                                        disable=not cfg.normalize_values)
+    value_normalizer_intrinsic = value_normalizer_intrinsic.to(dev)
+
     learning_state = LearningState(
         policy = actor_critic,
         optimizer = optimizer,
         scheduler = None,
         value_normalizer = value_normalizer,
+        value_normalizer_intrinsic = value_normalizer_intrinsic,
         amp = amp,
     )
 
@@ -607,7 +711,7 @@ def train(dev, sim, cfg, actor_critic, update_cb, restore_ckpt=None):
         start_update_idx = 0
 
     rollout_mgr = RolloutManager(dev, sim, cfg.steps_per_update,
-        cfg.num_bptt_chunks, amp, actor_critic.recurrent_cfg)
+        cfg.num_bptt_chunks, amp, actor_critic.recurrent_cfg, intrinsic=cfg.ppo.use_intrinsic_loss)
 
     if dev.type == 'cuda':
         def gpu_sync_fn():

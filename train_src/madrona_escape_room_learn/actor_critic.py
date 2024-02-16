@@ -55,15 +55,71 @@ class RecurrentStateConfig:
     def __init__(self, shapes):
         self.shapes = shapes
     
+class RNDModel(Backbone):
+    def __init__(self, process_obs, target_net, predictor_net):
+        super().__init__()
+
+        self.process_obs = process_obs
+        self.target_net = target_net
+        self.predictor_net = predictor_net
+
+        # Target net is not trainable
+        for param in self.target_net.parameters():
+            param.requires_grad = False
+
+    def forward(self, *obs_in):
+        with torch.no_grad():
+            #flattened_obs = self._flatten_obs_sequence(obs_in)
+            processed_obs = self.process_obs(*obs_in)
+        target_features = self.target_net(processed_obs)
+        predictor_features = self.predictor_net(processed_obs)
+
+        # Print weights
+        #print("Target net weights", self.target_net.net[0].weight)
+        #print("Predictor net weights", self.predictor_net.net[0].weight)
+
+        return F.mse_loss(target_features, predictor_features)
+    
+    def forward_update(self, *obs_in):
+        with torch.no_grad():
+            flattened_obs = self._flatten_obs_sequence(obs_in)
+            processed_obs = self.process_obs(*flattened_obs)
+        target_features = self.target_net(processed_obs)
+        predictor_features = self.predictor_net(processed_obs)
+
+        return F.mse_loss(target_features, predictor_features)
+
+'''
+    def target(self, features):
+        return self.target_net(features)
+
+    def predictor(self, features):
+        return self.predictor_net(features)
+
+    def target_loss(self, target_features, predictor_features):
+        return F.mse_loss(target_features, predictor_features)
+
+    def intrinsic_reward(self, target_features, predictor_features):
+        return F.mse_loss(target_features, predictor_features)
+
+    def intrinsic_reward(self, features):
+        target_features, predictor_features = self(features)
+        return self.intrinsic_reward(target_features, predictor_features)
+'''
 
 class ActorCritic(nn.Module):
-    def __init__(self, backbone, actor, critic):
+    def __init__(self, backbone, actor, critic, critic_intrinsic = None, rnd_model = None):
         super().__init__()
 
         self.backbone = backbone 
         self.recurrent_cfg = backbone.recurrent_cfg
         self.actor = actor
         self.critic = critic
+        self.critic_intrinsic = critic_intrinsic
+        self.rnd_model = rnd_model
+
+    def _flatten_obs_sequence(self, obs):
+        return [o.view(-1, *o.shape[2:]) for o in obs]
 
     # Direct call intended for debugging only, should use below
     # specialized functions
@@ -89,15 +145,29 @@ class ActorCritic(nn.Module):
         values_out[...] = self.critic(features)
 
     def fwd_rollout(self, actions_out, log_probs_out, values_out,
-                      rnn_states_out, rnn_states_in, *obs_in):
+                      rnn_states_out, rnn_states_in, values_intrinsic_out, reward_intrinsic_out, *obs_in):
+        #print("Obs in length", len(obs_in))
+        #print(values_intrinsic_out)
+        #print(obs_in)
         actor_features, critic_features = self.backbone.fwd_rollout(
             rnn_states_out, rnn_states_in, *obs_in)
 
         action_dists = self.actor(actor_features)
         values = self.critic(critic_features)
+        if self.critic_intrinsic:
+            values_intrinsic = self.critic_intrinsic(critic_features)
+        else:
+            values_intrinsic = None
+
+        if self.rnd_model:
+            reward_intrinsic = self.rnd_model(*obs_in)
 
         action_dists.sample(actions_out, log_probs_out)
         values_out[...] = values
+        if values_intrinsic_out != None:
+            values_intrinsic_out[...] = values_intrinsic
+        if reward_intrinsic_out != None:
+            reward_intrinsic_out[...] = reward_intrinsic
 
     def fwd_update(self, rnn_states, sequence_breaks, rollout_actions, *obs):
         actor_features, critic_features = self.backbone.fwd_sequence(
@@ -105,6 +175,15 @@ class ActorCritic(nn.Module):
 
         action_dists = self.actor(actor_features)
         values = self.critic(critic_features)
+        if self.critic_intrinsic:
+            values_intrinsic = self.critic_intrinsic(critic_features)
+        else:
+            values_intrinsic = None
+
+        if self.rnd_model:
+            reward_intrinsic = self.rnd_model.forward_update(*obs)
+        else:
+            reward_intrinsic = None
 
         T, N = rollout_actions.shape[0:2]
         flattened_actions = rollout_actions.view(
@@ -115,8 +194,10 @@ class ActorCritic(nn.Module):
         log_probs = log_probs.view(T, N, *log_probs.shape[1:])
         entropies = entropies.view(T, N, *entropies.shape[1:])
         values = values.view(T, N, *values.shape[1:])
+        if values_intrinsic != None:
+            values_intrinsic = values_intrinsic.view(T, N, *values_intrinsic.shape[1:])
 
-        return log_probs, entropies, values
+        return log_probs, entropies, values, values_intrinsic, reward_intrinsic
 
 class BackboneEncoder(nn.Module):
     def __init__(self, net):

@@ -12,6 +12,7 @@ class LearningState:
     optimizer : torch.optim.Optimizer
     scheduler : Optional[torch.optim.lr_scheduler.LRScheduler]
     value_normalizer: EMANormalizer
+    value_normalizer_intrinsic: EMANormalizer
     amp: AMPState
 
     def save(self, update_idx, path):
@@ -31,6 +32,7 @@ class LearningState:
             'optimizer': self.optimizer.state_dict(),
             'scheduler': scheduler_state_dict,
             'value_normalizer': self.value_normalizer.state_dict(),
+            'value_normalizer_intrinsic': self.value_normalizer_intrinsic.state_dict(),
             'amp': {
                 'device_type': self.amp.device_type,
                 'enabled': self.amp.enabled,

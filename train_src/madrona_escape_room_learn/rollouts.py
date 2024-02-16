@@ -19,6 +19,10 @@ class Rollouts:
     values: torch.Tensor
     bootstrap_values: torch.Tensor
     rnn_start_states: tuple[torch.Tensor, ...]
+    # Add intrinsic rewards and values
+    rewards_intrinsic: Optional[torch.Tensor] = None
+    values_intrinsic: Optional[torch.Tensor] = None
+    bootstrap_values_intrinsic: Optional[torch.Tensor] = None
 
 class RolloutManager:
     def __init__(
@@ -29,6 +33,7 @@ class RolloutManager:
             num_bptt_chunks : int,
             amp : AMPState,
             recurrent_cfg : RecurrentStateConfig,
+            intrinsic: bool,
         ):
         self.dev = dev
         self.steps_per_update = steps_per_update
@@ -70,10 +75,25 @@ class RolloutManager:
 
         self.bootstrap_values = torch.zeros(
             sim.rewards.shape, dtype=amp.compute_dtype, device=dev)
+        
+        if intrinsic:
+            self.rewards_intrinsic = torch.zeros(
+                (num_bptt_chunks, num_bptt_steps, *sim.rewards.shape),
+                dtype=float_storage_type, device=dev)
+            self.values_intrinsic = torch.zeros(
+                (num_bptt_chunks, num_bptt_steps, *sim.rewards.shape),
+                dtype=float_storage_type, device=dev)
+            self.bootstrap_values_intrinsic = torch.zeros(
+                sim.rewards.shape, dtype=amp.compute_dtype, device=dev)
+        else:
+            self.rewards_intrinsic = None
+            self.values_intrinsic = None
+            self.bootstrap_values_intrinsic = None
 
         self.obs = []
 
         for obs_tensor in sim.obs:
+            print("Appending an obs tensor")
             self.obs.append(torch.zeros(
                 (num_bptt_chunks, num_bptt_steps, *obs_tensor.shape),
                 dtype=obs_tensor.dtype, device=dev))
@@ -117,6 +137,7 @@ class RolloutManager:
             sim : SimInterface,
             actor_critic : ActorCritic,
             value_normalizer: EMANormalizer,
+            value_normalizer_intrinsic: Optional[EMANormalizer],
         ):
         rnn_states_cur_in = self.rnn_end_states
         rnn_states_cur_out = self.rnn_alt_states
@@ -140,7 +161,7 @@ class RolloutManager:
 
                     cur_actions_store = self.actions[bptt_chunk, slot]
 
-                    
+                    #print("len(cur_obs_buffers)", len(cur_obs_buffers))
 
                     with amp.enable():
                         actor_critic.fwd_rollout(
@@ -149,12 +170,17 @@ class RolloutManager:
                             self.values[bptt_chunk, slot],
                             rnn_states_cur_out,
                             rnn_states_cur_in,
+                            self.values_intrinsic[bptt_chunk, slot] if self.values_intrinsic is not None else None,
+                            self.rewards_intrinsic[bptt_chunk, slot] if self.rewards_intrinsic is not None else None,
                             *cur_obs_buffers,
                         )
 
                     # Invert normalized values
                     self.values[bptt_chunk, slot] = \
                         value_normalizer.invert(amp, self.values[bptt_chunk, slot])
+                    if self.values_intrinsic is not None:
+                        self.values_intrinsic[bptt_chunk, slot] = \
+                            value_normalizer_intrinsic.invert(amp, self.values_intrinsic[bptt_chunk, slot])
 
                     rnn_states_cur_in, rnn_states_cur_out = \
                         rnn_states_cur_out, rnn_states_cur_in
@@ -222,4 +248,7 @@ class RolloutManager:
             values = self.values,
             bootstrap_values = self.bootstrap_values,
             rnn_start_states = self.rnn_start_states,
+            rewards_intrinsic = self.rewards_intrinsic,
+            values_intrinsic = self.values_intrinsic,
+            bootstrap_values_intrinsic = self.bootstrap_values_intrinsic,
         )

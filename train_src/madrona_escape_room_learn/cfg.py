@@ -8,6 +8,9 @@ class PPOConfig:
     num_mini_batches: int
     clip_coef: float
     value_loss_coef: float
+    use_intrinsic_loss: bool
+    value_loss_intrinsic_coef: float
+    intrinsic_loss_coef: float
     entropy_coef: float
     max_grad_norm: float
     num_epochs: int = 1

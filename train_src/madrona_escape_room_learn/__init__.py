@@ -6,6 +6,7 @@ from madrona_escape_room_learn.actor_critic import (
         ActorCritic, DiscreteActor, Critic,
         BackboneEncoder, RecurrentBackboneEncoder,
         Backbone, BackboneShared, BackboneSeparate,
+        RNDModel,
     )
 from madrona_escape_room_learn.profile import profile
 import madrona_escape_room_learn.models
@@ -19,5 +20,5 @@ __all__ = [
         "ActorCritic", "DiscreteActor", "Critic",
         "BackboneEncoder", "RecurrentBackboneEncoder",
         "Backbone", "BackboneShared", "BackboneSeparate",
-        "NStepReplay",
+        "NStepReplay", "RNDModel",
     ]
