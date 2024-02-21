@@ -238,6 +238,8 @@ class RolloutManager:
         # but in the future could return only one set of buffers from a
         # double buffered store, etc
 
+        #print("Rewards intrinsic", self.rewards_intrinsic.shape)
+
         return Rollouts(
             obs = self.obs,
             actions = self.actions,

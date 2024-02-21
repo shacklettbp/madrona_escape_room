@@ -78,7 +78,7 @@ class RNDModel(Backbone):
         #print("Target net weights", self.target_net.net[0].weight)
         #print("Predictor net weights", self.predictor_net.net[0].weight)
 
-        return F.mse_loss(target_features, predictor_features)
+        return F.mse_loss(target_features, predictor_features, reduction='none').mean(dim=1)
     
     def forward_update(self, *obs_in):
         with torch.no_grad():
@@ -87,7 +87,7 @@ class RNDModel(Backbone):
         target_features = self.target_net(processed_obs)
         predictor_features = self.predictor_net(processed_obs)
 
-        return F.mse_loss(target_features, predictor_features)
+        return F.mse_loss(target_features, predictor_features, reduction='none').mean(dim=1)
 
 '''
     def target(self, features):
@@ -167,7 +167,7 @@ class ActorCritic(nn.Module):
         if values_intrinsic_out != None:
             values_intrinsic_out[...] = values_intrinsic
         if reward_intrinsic_out != None:
-            reward_intrinsic_out[...] = reward_intrinsic
+            reward_intrinsic_out[..., 0] = reward_intrinsic
 
     def fwd_update(self, rnn_states, sequence_breaks, rollout_actions, *obs):
         actor_features, critic_features = self.backbone.fwd_sequence(

@@ -48,7 +48,8 @@ class PPOStats:
     entropy_loss : float = 0
     returns_mean : float = 0
     returns_stddev : float = 0
-
+    value_loss_array : torch.Tensor = None
+    intrinsic_reward_array : torch.Tensor = None
 
 @dataclass(frozen = True)
 class UpdateResult:
@@ -217,87 +218,6 @@ def _compute_action_scores(cfg, amp, advantages):
 
             return action_scores.to(dtype=amp.compute_dtype)
 
-# Keep value loss the same as PPO, but make the policy loss be advantage-weighted regression
-# Introduce buffer if needed
-def _awr_update(cfg : TrainConfig,
-                amp : AMPState,
-                mb : MiniBatch,
-                actor_critic : ActorCritic,
-                optimizer : torch.optim.Optimizer,
-                value_normalizer : EMANormalizer,
-            ):
-    with amp.enable():
-        with profile('AC Forward', gpu=True):
-            new_log_probs, entropies, new_values = actor_critic.fwd_update(
-                mb.rnn_start_states, mb.dones, mb.actions, *mb.obs)
-
-        with torch.no_grad():
-            action_scores = _compute_action_scores(cfg, amp, mb.advantages)
-
-        '''
-        ratio = torch.exp(new_log_probs - mb.log_probs)
-        surr1 = action_scores * ratio
-        surr2 = action_scores * (
-            torch.clamp(ratio, 1.0 - cfg.ppo.clip_coef, 1.0 + cfg.ppo.clip_coef))
-
-        action_obj = torch.min(surr1, surr2)
-        '''
-        action_obj = new_log_probs * torch.exp(action_scores * cfg.awr.beta_inverse) 
-
-        returns = mb.advantages + mb.values
-
-        if cfg.awr.clip_value_loss:
-            with torch.no_grad():
-                low = mb.values - cfg.ppo.clip_coef
-                high = mb.values + cfg.ppo.clip_coef
-
-            new_values = torch.clamp(new_values, low, high)
-
-        normalized_returns = value_normalizer(amp, returns)
-        value_loss = 0.5 * F.mse_loss(
-            new_values, normalized_returns, reduction='none')
-
-        action_obj = torch.mean(action_obj)
-        value_loss = torch.mean(value_loss)
-        entropies = torch.mean(entropies)
-
-        loss = (
-            - action_obj # Maximize the action objective function
-            + cfg.ppo.value_loss_coef * value_loss
-            - cfg.ppo.entropy_coef * entropies # Maximize entropy
-        )
-
-    with profile('Optimize'):
-        if amp.scaler is None:
-            loss.backward()
-            nn.utils.clip_grad_norm_(
-                actor_critic.parameters(), cfg.ppo.max_grad_norm)
-            optimizer.step()
-        else:
-            amp.scaler.scale(loss).backward()
-            amp.scaler.unscale_(optimizer)
-            nn.utils.clip_grad_norm_(
-                actor_critic.parameters(), cfg.ppo.max_grad_norm)
-            amp.scaler.step(optimizer)
-            amp.scaler.update()
-
-        optimizer.zero_grad()
-
-    with torch.no_grad():
-        returns_var, returns_mean = torch.var_mean(normalized_returns)
-        returns_stddev = torch.sqrt(returns_var)
-
-        stats = PPOStats(
-            loss = loss.cpu().float().item(),
-            action_loss = -(action_obj.cpu().float().item()),
-            value_loss = value_loss.cpu().float().item(),
-            entropy_loss = -(entropies.cpu().float().item()),
-            returns_mean = returns_mean.cpu().float().item(),
-            returns_stddev = returns_stddev.cpu().float().item(),
-        )
-
-    return stats
-
 def _ppo_update(cfg : TrainConfig,
                 amp : AMPState,
                 mb : MiniBatch,
@@ -351,7 +271,7 @@ def _ppo_update(cfg : TrainConfig,
 
         normalized_returns = value_normalizer(amp, returns)
         #print("Value shapes", new_values.shape, normalized_returns.shape, new_values_intrinsic.shape, normalized_returns_intrinsic.shape)
-        value_loss = 0.5 * F.mse_loss(
+        value_loss_array = 0.5 * F.mse_loss(
             new_values, normalized_returns, reduction='none')
         if cfg.ppo.use_intrinsic_loss:
             normalized_returns_intrinsic = value_normalizer_intrinsic(amp, intrinsic_returns)
@@ -359,7 +279,7 @@ def _ppo_update(cfg : TrainConfig,
                 new_values_intrinsic, normalized_returns_intrinsic, reduction='none')
 
         action_obj = torch.mean(action_obj)
-        value_loss = torch.mean(value_loss)
+        value_loss = torch.mean(value_loss_array)
         entropies = torch.mean(entropies)
 
         if cfg.ppo.use_intrinsic_loss:
@@ -416,6 +336,9 @@ def _ppo_update(cfg : TrainConfig,
 
         optimizer.zero_grad()
 
+    #print("Intrinsic reward array shape", reward_intrinsic.shape)
+    #print(reward_intrinsic)
+
     with torch.no_grad():
         returns_var, returns_mean = torch.var_mean(normalized_returns)
         returns_stddev = torch.sqrt(returns_var)
@@ -429,6 +352,8 @@ def _ppo_update(cfg : TrainConfig,
             entropy_loss = -(cfg.ppo.entropy_coef * entropies.cpu().float().item()),
             returns_mean = returns_mean.cpu().float().item(),
             returns_stddev = returns_stddev.cpu().float().item(),
+            value_loss_array = value_loss_array[-1,:,0], # Collapse to one per checkpoint
+            intrinsic_reward_array = None #reward_intrinsic[-1,:,0] if reward_intrinsic is not None else None, # Collapse to one per checkpoint
         )
 
     return stats
@@ -478,15 +403,19 @@ def _update_iter(cfg : TrainConfig,
                     # Compute change in exit dist
                     all_bins = user_cb.map_states_to_bins(rollouts.obs) # num_timesteps * num_worlds
                     #if user_cb.max_progress < 1.01:
-                    reward_bonus_1 = user_cb.start_bin_steps[all_bins]
+                    reward_bonus_1 = user_cb.start_bin_steps[all_bins].float()
+                    mean_reward_bonus = reward_bonus_1.mean()
+                    reward_bonus_1 *= user_cb.bin_reward_boost / mean_reward_bonus
                     #print(reward_bonus_1.sum(axis=0))
                     #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] *= 0
-                    rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_1[...,None].repeat(1,1,2).view(reward_bonus_1.shape[0],-1,1) * user_cb.bin_reward_boost * 0.5
+                    rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_1[...,None].repeat(1,1,2).view(reward_bonus_1.shape[0],-1,1) #* user_cb.bin_reward_boost * 0.5
+                    '''
                     max_bin_steps = 200
                     if user_cb.bin_steps[user_cb.bin_steps < 200].size(dim=0) > 0:
                         max_bin_steps = user_cb.bin_steps[user_cb.bin_steps < 200].max()
                     reward_bonus_2 = max_bin_steps - user_cb.bin_steps[all_bins]
                     reward_bonus_2[reward_bonus_2 < 0] = 0
+                    '''
                     #reward_bonus = (user_cb.bin_steps[all_bins[1:]] < user_cb.bin_steps[all_bins[:-1]]).float() - (user_cb.bin_steps[all_bins[1:]] > user_cb.bin_steps[all_bins[:-1]]).float()
                     #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:-1] += reward_bonus[...,None].repeat(1,1,2).view(reward_bonus.shape[0],-1,1) * user_cb.bin_reward_boost
                     #rollouts.rewards.view(-1, *rollouts.rewards.shape[2:])[:] += reward_bonus_2[...,None].repeat(1,1,2).view(reward_bonus_2.shape[0],-1,1) * user_cb.bin_reward_boost
@@ -528,8 +457,8 @@ def _update_iter(cfg : TrainConfig,
         num_stats = 0
 
         for epoch in range(cfg.ppo.num_epochs):
-            #for inds in torch.arange(num_train_seqs).chunk(
-            for inds in torch.randperm(num_train_seqs).chunk(
+            for inds in torch.arange(num_train_seqs).chunk(
+            #for inds in torch.randperm(num_train_seqs).chunk( # VISHNU: ASSUME ONE MINIBATCH, randperm messes up tracking
                     cfg.ppo.num_mini_batches):
                 with torch.no_grad(), profile('Gather Minibatch', gpu=True):
                     mb = _gather_minibatch(rollouts, advantages, advantages_intrinsic, inds, amp)
@@ -559,6 +488,9 @@ def _update_iter(cfg : TrainConfig,
                     # FIXME
                     aggregate_stats.returns_stddev += (
                         cur_stats.returns_stddev - aggregate_stats.returns_stddev) / num_stats
+                    aggregate_stats.value_loss_array = cur_stats.value_loss_array
+                    #aggregate_stats.intrinsic_reward_array = cur_stats.intrinsic_reward_array
+    aggregate_stats.intrinsic_reward_array = rollouts.rewards_intrinsic.view(-1, *rollouts.rewards_intrinsic.shape[2:])[-1,:,0].detach().float() if rollouts.rewards_intrinsic is not None else None # Get the intrinsic reward of the last step to weight the checkpoint
 
     return UpdateResult(
         obs = rollouts.obs,
