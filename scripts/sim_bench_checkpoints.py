@@ -46,30 +46,38 @@ for i in range(args.num_steps):
     sim.step()
 
     # Check that the observations are the same
-    for i in range(len(obs)):
-        print("Element", i)
+    for j in range(len(obs)):
+        print("Element", j)
         #if i == 2:
         #    continue
-        print(obs[0].shape)
-        issue_elems = torch.where(~torch.isclose(obs[i][(args.num_worlds//2 + i)*2:], obs[i][:(args.num_worlds//2 - i)*2], atol=1e-2))
-        print(obs[i][(args.num_worlds//2 + i)*2:])
-        print(obs[i][:(args.num_worlds//2 - i)*2])
-        print(issue_elems)
-        #assert torch.allclose(obs[i][args.num_worlds//2 + i:], obs[i][:args.num_worlds//2 - i], atol=1e-2)
-        #assert torch.allclose(obs[i][args.num_worlds//2:args.num_worlds//2 + i], obs[i][:i], atol=1e-2)
-    assert(False)
+        #issue_elems = torch.where(~torch.isclose(obs[j][args.num_worlds//2 + i:], obs[j][:args.num_worlds//2 - i], atol=1e-2))
+        #print(obs[j][args.num_worlds//2 + i:])
+        #print(obs[j][:args.num_worlds//2 - i])
+        assert torch.allclose(obs[j][(args.num_worlds//2 + i)*2:], obs[j][:(args.num_worlds//2 - i)*2], atol=1e-2)
+        assert torch.allclose(obs[j][(args.num_worlds//2)*2:(args.num_worlds//2 + i)*2], obs[j][:i], atol=1e-2)
     # Now take an action on all worlds
     actions[..., 0] = torch.randint_like(actions[..., 0], 0, 4)
     actions[..., 1] = torch.randint_like(actions[..., 1], 0, 8)
     actions[..., 2] = torch.randint_like(actions[..., 2], 0, 5)
     actions[..., 3] = torch.randint_like(actions[..., 3], 0, 2)
 
+    # Copy actions from first half of worlds to last half, but shifted by i
+    actions[(args.num_worlds//2 + i)*2:] = actions[:(args.num_worlds//2 - i)*2].clone()
+    actions[(args.num_worlds//2)*2:(args.num_worlds//2 + i)*2] = actions[:i].clone()
+
     sim.step()
 
     # Same check for observations
-    for i in range(len(obs)):
-        assert torch.allclose(obs[i][args.num_worlds//2 + i:], obs[i][:args.num_worlds//2 - i], atol=1e-2)
-        assert torch.allclose(obs[i][args.num_worlds//2:args.num_worlds//2 + i], obs[i][:i], atol=1e-2)
+    for j in range(len(obs)):
+        print("Element", j)
+        #if i == 2:
+        #    continue
+        #issue_elems = torch.where(~torch.isclose(obs[j][args.num_worlds//2 + i:], obs[j][:args.num_worlds//2 - i], atol=1e-2))
+        print(obs[j][(args.num_worlds//2 + i)*2:])
+        print(obs[j][:(args.num_worlds//2 - i)*2])
+        print(torch.where(~torch.isclose(obs[j][(args.num_worlds//2 + i)*2:], obs[j][:(args.num_worlds//2 - i)*2], atol=1e-2)))
+        assert torch.allclose(obs[j][(args.num_worlds//2 + i)*2:], obs[j][:(args.num_worlds//2 - i)*2], atol=1e-2)
+        assert torch.allclose(obs[j][(args.num_worlds//2)*2:(args.num_worlds//2 + i)*2], obs[j][:i], atol=1e-2)
 
 end = time.time()
 
