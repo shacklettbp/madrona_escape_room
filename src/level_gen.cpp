@@ -155,12 +155,10 @@ void createPersistentEntities(Engine &ctx)
             ctx.makeRenderableEntity<Agent>();
 
         // Create a render view for the agent
-        if (ctx.data().enableRender) {
-            render::RenderingSystem::attachEntityToView(ctx,
-                    agent,
-                    100.f, 0.001f,
-                    1.5f * math::up);
-        }
+        render::RenderingSystem::attachEntityToView(ctx,
+                agent,
+                100.f, 0.001f,
+                1.5f * math::up);
 
         ctx.get<Scale>(agent) = Diag3x3 { 1, 1, 1 };
         ctx.get<ObjectID>(agent) = ObjectID { (int32_t)SimObject::Agent };

@@ -708,9 +708,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             Lidar
         >>({post_reset_broadphase});
 
-    if (cfg.renderBridge) {
-        RenderingSystem::setupTasks(builder, {reset_sys});
-    }
+    RenderingSystem::setupTasks(builder, {reset_sys});
 
 #ifdef MADRONA_GPU_MODE
     // Sort entities, this could be conditional on reset like the second
