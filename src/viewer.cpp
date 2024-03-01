@@ -165,8 +165,7 @@ int main(int argc, char *argv[])
 
         printf("\n");
     };
-
-
+    (void)printObs;
 
     // Main loop for the viewer viewer
     viewer.loop(
@@ -256,6 +255,6 @@ int main(int argc, char *argv[])
 
         mgr.step();
 
-        printObs();
+        //printObs();
     }, []() {});
 }
