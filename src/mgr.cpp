@@ -73,6 +73,7 @@ static inline Optional<render::RenderManager> initRenderManager(
 
     return render::RenderManager(render_api, render_dev, {
         .enableBatchRenderer = mgr_cfg.enableBatchRenderer,
+        .renderMode = render::RenderManager::Config::RenderMode::RGBD,
         .agentViewWidth = mgr_cfg.batchRenderViewWidth,
         .agentViewHeight = mgr_cfg.batchRenderViewHeight,
         .numWorlds = mgr_cfg.numWorlds,
@@ -110,7 +111,7 @@ struct Manager::Impl {
     virtual void run() = 0;
 
     virtual Tensor exportTensor(ExportID slot,
-        Tensor::ElementType type,
+        TensorElementType type,
         madrona::Span<const int64_t> dimensions) const = 0;
 
     static inline Impl * init(const Config &cfg);
@@ -143,7 +144,7 @@ struct Manager::CPUImpl final : Manager::Impl {
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
-        Tensor::ElementType type,
+        TensorElementType type,
         madrona::Span<const int64_t> dims) const final
     {
         void *dev_ptr = cpuExec.getExported((uint32_t)slot);
@@ -154,6 +155,7 @@ struct Manager::CPUImpl final : Manager::Impl {
 #ifdef MADRONA_CUDA_SUPPORT
 struct Manager::CUDAImpl final : Manager::Impl {
     MWCudaExecutor gpuExec;
+    MWCudaLaunchGraph stepGraph;
 
     inline CUDAImpl(const Manager::Config &mgr_cfg,
                    PhysicsLoader &&phys_loader,
@@ -165,18 +167,19 @@ struct Manager::CUDAImpl final : Manager::Impl {
         : Impl(mgr_cfg, std::move(phys_loader),
                reset_buffer, action_buffer,
                std::move(render_gpu_state), std::move(render_mgr)),
-          gpuExec(std::move(gpu_exec))
+          gpuExec(std::move(gpu_exec)),
+          stepGraph(gpuExec.buildLaunchGraphAllTaskGraphs())
     {}
 
     inline virtual ~CUDAImpl() final {}
 
     inline virtual void run()
     {
-        gpuExec.run();
+        gpuExec.run(stepGraph);
     }
 
     virtual inline Tensor exportTensor(ExportID slot,
-        Tensor::ElementType type,
+        TensorElementType type,
         madrona::Span<const int64_t> dims) const final
     {
         void *dev_ptr = gpuExec.getExported((uint32_t)slot);
@@ -187,6 +190,8 @@ struct Manager::CUDAImpl final : Manager::Impl {
 
 static void loadRenderObjects(render::RenderManager &render_mgr)
 {
+    StackAlloc tmp_alloc;
+
     std::array<std::string, (size_t)SimObject::NumObjects> render_asset_paths;
     render_asset_paths[(size_t)SimObject::Cube] =
         (std::filesystem::path(DATA_DIR) / "cube_render.obj").string();
@@ -206,8 +211,10 @@ static void loadRenderObjects(render::RenderManager &render_mgr)
         render_asset_cstrs[i] = render_asset_paths[i].c_str();
     }
 
+    imp::AssetImporter importer;
+
     std::array<char, 1024> import_err;
-    auto render_assets = imp::ImportedAssets::importFromDisk(
+    auto render_assets = importer.importFromDisk(
         render_asset_cstrs, Span<char>(import_err.data(), import_err.size()));
 
     if (!render_assets.has_value()) {
@@ -234,12 +241,17 @@ static void loadRenderObjects(render::RenderManager &render_mgr)
     render_assets->objects[(CountT)SimObject::Button].meshes[0].materialIDX = 6;
     render_assets->objects[(CountT)SimObject::Plane].meshes[0].materialIDX = 4;
 
-    render_mgr.loadObjects(render_assets->objects, materials, {
-        { (std::filesystem::path(DATA_DIR) /
-           "green_grid.png").string().c_str() },
-        { (std::filesystem::path(DATA_DIR) /
-           "smile.png").string().c_str() },
-    });
+    imp::ImageImporter img_importer;
+    Span<imp::SourceTexture> imported_textures = img_importer.importImages(
+        tmp_alloc, {
+            (std::filesystem::path(DATA_DIR) /
+               "green_grid.png").string().c_str(),
+            (std::filesystem::path(DATA_DIR) /
+               "smile.png").string().c_str(),
+        });
+
+    render_mgr.loadObjects(
+        render_assets->objects, materials, imported_textures);
 
     render_mgr.configureLighting({
         { true, math::Vector3{1.0f, 1.0f, -2.0f}, math::Vector3{1.0f, 1.0f, 1.0f} }
@@ -265,8 +277,10 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
         asset_cstrs[i] = asset_paths[i].c_str();
     }
 
+    imp::AssetImporter importer;
+
     char import_err_buffer[4096];
-    auto imported_src_hulls = imp::ImportedAssets::importFromDisk(
+    auto imported_src_hulls = importer.importFromDisk(
         asset_cstrs, import_err_buffer, true);
 
     if (!imported_src_hulls.has_value()) {
@@ -332,6 +346,7 @@ static void loadPhysicsObjects(PhysicsLoader &loader)
 
     SourceCollisionPrimitive plane_prim {
         .type = CollisionPrimitive::Type::Plane,
+        .plane = {},
     };
 
     src_objs[(CountT)SimObject::Plane] = {
@@ -411,6 +426,7 @@ Manager::Impl * Manager::Impl::init(
             .numWorldDataBytes = sizeof(Sim),
             .worldDataAlignment = alignof(Sim),
             .numWorlds = mgr_cfg.numWorlds,
+            .numTaskGraphs = 1,
             .numExportedBuffers = (uint32_t)ExportID::NumExports, 
         }, {
             { GPU_HIDESEEK_SRC_LIST },
@@ -466,6 +482,7 @@ Manager::Impl * Manager::Impl::init(
             },
             sim_cfg,
             world_inits.data(),
+            (uint32_t)TaskGraphID::NumTaskGraphs,
         };
 
         WorldReset *world_reset_buffer = 
@@ -527,7 +544,7 @@ void Manager::step()
 Tensor Manager::resetTensor() const
 {
     return impl_->exportTensor(ExportID::Reset,
-                               Tensor::ElementType::Int32,
+                               TensorElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
                                    1,
@@ -536,7 +553,7 @@ Tensor Manager::resetTensor() const
 
 Tensor Manager::actionTensor() const
 {
-    return impl_->exportTensor(ExportID::Action, Tensor::ElementType::Int32,
+    return impl_->exportTensor(ExportID::Action, TensorElementType::Int32,
         {
             impl_->cfg.numWorlds,
             consts::numAgents,
@@ -546,7 +563,7 @@ Tensor Manager::actionTensor() const
 
 Tensor Manager::rewardTensor() const
 {
-    return impl_->exportTensor(ExportID::Reward, Tensor::ElementType::Float32,
+    return impl_->exportTensor(ExportID::Reward, TensorElementType::Float32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -556,7 +573,7 @@ Tensor Manager::rewardTensor() const
 
 Tensor Manager::doneTensor() const
 {
-    return impl_->exportTensor(ExportID::Done, Tensor::ElementType::Int32,
+    return impl_->exportTensor(ExportID::Done, TensorElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -567,7 +584,7 @@ Tensor Manager::doneTensor() const
 Tensor Manager::selfObservationTensor() const
 {
     return impl_->exportTensor(ExportID::SelfObservation,
-                               Tensor::ElementType::Float32,
+                               TensorElementType::Float32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -578,7 +595,7 @@ Tensor Manager::selfObservationTensor() const
 Tensor Manager::partnerObservationsTensor() const
 {
     return impl_->exportTensor(ExportID::PartnerObservations,
-                               Tensor::ElementType::Float32,
+                               TensorElementType::Float32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -590,7 +607,7 @@ Tensor Manager::partnerObservationsTensor() const
 Tensor Manager::roomEntityObservationsTensor() const
 {
     return impl_->exportTensor(ExportID::RoomEntityObservations,
-                               Tensor::ElementType::Float32,
+                               TensorElementType::Float32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -602,7 +619,7 @@ Tensor Manager::roomEntityObservationsTensor() const
 Tensor Manager::doorObservationTensor() const
 {
     return impl_->exportTensor(ExportID::DoorObservation,
-                               Tensor::ElementType::Float32,
+                               TensorElementType::Float32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -612,7 +629,7 @@ Tensor Manager::doorObservationTensor() const
 
 Tensor Manager::lidarTensor() const
 {
-    return impl_->exportTensor(ExportID::Lidar, Tensor::ElementType::Float32,
+    return impl_->exportTensor(ExportID::Lidar, TensorElementType::Float32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -624,7 +641,7 @@ Tensor Manager::lidarTensor() const
 Tensor Manager::stepsRemainingTensor() const
 {
     return impl_->exportTensor(ExportID::StepsRemaining,
-                               Tensor::ElementType::Int32,
+                               TensorElementType::Int32,
                                {
                                    impl_->cfg.numWorlds,
                                    consts::numAgents,
@@ -636,7 +653,7 @@ Tensor Manager::rgbTensor() const
 {
     const uint8_t *rgb_ptr = impl_->renderMgr->batchRendererRGBOut();
 
-    return Tensor((void*)rgb_ptr, Tensor::ElementType::UInt8, {
+    return Tensor((void*)rgb_ptr, TensorElementType::UInt8, {
         impl_->cfg.numWorlds,
         consts::numAgents,
         impl_->cfg.batchRenderViewHeight,
@@ -649,7 +666,7 @@ Tensor Manager::depthTensor() const
 {
     const float *depth_ptr = impl_->renderMgr->batchRendererDepthOut();
 
-    return Tensor((void *)depth_ptr, Tensor::ElementType::Float32, {
+    return Tensor((void *)depth_ptr, TensorElementType::Float32, {
         impl_->cfg.numWorlds,
         consts::numAgents,
         impl_->cfg.batchRenderViewHeight,

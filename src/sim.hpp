@@ -11,6 +11,13 @@ namespace madEscape {
 
 class Engine;
 
+// This enum is used to uniquely identify each ECS system task graph
+// that can be separately executed
+enum class TaskGraphID : uint32_t {
+  Step,
+  NumTaskGraphs,
+};
+
 // This enum is used by the Sim and Manager classes to track the export slots
 // for each component exported to the training code.
 enum class ExportID : uint32_t {
@@ -66,7 +73,7 @@ struct Sim : public madrona::WorldBase {
     // Sim::setupTasks is called during initialization to build
     // the system task graph that will be invoked by the 
     // Manager class (src/mgr.hpp) for each step.
-    static void setupTasks(madrona::TaskGraphBuilder &builder,
+    static void setupTasks(madrona::TaskGraphManager &mgr,
                            const Config &cfg);
 
     // The constructor is called for each world during initialization.

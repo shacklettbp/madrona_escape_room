@@ -22,6 +22,7 @@ using madrona::phys::Velocity;
 using madrona::phys::ResponseType;
 using madrona::phys::ExternalForce;
 using madrona::phys::ExternalTorque;
+using madrona::phys::RigidBody;
 
 // WorldReset is a per-world singleton component that causes the current
 // episode to be terminated and the world regenerated
@@ -198,21 +199,11 @@ struct LevelState {
 
 // There are 2 Agents in the environment trying to get to the destination
 struct Agent : public madrona::Archetype<
-    // Basic components required for physics. Note that the current physics
-    // implementation requires archetypes to have these components first
-    // in this exact order.
-    Position,
-    Rotation,
-    Scale,
-    Velocity,
-    ObjectID,
-    ResponseType,
-    madrona::phys::solver::SubstepPrevState,
-    madrona::phys::solver::PreSolvePositional,
-    madrona::phys::solver::PreSolveVelocity,
-    ExternalForce,
-    ExternalTorque,
-    madrona::phys::broadphase::LeafID,
+    // RigidBody is a "bundle" component defined in physics.hpp in Madrona.
+    // This includes a number of components into the archetype, including
+    // Position, Rotation, Scale, Velocity, and a number of other components
+    // used internally by the physics.
+    RigidBody,
 
     // Internal logic state.
     GrabState,
@@ -245,18 +236,7 @@ struct Agent : public madrona::Archetype<
 
 // Archetype for the doors blocking the end of each challenge room
 struct DoorEntity : public madrona::Archetype<
-    Position, 
-    Rotation,
-    Scale,
-    Velocity,
-    ObjectID,
-    ResponseType,
-    madrona::phys::solver::SubstepPrevState,
-    madrona::phys::solver::PreSolvePositional,
-    madrona::phys::solver::PreSolveVelocity,
-    ExternalForce,
-    ExternalTorque,
-    madrona::phys::broadphase::LeafID,
+    RigidBody,
     OpenState,
     DoorProperties,
     EntityType,
@@ -278,18 +258,7 @@ struct ButtonEntity : public madrona::Archetype<
 // Generic archetype for entities that need physics but don't have custom
 // logic associated with them.
 struct PhysicsEntity : public madrona::Archetype<
-    Position, 
-    Rotation,
-    Scale,
-    Velocity,
-    ObjectID,
-    ResponseType,
-    madrona::phys::solver::SubstepPrevState,
-    madrona::phys::solver::PreSolvePositional,
-    madrona::phys::solver::PreSolveVelocity,
-    ExternalForce,
-    ExternalTorque,
-    madrona::phys::broadphase::LeafID,
+    RigidBody,
     EntityType,
     madrona::render::Renderable
 > {};

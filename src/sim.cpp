@@ -3,6 +3,8 @@
 #include "sim.hpp"
 #include "level_gen.hpp"
 
+#include <algorithm>
+
 using namespace madrona;
 using namespace madrona::math;
 using namespace madrona::phys;
@@ -16,7 +18,7 @@ namespace madEscape {
 void Sim::registerTypes(ECSRegistry &registry, const Config &cfg)
 {
     base::registerTypes(registry);
-    phys::RigidBodyPhysicsSystem::registerTypes(registry);
+    phys::PhysicsSystem::registerTypes(registry);
 
     RenderingSystem::registerTypes(registry, cfg.renderBridge);
 
@@ -87,7 +89,7 @@ static inline void cleanupWorld(Engine &ctx)
 
 static inline void initWorld(Engine &ctx)
 {
-    phys::RigidBodyPhysicsSystem::reset(ctx);
+    phys::PhysicsSystem::reset(ctx);
 
     // Assign a new episode ID
     ctx.data().rng = RNG(rand::split_i(ctx.data().initRandKey,
@@ -203,9 +205,6 @@ inline void grabSystem(Engine &ctx,
         return;
     }
 
-    Entity constraint_entity = ctx.makeEntity<ConstraintData>();
-    grab.constraintEntity = constraint_entity;
-
     Vector3 other_pos = ctx.get<Position>(grab_entity);
     Quat other_rot = ctx.get<Rotation>(grab_entity);
 
@@ -220,7 +219,7 @@ inline void grabSystem(Engine &ctx,
 
     float separation = hit_t - 1.25f;
 
-    ctx.get<JointConstraint>(constraint_entity) = JointConstraint::setupFixed(
+    grab.constraintEntity = PhysicsSystem::makeFixedJoint(ctx,
         e, grab_entity, attach1, attach2, r1, r2, separation);
 }
 
@@ -266,7 +265,7 @@ inline void buttonSystem(Engine &ctx,
     };
 
     bool button_pressed = false;
-    RigidBodyPhysicsSystem::findEntitiesWithinAABB(
+    PhysicsSystem::findEntitiesWithinAABB(
             ctx, button_aabb, [&](Entity) {
         button_pressed = true;
     });
@@ -572,8 +571,10 @@ TaskGraph::NodeID queueSortByWorld(TaskGraph::Builder &builder,
 #endif
 
 // Build the task graph
-void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
+void Sim::setupTasks(TaskGraphManager &taskgraph_mgr, const Config &cfg)
 {
+    TaskGraphBuilder &builder = taskgraph_mgr.init(TaskGraphID::Step);
+
     // Turn policy actions into movement
     auto move_sys = builder.addToGraph<ParallelForNode<Engine,
         movementSystem,
@@ -591,9 +592,8 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({move_sys});
 
     // Build BVH for broadphase / raycasting
-    auto broadphase_setup_sys =
-        phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(builder, 
-                                                           {set_door_pos_sys});
+    auto broadphase_setup_sys = phys::PhysicsSystem::setupBroadphaseTasks(
+        builder, {set_door_pos_sys});
 
     // Grab action, post BVH build to allow raycasting
     auto grab_sys = builder.addToGraph<ParallelForNode<Engine,
@@ -606,7 +606,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         >>({broadphase_setup_sys});
 
     // Physics collision detection and solver
-    auto substep_sys = phys::RigidBodyPhysicsSystem::setupSubstepTasks(builder,
+    auto substep_sys = phys::PhysicsSystem::setupPhysicsStepTasks(builder,
         {grab_sys}, consts::numPhysicsSubsteps);
 
     // Improve controllability of agents by setting their velocity to 0
@@ -616,7 +616,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
             {substep_sys});
 
     // Finalize physics subsystem work
-    auto phys_done = phys::RigidBodyPhysicsSystem::setupCleanupTasks(
+    auto phys_done = phys::PhysicsSystem::setupCleanupTasks(
         builder, {agent_zero_vel});
 
     // Check buttons
@@ -675,7 +675,7 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
     // This second BVH build is a limitation of the current taskgraph API.
     // It's only necessary if the world was reset, but we don't have a way
     // to conditionally queue taskgraph nodes yet.
-    auto post_reset_broadphase = phys::RigidBodyPhysicsSystem::setupBroadphaseTasks(
+    auto post_reset_broadphase = phys::PhysicsSystem::setupBroadphaseTasks(
         builder, {reset_sys});
 
     // Finally, collect observations for the next step.
@@ -723,8 +723,6 @@ void Sim::setupTasks(TaskGraphBuilder &builder, const Config &cfg)
         builder, {sort_phys_objects});
     auto sort_walls = queueSortByWorld<DoorEntity>(
         builder, {sort_buttons});
-    auto sort_constraints = queueSortByWorld<ConstraintData>(
-        builder, {sort_walls});
     (void)sort_walls;
 #else
     (void)lidar;
@@ -744,10 +742,9 @@ Sim::Sim(Engine &ctx,
         consts::numRooms * (consts::maxEntitiesPerRoom + 3) +
         4; // side walls + floor
 
-    phys::RigidBodyPhysicsSystem::init(ctx, cfg.rigidBodyObjMgr,
+    phys::PhysicsSystem::init(ctx, cfg.rigidBodyObjMgr,
         consts::deltaT, consts::numPhysicsSubsteps, -9.8f * math::up,
-        max_total_entities, max_total_entities * max_total_entities / 2,
-        consts::numAgents);
+        max_total_entities);
 
     initRandKey = cfg.initRandKey;
     autoReset = cfg.autoReset;
