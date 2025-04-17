@@ -10,8 +10,6 @@ from policy import make_policy, setup_obs
 import argparse
 import math
 from pathlib import Path
-import warnings
-warnings.filterwarnings("error")
 
 torch.manual_seed(0)
 
